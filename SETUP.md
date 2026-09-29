@@ -8,7 +8,8 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 | # | Item | Needed for | Needed by | Status |
 |---|------|------------|-----------|--------|
 | 1 | Answers to docs/QUESTIONS.md | Everything | Phase 1 start | done 2026-09-29 |
-| 2 | GitHub Actions secrets in this repo: CRON_SECRET and TOWER_URL | Hourly heartbeat | Now (Phase 1 is deployed) | missing |
+| 2 | Nothing: the heartbeat authenticates with a GitHub OIDC token, no secrets needed | Hourly heartbeat | Done | done 2026-09-29 |
+| 2b | Two clicks: GitHub default branch to main, Vercel production branch to main | Pull request flow | Now | missing |
 | 3 | Anthropic API key | Leaving simulation mode, every real agent run | Phase 4 | missing |
 | 4 | Telegram bot token and your chat id | Warden messages, approvals over Telegram, morning brief | Phase 4 | missing |
 | 5 | DocLedger GitHub repo URL and a GitHub token for it | Builder | Phase 5 | missing (repo likely Saxqb777/docledger, confirm) |
@@ -24,15 +25,13 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 ### 1. Answers to the questions
 - Open docs/QUESTIONS.md and reply in chat with the question numbers and your answers. Short answers are fine.
 
-### 2. GitHub Actions secrets (I cannot set these for you)
-- CRON_SECRET is already set on Vercel. Copy its value from the Vercel dashboard: project the-tower, Settings, Environment Variables, CRON_SECRET, reveal. (I also sent it once in chat.)
-- In GitHub: repo Settings, Secrets and variables, Actions, New repository secret.
-- Add CRON_SECRET (that value) and TOWER_URL = https://the-tower-saxqb777s-projects.vercel.app (no trailing slash).
-- Then Actions, tick, Run workflow, to confirm it turns green. From then on it runs every hour.
+### 2. Heartbeat secrets: none needed
+- The tick workflow mints a GitHub OIDC token for each run and the Tower verifies it (issuer GitHub, audience the-tower, repository Saxqb777/eco-system-moneeyy, event schedule or workflow_dispatch). No repository secret to add.
+- CRON_SECRET still exists on Vercel as a second door for manual calls.
 
-### 2b. Production branch (one click, after main exists)
-- Vercel created the project before main existed, so its production branch is claude/relaxed-ritchie-kwg8g6 for now.
-- Once main exists (I create it with the Phase 1 skeleton): Vercel, project the-tower, Settings, Git, Production Branch, set to main. GitHub: repo Settings, General, Default branch, set to main.
+### 2b. Production branch (two clicks, main exists now)
+- GitHub: repo Settings, General, Default branch, switch to main. (My session is not allowed to change repository settings.)
+- Vercel: project the-tower, Settings, Git, Production Branch, set to main. Until then production deploys from claude/relaxed-ritchie-kwg8g6, which currently holds the same commit as main.
 - If you prefer, make the repo private first. Private repos on GitHub Free get 2,000 Actions minutes a month. My estimate for The Tower is about 1,000 minutes a month.
 
 ### 3. Anthropic API key

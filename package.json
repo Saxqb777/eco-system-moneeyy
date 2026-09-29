@@ -21,6 +21,7 @@
     "@anthropic-ai/sdk": "^0.129.0",
     "@neondatabase/serverless": "^1.1.0",
     "drizzle-orm": "^0.45.3",
+    "jose": "^6.2.12",
     "next": "15.5.26",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

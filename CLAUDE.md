@@ -37,7 +37,7 @@ Read this file first in every session. It is the cross chat memory for this repo
 - Phase 2 and later: not started.
 
 ## Accounts and services seen from this environment (2026-09-29)
-- GitHub: Saxqb777. This repo (eco-system-moneeyy) is public and was empty before Phase 0.
+- GitHub: Saxqb777. This repo (eco-system-moneeyy) is public. The proxy authenticates api.github.com calls as Saxqb777 but blocks the Actions secrets endpoints, and repository setting changes (default branch) are refused by the permission layer: ask Saaqib for those.
 - Also on GitHub: Saxqb777/docledger (likely the DocLedger repo) and Saxqb777/deals-program.
 - Vercel team: saxqb777s-projects (team_yKuXQ8P3eoGrvRnTWMIqSiGo). Tower project: the-tower (prj_c6WtQ5XBWTFdj1Zh3SnmsaayMVRw), region fra1, production URL https://the-tower-saxqb777s-projects.vercel.app
 - Neon org: Saaqib (org-fragrant-rice-50839536), free plan. Tower project: the-tower (square-flower-63114503), Frankfurt, database tower, role tower_owner, branch main.

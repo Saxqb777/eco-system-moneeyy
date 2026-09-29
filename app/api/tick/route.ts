@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { OWNER_COOKIE, verifySessionToken } from "@/lib/auth";
+import { verifyGithubOidc } from "@/lib/github-oidc";
 import { bearerOk, json, unauthorized } from "@/lib/http";
 import { runTick, type TickTrigger } from "@/warden/tick";
 
@@ -15,16 +16,29 @@ async function ownerOk(): Promise<boolean> {
   return verifySessionToken(token, secret);
 }
 
-// Called by the GitHub Actions cron with the bearer secret, or by the owner from the game.
+// Three doors, all checked server side: the cron bearer secret, a GitHub Actions OIDC token
+// minted inside this repository, or the owner's session cookie from the game.
+async function callerOk(req: Request): Promise<{ ok: boolean; via: string; reason?: string }> {
+  if (bearerOk(req)) return { ok: true, via: "cron_secret" };
+  if (req.headers.get("x-tower-auth") === "github-oidc") {
+    const header = req.headers.get("authorization") ?? "";
+    const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+    const check = await verifyGithubOidc(token);
+    return check.ok ? { ok: true, via: `github:${check.event}` } : { ok: false, via: "github", reason: check.reason };
+  }
+  if (await ownerOk()) return { ok: true, via: "owner" };
+  return { ok: false, via: "none" };
+}
+
 async function handle(req: Request) {
-  const allowed = bearerOk(req) || (await ownerOk());
-  if (!allowed) return unauthorized("Bad or missing cron secret");
+  const caller = await callerOk(req);
+  if (!caller.ok) return unauthorized(caller.reason ? `Not allowed: ${caller.reason}` : "Bad or missing credentials");
   const url = new URL(req.url);
   const raw = url.searchParams.get("trigger") ?? "cron";
   const trigger = (TRIGGERS.includes(raw as TickTrigger) ? raw : "cron") as TickTrigger;
   try {
     const result = await runTick(trigger);
-    return json({ ok: true, ...result });
+    return json({ ok: true, via: caller.via, ...result });
   } catch (err) {
     return json({ ok: false, error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }

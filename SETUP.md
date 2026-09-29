@@ -1,6 +1,7 @@
 # SETUP: everything Saaqib needs to provide
 
 This file mirrors the Warden clipboard (the setup_items table). Status is updated as items arrive.
+Since Phase 3 you can paste every item straight into the game: click Warden, open the Setup tab, paste, Save. Secrets are encrypted and never shown again.
 Rule: never paste a secret into the repo. Secrets go into the Warden clipboard once Phase 3 is live. Until then, the Vercel environment variables route is used (see the notes per item).
 
 ## Status board

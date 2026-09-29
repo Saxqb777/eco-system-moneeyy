@@ -13,3 +13,4 @@ Rule: no purple to blue gradients, no glassmorphism, no glowing orbs, no floatin
 
 - game-desktop.png and game-phone.png: latest local renders of the running scene (mock state), regenerated with design/shot.mjs.
 - Frame budget: anything ambient sits behind the Low Effects toggle in the game (top right of the stage).
+- panel-character.png, panel-floor.png, panel-approvals.png, panel-setup.png, panel-brief.png, panel-phone.png: Phase 3 panels, rendered by the same script through the ?panel= deep links.

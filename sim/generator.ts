@@ -39,6 +39,7 @@ import {
 } from "./names";
 import { SIM_PLAYBOOKS } from "./playbooks";
 import { between, pick, rngFor } from "./rng";
+import { describeTaskOutput } from "@/lib/tasks";
 
 const SLICE_MINUTES = 5;
 const PENTHOUSE_LEVEL = 5;
@@ -265,7 +266,7 @@ async function finishTask(db: Db, world: World, agent: AgentRow, task: TaskRow, 
   const score = rejected ? between(rand, 3, 5) : between(rand, 6, 10);
   const reason = rejected ? pick(rand, REJECT_REASONS) : "Meets the playbook, accepted";
 
-  await logEvent(db, { taskId: task.id, agentId: agent.id, floorId: floor.id, type: "output", message: summarizeOutput(task.kind, output, rejected), data: output, at: t });
+  await logEvent(db, { taskId: task.id, agentId: agent.id, floorId: floor.id, type: "output", message: describeTaskOutput(task.kind, output, rejected), data: output, at: t });
   await logEvent(db, { taskId: task.id, agentId: world.warden.id, floorId: floor.id, type: "review", message: `Warden scored ${score}/10: ${reason}`, data: { score, reason }, at: t });
 
   if (rejected) {
@@ -297,30 +298,6 @@ async function finishTask(db: Db, world: World, agent: AgentRow, task: TaskRow, 
   agent.reviewScoreSum = (Number(agent.reviewScoreSum) + score).toFixed(2);
   agent.reviewCount = agent.reviewCount + 1;
   summary.tasksFinished += 1;
-}
-
-function summarizeOutput(kind: string, output: Record<string, unknown>, rejected: boolean): string {
-  if (rejected) return "Draft output ready for review";
-  switch (kind) {
-    case "find_leads":
-      return `Found ${output.found ?? 0} new leads`;
-    case "qualify_lead":
-      return output.company ? `Scored ${output.company}: ${output.score}/10` : "No new lead to qualify";
-    case "draft_outreach":
-      return output.company ? `Outreach drafted for ${output.company}, waiting for approval` : "No qualified lead waiting";
-    case "follow_up":
-      return String(output.result ?? "Follow up logged");
-    case "build_ticket":
-      return output.title ? `Pull request opened: ${output.title}` : "No ticket in the backlog";
-    case "find_deals":
-      return `Found ${output.found ?? 0} deals`;
-    case "write_post":
-      return output.title ? `Post drafted: ${output.title}` : "No deal waiting for a post";
-    case "publish_post":
-      return output.posted ? `Posted to the channel, ${output.clicks} clicks so far` : "Nothing approved to publish yet";
-    default:
-      return "Task finished";
-  }
 }
 
 async function produceOutput(db: Db, agent: AgentRow, task: TaskRow, floor: FloorRow, t: Date, rand: () => number, summary: SimSummary): Promise<Record<string, unknown>> {

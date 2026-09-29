@@ -22,6 +22,7 @@ export class RoofHud {
   private stamp: Container;
   private segments: Graphics[] = [];
   private shown = { net: 0, spend: 0 };
+  onIdeas: (() => void) | null = null;
   private target: CounterValues = { netUsd: 0, spendTodayUsd: 0, capUsd: 1.7, level: 1, simulated: true };
 
   constructor() {
@@ -82,6 +83,15 @@ export class RoofHud {
     const ideasLabel = label("IDEAS", { fontSize: 10, fill: C.stone, spacing: 2 });
     ideasLabel.position.set(bx + 4, baseY - 64);
     this.container.addChild(this.netLabel, this.netText, this.stamp, spendLabel, this.spendText, levelLabel, this.levelText, ideasLabel);
+    // The mail slot takes clicks: it opens the ideas inbox.
+    const slot = new Graphics();
+    slot.rect(bx - 8, baseY - 70, 62, 72).fill({ color: 0xffffff, alpha: 0.001 });
+    slot.eventMode = "static";
+    slot.cursor = "pointer";
+    slot.on("pointertap", () => this.onIdeas?.());
+    slot.on("pointerover", () => (ideasLabel.style.fill = C.glow));
+    slot.on("pointerout", () => (ideasLabel.style.fill = C.stone));
+    this.container.addChild(slot);
   }
 
   private buildStamp(): Container {

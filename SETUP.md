@@ -9,7 +9,7 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 |---|------|------------|-----------|--------|
 | 1 | Answers to docs/QUESTIONS.md | Everything | Phase 1 start | done 2026-09-29 |
 | 2 | Nothing: the heartbeat authenticates with a GitHub OIDC token, no secrets needed | Hourly heartbeat | Done | done 2026-09-29 |
-| 2b | Two clicks: GitHub default branch to main, Vercel production branch to main | Pull request flow | Now | missing |
+| 2b | Two clicks: GitHub default branch to main, Vercel production branch to main | Pull request flow | Done | done 2026-09-29 by Saaqib |
 | 3 | Anthropic API key | Leaving simulation mode, every real agent run | Phase 4 | missing |
 | 4 | Telegram bot token and your chat id | Warden messages, approvals over Telegram, morning brief | Phase 4 | missing |
 | 5 | DocLedger GitHub repo URL and a GitHub token for it | Builder | Phase 5 | missing (repo likely Saxqb777/docledger, confirm) |

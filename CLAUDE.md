@@ -33,8 +33,9 @@ Read this file first in every session. It is the cross chat memory for this repo
 
 ## Status
 - Phase 0 (plan): delivered and approved 2026-09-29. Answers in docs/QUESTIONS.md.
-- Phase 1 (skeleton): built and deployed 2026-09-29, waiting for Saaqib's review.
-- Phase 2 and later: not started.
+- Phase 1 (skeleton): delivered 2026-09-29, accepted by Saaqib (he started Phase 2). main is now the default and production branch. From here on: work on the dev branch, one pull request per phase, never push to main.
+- Phase 2 (design): started 2026-09-29. Step 1: two concept images, palette, two font pairs, then wait for Saaqib's pick. No PixiJS before the pick.
+- Phase 3 and later: not started.
 
 ## Accounts and services seen from this environment (2026-09-29)
 - GitHub: Saxqb777. This repo (eco-system-moneeyy) is public. The proxy authenticates api.github.com calls as Saxqb777 but blocks the Actions secrets endpoints, and repository setting changes (default branch) are refused by the permission layer: ask Saaqib for those.

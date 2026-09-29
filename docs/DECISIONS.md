@@ -24,3 +24,8 @@ Append only. Newest entries at the bottom. Each entry: id, date, decision, who d
 - D015 (Claude): Vercel Authentication (the team default deployment protection) is switched off on the tower project because it would block the cron and the Telegram webhook. The owner passcode protects the game instead.
 - D016 (Claude): simulation mode is covered by an integration test on PGlite (a real Postgres in process) that applies the real migration, runs the real seed, simulates hours of activity and checks the invariants. It found and fixed a JSON null bug before anyone saw it. CI runs typecheck, tests and build on every push.
 - D017 (Claude, with Saaqib's "you have all the access"): the heartbeat authenticates with a GitHub Actions OIDC token verified by the Tower (issuer, audience, repository and event checked, keys fetched from GitHub). No Actions secret is needed, which also removes a shared secret from the design. The proxy in this environment blocks the Actions secrets API and my permission layer refused the default branch change, so those stay with Saaqib as clicks.
+
+## Phase 2 start (2026-09-29)
+
+- D018 (Saaqib): Phase 1 accepted. GitHub default branch and Vercel production branch switched to main by Saaqib. Phase 2 started with the order: concept images (low poly and chunky pixel), palette and two fonts first, then wait for the pick, no PixiJS before that.
+- D019 (Claude): review pages for Phase 2 live on the dev branch preview deployment, so main stays untouched until the phase pull request.

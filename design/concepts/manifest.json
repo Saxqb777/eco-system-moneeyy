@@ -1,0 +1,9 @@
+{
+  "note": "Concept images generated with Higgsfield on 2026-09-29. Fetched into the repo by .github/workflows/design-fetch.yml because this sandbox cannot reach the image host.",
+  "images": [
+    { "file": "pixel-gpt.png", "style": "chunky pixel", "model": "gpt_image_2_5", "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3Es5Qc82ZRrNDRgmX0S5QX1D44c/hf_20260929_195314_8d58faa8-9a57-491b-96c3-bb0acfdae4f4.png" },
+    { "file": "lowpoly-gpt.png", "style": "low poly", "model": "gpt_image_2_5", "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3Es5Qc82ZRrNDRgmX0S5QX1D44c/hf_20260929_195316_7b8b2091-fc69-4248-b6c9-15dddf5239fd.png" },
+    { "file": "pixel-recraft.png", "style": "chunky pixel", "model": "recraft_v4_1", "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3Es5Qc82ZRrNDRgmX0S5QX1D44c/hf_20260929_195318_90f6e562-2c81-45ef-892a-a205a8ddf99f.png" },
+    { "file": "lowpoly-recraft.png", "style": "low poly", "model": "recraft_v4_1", "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3Es5Qc82ZRrNDRgmX0S5QX1D44c/hf_20260929_195320_fef22207-f0fb-4a48-bfea-7a0b4b2fd4cf.png" }
+  ]
+}

@@ -15,3 +15,5 @@ pnpm dev
 ```
 
 `pnpm tick` runs one heartbeat locally. `pnpm test` runs the rule tests. `pnpm typecheck` checks types.
+
+Heartbeat: the tick workflow runs hourly from the default branch. See SETUP.md item 2.

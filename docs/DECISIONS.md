@@ -29,3 +29,4 @@ Append only. Newest entries at the bottom. Each entry: id, date, decision, who d
 
 - D018 (Saaqib): Phase 1 accepted. GitHub default branch and Vercel production branch switched to main by Saaqib. Phase 2 started with the order: concept images (low poly and chunky pixel), palette and two fonts first, then wait for the pick, no PixiJS before that.
 - D019 (Claude): review pages for Phase 2 live on the dev branch preview deployment, so main stays untouched until the phase pull request.
+- D020 (Claude): concept round used gpt_image_2_5 (0.25 credits each) and Recraft V4.1 (1.25 credits each), 3 credits in total. Both Recraft outputs broke the hard bans and were rejected. Candidates shown to Saaqib: pixel-gpt.png (chunky pixel) and lowpoly-gpt.png (low poly). Waiting for his style pick and font pair pick.

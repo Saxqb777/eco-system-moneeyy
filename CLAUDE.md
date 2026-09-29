@@ -33,8 +33,10 @@ Read this file first in every session. It is the cross chat memory for this repo
 
 ## Status
 - Phase 0 (plan): delivered and approved 2026-09-29. Answers in docs/QUESTIONS.md.
-- Phase 1 (skeleton): built and deployed 2026-09-29, waiting for Saaqib's review.
-- Phase 2 and later: not started.
+- Phase 1 (skeleton): delivered 2026-09-29, accepted by Saaqib (he started Phase 2). main is now the default and production branch. From here on: work on the dev branch, one pull request per phase, never push to main.
+- Phase 2 (design): concepts shown 2026-09-29, Saaqib picked style B (low poly) and font pair 1 (Barlow Condensed plus IBM Plex Sans). Step 2 built 2026-09-29 and approved with fixes. Fix and polish batch (lift with landing doors, covered desks, centred labels, bigger Warden, obvious poses, receptionist, penthouse rug, phone zoom, ambient motion, idle variety, paper flights, coin drops, blocked lamp and alert, cap hit amber, level up fanfare, parallax and floor zoom, haze and sandstorm, Warden moods, name plates and quirks from the db, sound pack, Low Effects toggle) delivered for review on the branch preview URL. The old status page moved to /status.
+- Phase 3 (panels): not started. Rule from Saaqib: panels are clipboards or brass framed screens sliding out of the building, matching the palette, never generic cards.
+- Heartbeat: GitHub has not fired the tick schedule (slots 20:07, 21:07 and 22:07 UTC on 2026-09-29 missed, ticks table empty). /api/tick takes Bearer CRON_SECRET on main and also x-tower-key on the branch. Backup caller needs Saaqib (SETUP.md 2c: one line edit to tick.yml on main, or a cron-job.org job). This sandbox may not read the secret value, so do not try to register a caller yourself. Report the first ticks row when it lands.
 
 ## Accounts and services seen from this environment (2026-09-29)
 - GitHub: Saxqb777. This repo (eco-system-moneeyy) is public. The proxy authenticates api.github.com calls as Saxqb777 but blocks the Actions secrets endpoints, and repository setting changes (default branch) are refused by the permission layer: ask Saaqib for those.
@@ -54,3 +56,4 @@ Read this file first in every session. It is the cross chat memory for this repo
 - Every model call goes through one wrapper that logs agent, model, tokens, cache hits, cost, duration and task id.
 - Every side effect checks for an approved approval row first. No exceptions.
 - Tests with vitest for budget rules, unlock rules, lift queue, cost math and the simulation generator.
+- Local visual check: TOWER_MOCK_STATE=1 pnpm dev, then CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome PASSCODE=<passcode> node design/shot.mjs writes design/game-desktop.png and design/game-phone.png. Chromium in this sandbox needs the proxy passed explicitly (the script does it).

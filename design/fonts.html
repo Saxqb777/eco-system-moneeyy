@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The Tower fonts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="fonts.css">
+<style>
+  body { margin: 0; background: #0E1422; color: #F3E9D2; width: 1600px; }
+  .sheet { padding: 40px 48px; display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  .pair { background: #1B2438; border: 2px solid #3A3F4B; border-radius: 10px; padding: 28px 30px; }
+  .tag { font-size: 12px; letter-spacing: .14em; color: #9C8F7A; text-transform: uppercase; margin-bottom: 14px; }
+  .title { font-size: 74px; line-height: 1; letter-spacing: .04em; text-transform: uppercase; color: #C9963B; margin: 0 0 6px; }
+  .floors { font-size: 30px; line-height: 1.25; color: #F2B86C; margin: 0 0 18px; }
+  .floors span { display: block; }
+  .panel { background: #F3E9D2; color: #1E1A16; border: 4px solid #8C5A2B; box-shadow: inset 0 0 0 2px #C9963B; border-radius: 6px; padding: 16px 18px; }
+  .panel h3 { margin: 0 0 6px; font-size: 22px; color: #1E1A16; }
+  .panel p { margin: 0 0 8px; font-size: 15px; line-height: 1.45; }
+  .panel .k { color: #6E6455; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
+  .panel .num { font-size: 30px; font-weight: 700; color: #8A6424; }
+  .a .title, .a .floors, .a .panel h3, .a .num { font-family: "Barlow Condensed", sans-serif; font-weight: 700; }
+  .a .panel p, .a .panel .k, .a .tag { font-family: "IBM Plex Sans", sans-serif; }
+  .b .title, .b .floors, .b .panel h3, .b .num { font-family: "Zilla Slab", serif; font-weight: 700; }
+  .b .panel p, .b .panel .k, .b .tag { font-family: "Nunito Sans", sans-serif; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="pair a">
+    <div class="tag">Pair 1: Barlow Condensed (display) + IBM Plex Sans (panels)</div>
+    <h1 class="title">The Tower</h1>
+    <p class="floors"><span>Penthouse</span><span>DocLedger Sales</span><span>Deals Engine</span><span>Content Farm</span></p>
+    <div class="panel">
+      <h3>Scout: Find freight forwarders</h3>
+      <p class="k">Status: working since 09:40</p>
+      <p>Scanning Jebel Ali freight forwarders. Found 4 new leads, 1 already known. Web searches used: 3 of 5.</p>
+      <p class="k">Tokens today</p>
+      <p class="num">18,420 in, 2,110 out, 0.06 USD</p>
+    </div>
+  </div>
+  <div class="pair b">
+    <div class="tag">Pair 2: Zilla Slab (display) + Nunito Sans (panels)</div>
+    <h1 class="title">The Tower</h1>
+    <p class="floors"><span>Penthouse</span><span>DocLedger Sales</span><span>Deals Engine</span><span>Content Farm</span></p>
+    <div class="panel">
+      <h3>Scout: Find freight forwarders</h3>
+      <p class="k">Status: working since 09:40</p>
+      <p>Scanning Jebel Ali freight forwarders. Found 4 new leads, 1 already known. Web searches used: 3 of 5.</p>
+      <p class="k">Tokens today</p>
+      <p class="num">18,420 in, 2,110 out, 0.06 USD</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

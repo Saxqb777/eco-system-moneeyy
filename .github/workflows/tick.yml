@@ -2,6 +2,8 @@ name: tick
 
 # The heartbeat. Hourly at minute 7, plus 03:55 UTC so the morning brief lands at 08:00 Dubai.
 # Authenticates with a GitHub OIDC token that the Tower verifies. No secrets to configure.
+# GitHub registers the schedule when this file changes on the default branch, so a merge that
+# touches this file re registers it.
 on:
   schedule:
     - cron: "7 * * * *"

@@ -12,11 +12,13 @@ export function bad(message: string, status = 400) {
   return json({ ok: false, error: message }, { status });
 }
 
+// Accepts the secret as "Authorization: Bearer <secret>" or as an "x-tower-key: <secret>" header,
+// so any external cron service can call the heartbeat.
 export function bearerOk(req: Request, expectedEnv = "CRON_SECRET"): boolean {
   const expected = process.env[expectedEnv];
   if (!expected) return false;
   const header = req.headers.get("authorization") ?? "";
-  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : (req.headers.get("x-tower-key") ?? "");
   if (token.length !== expected.length) return false;
   let diff = 0;
   for (let i = 0; i < token.length; i++) diff |= token.charCodeAt(i) ^ expected.charCodeAt(i);

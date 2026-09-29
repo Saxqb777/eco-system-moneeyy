@@ -50,6 +50,8 @@ Postgres on Neon, managed with Drizzle. Conventions:
 | strategy_updated_at | timestamptz | |
 | auto_approve | boolean | Deals Engine after the approved request |
 | auto_approve_since | timestamptz | |
+| throttled_until | timestamptz | set by the 40 percent guard, cleared at the next Dubai midnight |
+| paused_reason | text | why the floor is paused, for example the daily cap |
 | niche | text | current niche, for example freight forwarders |
 | next_niches | jsonb | ordered list kept by Warden |
 | monthly_guide_usd | numeric | allocation guide from the brief |
@@ -401,6 +403,19 @@ Indexes on (occurred_at) and (floor_id, occurred_at). The roof counters, the pet
 | update_id | bigint, pk | idempotency for the webhook |
 | received_at | timestamptz | |
 | payload | jsonb | |
+
+### ticks
+| column | type | notes |
+|--------|------|-------|
+| id | uuid | |
+| trigger | text | cron, manual, setup, idea, blocked, ui |
+| status | text | running, done, failed |
+| steps | jsonb | what each step did |
+| error | text | |
+| started_at | timestamptz | |
+| finished_at | timestamptz | |
+
+One row per heartbeat so the status page and Warden can see the pulse.
 
 ## Derived views (not tables)
 

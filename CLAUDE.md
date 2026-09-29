@@ -33,18 +33,20 @@ Read this file first in every session. It is the cross chat memory for this repo
 
 ## Status
 - Phase 0 (plan): delivered and approved 2026-09-29. Answers in docs/QUESTIONS.md.
-- Phase 1 (skeleton): in progress since 2026-09-29.
+- Phase 1 (skeleton): built and deployed 2026-09-29, waiting for Saaqib's review.
 - Phase 2 and later: not started.
 
 ## Accounts and services seen from this environment (2026-09-29)
 - GitHub: Saxqb777. This repo (eco-system-moneeyy) is public and was empty before Phase 0.
 - Also on GitHub: Saxqb777/docledger (likely the DocLedger repo) and Saxqb777/deals-program.
-- Vercel team: saxqb777s-projects (team_yKuXQ8P3eoGrvRnTWMIqSiGo). No tower project yet. Existing project deals-program.
-- Neon org: Saaqib (org-fragrant-rice-50839536), free plan, 10 projects including doc-ledger and deals-program. No tower project yet.
+- Vercel team: saxqb777s-projects (team_yKuXQ8P3eoGrvRnTWMIqSiGo). Tower project: the-tower (prj_c6WtQ5XBWTFdj1Zh3SnmsaayMVRw), region fra1, production URL https://the-tower-saxqb777s-projects.vercel.app
+- Neon org: Saaqib (org-fragrant-rice-50839536), free plan. Tower project: the-tower (square-flower-63114503), Frankfurt, database tower, role tower_owner, branch main.
+- This sandbox cannot connect to Neon directly (egress). Apply migrations through the Neon MCP run_sql_transaction (split on statement breakpoints) and insert the drizzle journal row by hand. Seed SQL: pnpm exec tsx scripts/seed-sql.ts.
 - Higgsfield: basic plan, 70 credits (for concept art in Phase 2).
 - Figma: Saaqib Khan's team, starter tier (optional for UI frames).
 - Canva connector needs authorization in claude.ai connector settings before it can be used.
-- WebFetch cannot reach vercel.com or neon.com from this environment (egress blocked). Use the Vercel and Neon MCP tools instead.
+- WebFetch cannot reach vercel.com, neon.com or *.vercel.app from this environment (egress blocked). Use the Vercel and Neon MCP tools instead (web_fetch_vercel_url reads deployed pages).
+- Secrets for the deployment live in Vercel env vars: DATABASE_URL, CRON_SECRET, OWNER_PASSCODE, SECRETS_KEY, TELEGRAM_WEBHOOK_SECRET. A local copy sits in .env.local (ignored by git) and is regenerated per session if needed from the Vercel project.
 
 ## Conventions once code exists
 - pnpm. Next.js 15 App Router. TypeScript strict. Drizzle ORM on Neon Postgres.

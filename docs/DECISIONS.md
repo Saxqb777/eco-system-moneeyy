@@ -18,3 +18,7 @@ Append only. Newest entries at the bottom. Each entry: id, date, decision, who d
 - D009 (Saaqib): main is created once with the Phase 1 skeleton. After that, one pull request per phase, merged by Saaqib. Production follows main.
 - D010 (Saaqib): the repo stays public for now.
 - D011 (Claude, with Saaqib's yes): no Tailwind. Plain CSS with palette tokens so panels feel like the game's own UI, not a component library.
+- D012 (Claude): the sandbox cannot open a database connection to Neon, so migrations and seeds run through the Neon connection (one transaction, journal row recorded) rather than the migrate script. The script still works from any normal machine.
+- D013 (Claude): the temporary status page runs a simulation catch up on every open, so the building is alive on first load even before the hourly cron runs.
+- D014 (Claude): the tick route accepts the owner cookie as well as the cron bearer secret, so Run Warden now can come from the game.
+- D015 (Claude): Vercel Authentication (the team default deployment protection) is switched off on the tower project because it would block the cron and the Telegram webhook. The owner passcode protects the game instead.

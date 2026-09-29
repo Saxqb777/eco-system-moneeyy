@@ -11,3 +11,10 @@ Append only. Newest entries at the bottom. Each entry: id, date, decision, who d
 - D005 (Claude, proposal, needs Saaqib): pasted credentials are stored encrypted in Neon (AES 256 GCM with a key held only in Vercel env vars). The UI never shows a stored secret again, only presence and the last 4 characters.
 - D006 (Claude, proposal, needs Saaqib): the morning brief is built from data by code, not by a model call, so it costs nothing and always arrives.
 - D007 (Claude, proposal, needs Saaqib): the levels are Lobby, Ground, Floor 1, Floor 2, Floor 3, Penthouse, with the roof counters above the Penthouse.
+
+## Phase 1 start (2026-09-29)
+
+- D008 (Saaqib): all Phase 0 recommendations accepted, questions 1 to 16 answered as recommended (see docs/QUESTIONS.md), assumptions A1 to A8 accepted.
+- D009 (Saaqib): main is created once with the Phase 1 skeleton. After that, one pull request per phase, merged by Saaqib. Production follows main.
+- D010 (Saaqib): the repo stays public for now.
+- D011 (Claude, with Saaqib's yes): no Tailwind. Plain CSS with palette tokens so panels feel like the game's own UI, not a component library.

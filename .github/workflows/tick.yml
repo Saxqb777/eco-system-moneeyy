@@ -1,0 +1,27 @@
+name: tick
+
+# The heartbeat. Hourly at minute 7, plus 03:55 UTC so the morning brief lands at 08:00 Dubai.
+on:
+  schedule:
+    - cron: "7 * * * *"
+    - cron: "55 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Call the heartbeat
+        env:
+          TOWER_URL: ${{ secrets.TOWER_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$TOWER_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "TOWER_URL and CRON_SECRET secrets are not set in this repo yet (see SETUP.md item 2)."
+            exit 1
+          fi
+          code=$(curl -sS -o /tmp/tick.json -w "%{http_code}" --max-time 330 -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" "${TOWER_URL%/}/api/tick?trigger=cron")
+          cat /tmp/tick.json; echo
+          test "$code" = "200"

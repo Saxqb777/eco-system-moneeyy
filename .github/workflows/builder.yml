@@ -1,0 +1,14 @@
+name: builder
+
+# Builder's nightly ticket on the DocLedger repo. Disabled until Phase 5.
+# When enabled: schedule "0 22 * * *" (02:00 Dubai), one ticket, hard caps 25 tool calls, 0.40 USD, 20 minutes.
+on:
+  workflow_dispatch:
+
+jobs:
+  builder:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - run: echo "Builder arrives in Phase 5"

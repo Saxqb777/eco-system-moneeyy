@@ -32,8 +32,9 @@ Read this file first in every session. It is the cross chat memory for this repo
 - SETUP.md: everything Saaqib has to provide, with exact steps and current status.
 
 ## Status
-- Phase 0 (plan): delivered 2026-09-29. Waiting for Saaqib's approval and answers in docs/QUESTIONS.md.
-- Phase 1 and later: not started.
+- Phase 0 (plan): delivered and approved 2026-09-29. Answers in docs/QUESTIONS.md.
+- Phase 1 (skeleton): in progress since 2026-09-29.
+- Phase 2 and later: not started.
 
 ## Accounts and services seen from this environment (2026-09-29)
 - GitHub: Saxqb777. This repo (eco-system-moneeyy) is public and was empty before Phase 0.

@@ -61,4 +61,21 @@ Answer in chat with the number and a short reply. I will write the answers here 
 
 ## Answers
 
-(empty until Saaqib replies)
+Given by Saaqib on 2026-09-29: all recommendations accepted, assumptions A1 to A8 accepted, Phase 1 started.
+
+1. Create main once with the Phase 1 skeleton, then one pull request per phase that Saaqib merges. Production follows main.
+2. Warden: batch for the six scheduled runs, instant runs when Saaqib acts, morning brief built from data.
+3. Builder in a nightly GitHub Actions job. Caps per ticket: 25 tool calls, 0.40 USD, 20 minutes.
+4. Single owner passcode on the game and its API.
+5. Pasted keys stored encrypted in Neon, never shown again.
+6. Prompt caching off for Warden's scheduled runs, on everywhere else.
+7. Repo stays public for now. May flip to private later.
+8. DocLedger repo is Saxqb777/docledger. Confirm stack and tests at Phase 5.
+9. Deals page lives inside The Tower at /deals.
+10. Start with the Amazon.ae tag. Other stores post plain links until ids exist.
+11. Resend inbound for replies if the MX record can be added, else Saaqib forwards replies by hand. Decide at Phase 5.
+12. Levels: Lobby, Ground, Floor 1, Floor 2, Floor 3, Penthouse, roof counters on top.
+13. Start on Vercel Hobby. Move to Pro when money is real.
+14. Hyphen rule covers UI text and agent output only. Code, URLs and file names keep hyphens.
+15. Check the Higgsfield credit cost first, then generate the two concept images or draw them as SVG.
+16. Dubai time, weeks start Monday, budget review every 7 days from launch.

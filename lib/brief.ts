@@ -123,3 +123,23 @@ export async function buildBrief(db: Db, now = new Date()): Promise<Brief> {
     notes: runs.map((r) => r.summary).filter((s): s is string => !!s),
   };
 }
+
+// Plain text for Telegram. No markup, so nothing needs escaping.
+export function formatBrief(b: Brief): string {
+  const lines: string[] = [];
+  lines.push(`Morning brief, ${b.dayKey}${b.simulated ? " (SIMULATED)" : ""}`);
+  lines.push(`Money in today: ${usd(b.moneyInTodayUsd)}`);
+  lines.push(`Money out today: ${usd(b.moneyOutTodayUsd)}`);
+  lines.push(`Net today: ${usd(b.netTodayUsd)}. Net all time: ${usd(b.netTotalUsd)}`);
+  lines.push("");
+  lines.push(b.needs.length ? "Needs you:" : "Needs you: nothing today.");
+  for (const n of b.needs) lines.push(`• ${n}`);
+  lines.push("");
+  lines.push("Floors:");
+  for (const f of b.floors) lines.push(`• ${f.name}: ${f.line}`);
+  if (b.notes.length) {
+    lines.push("");
+    lines.push(`Warden: ${b.notes[0]}`);
+  }
+  return lines.join("\n");
+}

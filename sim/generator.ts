@@ -40,6 +40,8 @@ import {
 import { SIM_PLAYBOOKS } from "./playbooks";
 import { between, pick, rngFor } from "./rng";
 import { describeTaskOutput } from "@/lib/tasks";
+import { applyApprovalDecision } from "@/lib/approvals";
+export { applyApprovalDecision };
 
 const SLICE_MINUTES = 5;
 const PENTHOUSE_LEVEL = 5;
@@ -479,28 +481,6 @@ async function autoDecideApprovals(db: Db, now: Date, summary: SimSummary) {
     await applyApprovalDecision(db, a.id, approve ? "approved" : "rejected", approve ? null : "Not this one, too pushy", "auto", now);
     summary.approvalsAutoDecided += 1;
   }
-}
-
-// Shared with the API route: records the decision and, in simulation, moves the linked row along.
-export async function applyApprovalDecision(db: Db, approvalId: string, status: "approved" | "rejected", feedback: string | null, via: string, now = new Date()) {
-  const [a] = await db.select().from(approvals).where(eq(approvals.id, approvalId)).limit(1);
-  if (!a || a.status !== "pending") return null;
-  await db.update(approvals).set({ status, feedback, decidedAt: now, decidedVia: via, executedAt: a.simulated ? now : null, executionResult: a.simulated ? { simulated: true } : null, updatedAt: now }).where(eq(approvals.id, a.id));
-  if (a.simulated) {
-    if (a.type === "outreach_email") {
-      await db.update(outreach).set({ status: status === "approved" ? "sent" : "rejected", sentAt: status === "approved" ? now : null, updatedAt: now }).where(eq(outreach.approvalId, a.id));
-      const [o] = await db.select().from(outreach).where(eq(outreach.approvalId, a.id)).limit(1);
-      if (o?.leadId) await db.update(leads).set({ status: status === "approved" ? "contacted" : "qualified", updatedAt: now }).where(eq(leads.id, o.leadId));
-    } else if (a.type === "public_post") {
-      await db.update(posts).set({ status: status === "approved" ? "approved" : "rejected", updatedAt: now }).where(eq(posts.approvalId, a.id));
-    } else if (a.type === "pull_request") {
-      await db.update(tickets).set({ status: status === "approved" ? "approved" : "rejected", updatedAt: now }).where(eq(tickets.approvalId, a.id));
-    }
-  }
-  if (a.taskId) {
-    await logEvent(db, { taskId: a.taskId, agentId: a.agentId, floorId: a.floorId, type: status === "approved" ? "log" : "rejected", message: status === "approved" ? `Approved by owner (${via})` : `Rejected by owner: ${feedback ?? "no feedback"}`, at: now });
-  }
-  return { id: a.id, status };
 }
 
 // Removes every simulated row. Only called from the settings API on explicit request.

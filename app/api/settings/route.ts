@@ -4,6 +4,10 @@ import { setupItems } from "@/db/schema";
 import { bad, json, readJson } from "@/lib/http";
 import { asNumber, getSettings, setSetting } from "@/lib/settings";
 import { clearSimulationData } from "@/sim/generator";
+import { raiseApproval } from "@/lib/approvals";
+import { ensureLaunchDate } from "@/lib/budget";
+import { after } from "next/server";
+import { runTick } from "@/warden/tick";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +29,21 @@ export async function POST(req: Request) {
     return json({ ok: true, cleared: true });
   }
 
+  if (body.action === "raise_ceiling") {
+    const v = asNumber(body.value, NaN);
+    const s = await getSettings(db);
+    const ceiling = asNumber(s.hard_ceiling_usd, 5);
+    if (!Number.isFinite(v) || v <= ceiling) return bad(`Type a ceiling above the current ${ceiling.toFixed(2)} USD`);
+    if (v > 50) return bad("That is more than 50 USD a day. Start smaller.");
+    const raised = await raiseApproval(db, {
+      type: "spend_increase",
+      summary: `Raise the hard ceiling to ${v.toFixed(2)} USD a day`,
+      content: { proposedCeilingUsd: v },
+      riskNote: "Asked from the Budget tab. Approving lets the daily cap grow past the old ceiling on future reviews.",
+    });
+    return json({ ok: true, approvalId: raised.id });
+  }
+
   const { key, value } = body;
   if (!key || !EDITABLE.has(key)) return bad("That setting cannot be changed here");
 
@@ -40,5 +59,11 @@ export async function POST(req: Request) {
     if (v > ceiling) return bad(`Cap cannot pass the hard ceiling of ${ceiling} USD. Raising the ceiling is an approval item.`);
   }
   await setSetting(db, key, value);
+  if (key === "simulation_mode" && value === false) {
+    await ensureLaunchDate(db);
+    after(async () => {
+      await runTick("setup").catch(() => null);
+    });
+  }
   return json({ ok: true, key, value });
 }

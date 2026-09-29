@@ -149,7 +149,7 @@ interface SetupRow {
 
 // The clipboard: every item Saaqib has to provide, with a paste box. Values never come back out.
 export function SetupTab() {
-  const { data, error, reload } = usePoll<{ items: SetupRow[] }>("/api/setup", 10000);
+  const { data, error, reload } = usePoll<{ items: SetupRow[]; pairingCode?: string | null }>("/api/setup", 10000);
   if (error && !data) return <Empty>{error}</Empty>;
   if (!data) return <Empty>Fetching the clipboard</Empty>;
   const items = data.items;
@@ -160,13 +160,13 @@ export function SetupTab() {
         <div className="muted">Paste a value and press Save. Secrets are encrypted and never shown again, only a hint stays.</div>
       </Sheet>
       {items.map((i) => (
-        <SetupItem key={i.key} item={i} onSaved={reload} />
+        <SetupItem key={i.key} item={i} onSaved={reload} pairingCode={i.key === "telegram_chat_id" ? (data.pairingCode ?? null) : null} />
       ))}
     </>
   );
 }
 
-function SetupItem({ item, onSaved }: { item: SetupRow; onSaved: () => void }) {
+function SetupItem({ item, onSaved, pairingCode }: { item: SetupRow; onSaved: () => void; pairingCode: string | null }) {
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
@@ -198,6 +198,7 @@ function SetupItem({ item, onSaved }: { item: SetupRow; onSaved: () => void }) {
         <Pill status={present ? "present" : "missing"}>{present ? "On the board" : "Missing"}</Pill>
       </div>
       <div className="muted">{item.howTo}</div>
+      {pairingCode && !present ? <div className="hint">Or open your bot in Telegram and send: /pair {pairingCode}</div> : null}
       {present ? (
         <div className="hint">
           {item.hint ?? "saved"}
@@ -342,6 +343,14 @@ export function BudgetTab({ warden, onChanged }: { warden: WardenSummary | null;
         </div>
         {note ? <span className="note-s">{note}</span> : null}
       </Sheet>
+      <Sheet title="Hard ceiling">
+        <div className="goal-line">
+          <span className="goal-metric">Ceiling</span>
+          <span className="goal-num">{usd(b.hardCeilingUsd)}</span>
+        </div>
+        <div className="muted">Raising it is an approval item on the red phone: you ask here, then you approve it there.</div>
+        <CeilingRaise current={b.hardCeilingUsd} onChanged={onChanged} />
+      </Sheet>
       <Sheet title="Today by floor">
         {b.todayByFloor.length === 0 ? <div className="muted">No spend yet today.</div> : null}
         <dl className="kv">
@@ -436,5 +445,62 @@ export function IdeasTab() {
         </ul>
       </Sheet>
     </>
+  );
+}
+
+function CeilingRaise({ current, onChanged }: { current: number; onChanged?: () => void }) {
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  async function ask() {
+    if (busy) return;
+    setBusy(true);
+    const res = await post("/api/settings", { action: "raise_ceiling", value: Number(value) });
+    setBusy(false);
+    setNote(res.ok ? "Asked. The item is on the red phone." : (res.error ?? "Could not ask"));
+    if (res.ok) {
+      setValue("");
+      onChanged?.();
+    }
+    setTimeout(() => setNote(""), 4000);
+  }
+  return (
+    <>
+      <div className="paste-row">
+        <input className="field" inputMode="decimal" placeholder={`New ceiling, above ${current}`} value={value} onChange={(e) => setValue(e.target.value)} />
+        <Key small onClick={() => void ask()} disabled={busy}>
+          Ask
+        </Key>
+      </div>
+      {note ? <span className="note-s">{note}</span> : null}
+    </>
+  );
+}
+
+// Run Warden now: an instant run, limited to one an hour per trigger.
+export function WardenControls({ warden }: { warden: WardenSummary | null }) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const last = warden?.runs[0];
+  async function run() {
+    if (busy) return;
+    setBusy(true);
+    setNote("Warden is reading the floors");
+    const res = await post("/api/tick?trigger=manual", {});
+    setBusy(false);
+    const w = (res as { steps?: { warden?: { status?: string; reason?: string; summary?: string } } }).steps?.warden;
+    if (!res.ok) setNote(res.error ?? "The tick failed");
+    else if (!w) setNote("Tick done");
+    else if (w.status === "applied") setNote(`Done: ${w.summary ?? "decisions applied"}`);
+    else if (w.status === "simulated") setNote("Simulation is on: Warden's runs are simulated. Paste the Anthropic key and switch simulation off for a real run.");
+    else setNote(`${w.status}${w.reason ? `: ${w.reason}` : ""}`);
+  }
+  return (
+    <div className="actions" style={{ marginTop: 0 }}>
+      <Key onClick={() => void run()} disabled={busy}>
+        Run Warden now
+      </Key>
+      <span className="note-s light">{note || (last ? `Last run ${when(last.startedAt)}: ${last.summary ?? last.status}` : "No runs yet")}</span>
+    </div>
   );
 }

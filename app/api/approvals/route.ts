@@ -4,7 +4,7 @@ import { approvals } from "@/db/schema";
 import { bad, json, readJson } from "@/lib/http";
 import { mockApprovals, mockEnabled } from "@/lib/mock-state";
 import { asBool, getSettings } from "@/lib/settings";
-import { applyApprovalDecision } from "@/sim/generator";
+import { applyApprovalDecision } from "@/lib/approvals";
 
 export const dynamic = "force-dynamic";
 

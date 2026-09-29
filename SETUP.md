@@ -12,8 +12,8 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 | 2 | Nothing: the heartbeat authenticates with a GitHub OIDC token, no secrets needed | Hourly heartbeat | Done | done 2026-09-29, but GitHub has not fired the schedule yet (three hourly slots missed), see 2c |
 | 2b | Two clicks: GitHub default branch to main, Vercel production branch to main | Pull request flow | Done | done 2026-09-29 by Saaqib |
 | 2c | Backup heartbeat: a free cron-job.org job that calls /api/tick every hour with the CRON_SECRET from Vercel, or a one line edit to the tick workflow on main | Hourly heartbeat until GitHub's scheduler wakes up | Now (about 3 minutes) | missing |
-| 3 | Anthropic API key | Leaving simulation mode, every real agent run | Phase 4 | missing |
-| 4 | Telegram bot token and your chat id | Warden messages, approvals over Telegram, morning brief | Phase 4 | missing |
+| 3 | Anthropic API key | Leaving simulation mode, every real agent run | Now (Phase 4 is built) | missing |
+| 4 | Telegram bot token, then pair your chat with /pair | Warden messages, approvals over Telegram, morning brief | Now (Phase 4 is built) | missing |
 | 5 | DocLedger GitHub repo URL and a GitHub token for it | Builder | Phase 5 | missing (repo likely Saxqb777/docledger, confirm) |
 | 6 | Calendar booking link | Chaser demo booking | Phase 5 | missing |
 | 7 | Resend API key and verified sending domain | Sending approved outreach emails | Phase 5 | missing |
@@ -56,11 +56,11 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 - Paste it into the Warden clipboard (Phase 3 and later). Simulation mode turns off only after this key is present and you toggle it.
 
 ### 4. Telegram bot token and chat id
-- In Telegram, open BotFather, send /newbot, pick a name (for example Warden) and a username ending in bot. Copy the token.
-- Send /setprivacy to BotFather, pick your bot, choose Disable, so the bot can read messages in the deals channel later.
-- Start a chat with your new bot and send it any message.
-- Your chat id: open https://api.telegram.org/bot<TOKEN>/getUpdates in a browser and read message.chat.id. Or paste the token into the clipboard first and Warden will detect your chat id from your first message.
-- Paste token and chat id into the Warden clipboard.
+- Telegram, BotFather, /newbot, copy the token. Paste it in the game: Warden, Setup tab, Telegram bot token, Save.
+- Pair your chat: open your new bot in Telegram and send the /pair line shown under "Your Telegram chat id" in the Setup tab (a six character code). Nobody else can pair, the code lives only in the passcode protected game.
+- The webhook registers itself on the next heartbeat (no step for you). From then on: the morning brief at 08:00 Dubai, approvals with Approve and Reject buttons, Warden's replies to your ideas.
+- Commands: /status, /brief, /pause <floor>, /resume <floor>, /cap, /run. Any other text is an idea.
+- Works in simulation too, so you can try the bot before pasting the Anthropic key. Simulated approvals never ring the phone, only real ones.
 
 ### 5. DocLedger repo and token
 - Confirm the repo URL (I found https://github.com/Saxqb777/docledger).

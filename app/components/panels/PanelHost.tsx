@@ -7,7 +7,7 @@ import type { TowerScene } from "@/scene/TowerScene";
 import { CharacterBody } from "./CharacterPanel";
 import { FloorBody } from "./FloorPanel";
 import { Panel, usePoll, type Tab } from "./shared";
-import { ApprovalsTab, BriefTab, BudgetTab, IdeasTab, SetupTab } from "./WardenTabs";
+import { ApprovalsTab, BriefTab, BudgetTab, IdeasTab, SetupTab, WardenControls } from "./WardenTabs";
 
 export type WardenTab = "office" | "approvals" | "setup" | "brief" | "budget" | "ideas";
 export type PanelSel = { type: "agent"; id: string } | { type: "floor"; slug: string } | { type: "warden"; tab: WardenTab };
@@ -82,7 +82,12 @@ function WardenPanel({ open, tab, state, scene, onClose, onNavigate }: { open: b
   const kicker = tab === "approvals" ? "The red phone" : tab === "setup" ? "The clipboard" : tab === "ideas" ? "The mail slot" : tab === "brief" ? "Morning brief" : tab === "budget" ? "Spend cap and level" : "Penthouse";
   return (
     <Panel open={open} kicker={kicker} title={warden?.name ?? "Warden"} accent={penthouse?.accent} tabs={tabs} tab={tab} onTab={(id) => onNavigate({ type: "warden", tab: id as WardenTab })} onClose={onClose}>
-      {tab === "office" && warden ? <CharacterBody agentId={warden.id} scene={scene} onFloor={(slug) => onNavigate({ type: "floor", slug })} /> : null}
+      {tab === "office" && warden ? (
+        <>
+          <WardenControls warden={summary.data?.warden ?? null} />
+          <CharacterBody agentId={warden.id} scene={scene} onFloor={(slug) => onNavigate({ type: "floor", slug })} />
+        </>
+      ) : null}
       {tab === "approvals" ? <ApprovalsTab onChanged={summary.reload} /> : null}
       {tab === "setup" ? <SetupTab /> : null}
       {tab === "brief" ? <BriefTab warden={summary.data?.warden ?? null} /> : null}

@@ -34,7 +34,7 @@ Read this file first in every session. It is the cross chat memory for this repo
 ## Status
 - Phase 0 (plan): delivered and approved 2026-09-29. Answers in docs/QUESTIONS.md.
 - Phase 1 (skeleton): delivered 2026-09-29, accepted by Saaqib (he started Phase 2). main is now the default and production branch. From here on: work on the dev branch, one pull request per phase, never push to main.
-- Phase 2 (design): started 2026-09-29. Step 1: two concept images, palette, two font pairs, then wait for Saaqib's pick. No PixiJS before the pick.
+- Phase 2 (design): concepts shown 2026-09-29, Saaqib picked style B (low poly) and font pair 1 (Barlow Condensed plus IBM Plex Sans). Step 2 built 2026-09-29: the PixiJS building (scene/), lift, characters, day and night, roof counters, running on simulation data. Waiting for Saaqib's visual review on the branch preview URL. The old status page moved to /status.
 - Phase 3 and later: not started.
 
 ## Accounts and services seen from this environment (2026-09-29)
@@ -55,3 +55,4 @@ Read this file first in every session. It is the cross chat memory for this repo
 - Every model call goes through one wrapper that logs agent, model, tokens, cache hits, cost, duration and task id.
 - Every side effect checks for an approved approval row first. No exceptions.
 - Tests with vitest for budget rules, unlock rules, lift queue, cost math and the simulation generator.
+- Local visual check: TOWER_MOCK_STATE=1 pnpm dev, then CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome PASSCODE=<passcode> node design/shot.mjs writes design/game-desktop.png and design/game-phone.png. Chromium in this sandbox needs the proxy passed explicitly (the script does it).

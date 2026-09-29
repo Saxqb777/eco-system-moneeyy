@@ -62,3 +62,23 @@ export function dubaiHour(d: Date): number {
   const local = new Date(ms);
   return local.getUTCHours() + local.getUTCMinutes() / 60 + local.getUTCSeconds() / 3600;
 }
+
+// Afternoon haze: a warm sand veil that thickens after lunch and clears toward sunset.
+export function hazeAt(dubaiHour: number): number {
+  const h = ((dubaiHour % 24) + 24) % 24;
+  if (h < 12.5 || h > 17) return 0;
+  const t = (h - 12.5) / 4.5;
+  return Math.sin(t * Math.PI) * 0.12;
+}
+
+// A sandstorm on roughly one day in seven, mid afternoon, for about half an hour. Deterministic per day.
+export function sandstormAt(dayKey: string, dubaiHour: number): number {
+  let hsh = 2166136261;
+  for (let i = 0; i < dayKey.length; i++) hsh = Math.imul(hsh ^ dayKey.charCodeAt(i), 16777619);
+  if ((hsh >>> 0) % 7 !== 0) return 0;
+  const start = 14.7 + ((hsh >>> 8) % 100) / 100;
+  const h = ((dubaiHour % 24) + 24) % 24;
+  if (h < start || h > start + 0.6) return 0;
+  const t = (h - start) / 0.6;
+  return Math.sin(t * Math.PI) * 0.3;
+}

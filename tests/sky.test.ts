@@ -37,3 +37,17 @@ describe("tweens", () => {
     expect(log[log.length - 1]).toBe("done");
   });
 });
+
+describe("haze and sandstorm", () => {
+  it("has no haze at night and some mid afternoon", async () => {
+    const { hazeAt, sandstormAt } = await import("@/scene/sky");
+    expect(hazeAt(2)).toBe(0);
+    expect(hazeAt(14.75)).toBeGreaterThan(0.1);
+    // deterministic: same day, same answer; most days have none
+    const a = sandstormAt("2026-09-30", 15);
+    expect(a).toBe(sandstormAt("2026-09-30", 15));
+    const days = ["2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08"];
+    const stormy = days.filter((d) => [14.8, 15, 15.2, 15.4].some((h) => sandstormAt(d, h) > 0)).length;
+    expect(stormy).toBeLessThan(days.length);
+  });
+});

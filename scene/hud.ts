@@ -140,24 +140,32 @@ export function floorPlate(name: string, accent: number, level: number): Contain
 
 export function lockedLabel(rule: string, level: number): Container {
   const c = new Container();
-  const y = floorY(level) - 66;
-  const lines = wrap(rule, 34);
+  const lines = wrap(rule, 44);
+  const lineH = 14;
+  const padX = 12;
+  const iconW = 18;
+  const texts = lines.map((line) => label(line, { fontSize: 11, fill: C.ink, family: "panel", weight: "600" }));
+  const textW = Math.max(...texts.map((t) => t.width));
+  const w = padX * 2 + iconW + 6 + textW;
+  const h = 10 + lines.length * lineH;
   const g = new Graphics();
-  const w = 250;
-  const h = 14 + lines.length * 15;
   g.roundRect(0, 0, w, h, 3).fill(C.paper);
-  g.rect(0, 0, w, 3).fill(C.paperShade);
-  g.rect(0, h - 3, w, 3).fill(C.paperShade);
+  g.rect(0, 0, w, 2).fill(C.paperShade);
+  g.rect(0, h - 2, w, 2).fill(C.paperShade);
+  // inline padlock
+  const px = padX + 7;
+  const py = h / 2 + 2;
+  g.roundRect(px - 6, py - 6, 12, 9, 1.5).fill(C.brassDark);
+  g.roundRect(px - 4, py - 13, 8, 9, 4).stroke({ width: 2, color: C.brassDark });
+  g.rect(px - 1, py - 4, 2, 4).fill(C.paper);
   c.addChild(g);
-  lines.forEach((line, i) => {
-    const t = label(line, { fontSize: 12, fill: C.ink, family: "panel", weight: "600" });
-    t.position.set(10, 7 + i * 15);
+  texts.forEach((t, i) => {
+    t.position.set(padX + iconW + 6, 5 + i * lineH);
     c.addChild(t);
   });
-  const lock = label("LOCKED", { fontSize: 11, fill: C.red, spacing: 2 });
-  lock.position.set(w - lock.width - 10, h - 17);
-  c.addChild(lock);
-  c.position.set(BUILDING.interiorX + 120, y - h + 14);
+  // centred inside the floor, clear of the plate on the slab above
+  const centerX = (BUILDING.interiorX + BUILDING.interiorRight) / 2;
+  c.position.set(Math.round(centerX - w / 2), Math.round(floorY(level) - 60 - h / 2 - 8));
   return c;
 }
 

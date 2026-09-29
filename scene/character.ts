@@ -1,4 +1,5 @@
-// Small vector rigs with visible personality: hair, glasses, mugs, one slouching per floor.
+// Small vector rigs with visible personality: hair, glasses, a coloured mug, one slouching per floor.
+// Poses are unmistakable from across the room: typing hammers the keys, idle leans back.
 import { Container, Graphics } from "pixi.js";
 import { C, shade } from "./palette";
 import { label } from "./draw";
@@ -10,18 +11,43 @@ export interface Look {
   slouch: boolean;
   coat: boolean;
   tone: number;
+  mugColor?: string;
+  quirk?: string;
 }
 
-export type Pose = "sit_idle" | "sit_type" | "stand" | "walk" | "raise" | "pace" | "look_out" | "dim";
+export type Pose =
+  | "sit_idle"
+  | "sit_type"
+  | "stand"
+  | "walk"
+  | "raise"
+  | "pace"
+  | "look_out"
+  | "dim"
+  | "feet_up"
+  | "asleep"
+  | "chat"
+  | "spin"
+  | "drink"
+  | "coffee"
+  | "stretch";
 
 const TAU = Math.PI * 2;
+
+function hexToNum(hex: string | undefined, fallback: number): number {
+  if (!hex) return fallback;
+  const n = Number.parseInt(hex.replace("#", ""), 16);
+  return Number.isFinite(n) ? n : fallback;
+}
 
 export class CharacterSprite extends Container {
   readonly agentId: string;
   readonly isWarden: boolean;
+  readonly look: Look;
   level = 0;
   pose: Pose = "stand";
   facing = 1;
+  busyUntil = 0; // idle director leaves the sprite alone until this time
   private readonly body = new Container();
   private readonly legL = new Graphics();
   private readonly legR = new Graphics();
@@ -32,28 +58,31 @@ export class CharacterSprite extends Container {
   private readonly mug = new Graphics();
   private readonly bubble = new Container();
   private readonly tag = new Container();
+  private readonly zz = new Container();
   private t = 0;
-  private gestureUntil = 0;
-  private gesture: "none" | "sip" | "stretch" = "none";
-  private nextGestureAt = 4000 + Math.random() * 8000;
   private walkPhase = 0;
+  private spinPhase = 0;
   readonly bodyHeight: number;
+  private readonly scaleBase: number;
+  private mugTint: number;
 
   constructor(agentId: string, name: string, look: Look, isWarden: boolean) {
     super();
     this.agentId = agentId;
     this.isWarden = isWarden;
-    const scale = isWarden ? 1.3 : 1;
-    this.bodyHeight = 52 * scale;
+    this.look = look;
+    this.scaleBase = isWarden ? 1.4 : 1;
+    this.bodyHeight = 52 * this.scaleBase;
+    this.mugTint = hexToNum(look.mugColor, C.paper);
     this.addChild(this.body);
-    this.body.scale.set(scale);
+    this.body.scale.set(this.scaleBase);
 
     const skin = C.skin[Math.abs(look.tone) % C.skin.length] ?? C.skin[0]!;
     const shirt = isWarden ? C.coat : C.shirt[Math.abs(look.tone) % C.shirt.length] ?? C.shirt[0]!;
-    const hair = C.hair[Math.abs(look.hair) % C.hair.length] ?? C.hair[0]!;
+    const hair = isWarden ? 0xb9b3a8 : C.hair[Math.abs(look.hair) % C.hair.length] ?? C.hair[0]!;
+    const stance = isWarden ? 7 : 4; // Warden stands wider
 
-    // legs (pivot at hip)
-    for (const [leg, x] of [[this.legL, -4], [this.legR, 3]] as const) {
+    for (const [leg, x] of [[this.legL, -stance], [this.legR, stance - 1]] as const) {
       leg.rect(-3, 0, 6, 18).fill(C.trouser);
       leg.rect(0, 0, 3, 18).fill(shade(C.trouser, -0.3));
       leg.rect(-4, 16, 8, 3).fill(0x1a1a1e);
@@ -61,13 +90,15 @@ export class CharacterSprite extends Container {
       this.body.addChild(leg);
     }
 
-    // torso: trapezoid, lit left, shaded right. Warden gets a long coat over the knees.
     if (isWarden) {
-      this.torso.poly([-11, -40, 11, -40, 15, -6, -15, -6]).fill(C.coat);
-      this.torso.poly([0, -40, 11, -40, 15, -6, 0, -6]).fill(shade(C.coat, -0.25));
-      this.torso.poly([-4, -40, -1, -40, 1, -14, -3, -14]).fill(C.coatLight);
-      this.torso.poly([1, -40, 4, -40, 3, -14, 1, -14]).fill(shade(C.coatLight, -0.2));
-      this.torso.rect(-3, -22, 6, 2).fill(C.brass);
+      // long coat over the knees, broad shoulders, brass buttons
+      this.torso.poly([-13, -42, 13, -42, 17, -4, -17, -4]).fill(C.coat);
+      this.torso.poly([0, -42, 13, -42, 17, -4, 0, -4]).fill(shade(C.coat, -0.25));
+      this.torso.poly([-5, -42, -1, -42, 1, -12, -3, -12]).fill(C.coatLight);
+      this.torso.poly([1, -42, 5, -42, 3, -12, 1, -12]).fill(shade(C.coatLight, -0.2));
+      this.torso.rect(-2, -30, 4, 2).fill(C.brass);
+      this.torso.rect(-2, -22, 4, 2).fill(C.brass);
+      this.torso.rect(-13, -44, 26, 3).fill(shade(C.coat, 0.15)); // collar
     } else {
       this.torso.poly([-10, -40, 10, -40, 9, -18, -9, -18]).fill(shirt);
       this.torso.poly([0, -40, 10, -40, 9, -18, 0, -18]).fill(shade(shirt, -0.18));
@@ -75,25 +106,23 @@ export class CharacterSprite extends Container {
     }
     this.body.addChild(this.torso);
 
-    // arms (pivot at shoulder)
     for (const [arm, x, side] of [[this.armL, -9, -1], [this.armR, 9, 1]] as const) {
       const g = new Graphics();
       g.rect(-2.5, 0, 5, 16).fill(isWarden ? C.coat : shirt);
       g.rect(0, 0, 2.5, 16).fill(shade(isWarden ? C.coat : shirt, -0.25));
       g.rect(-2.5, 15, 5, 4).fill(skin);
       arm.addChild(g);
-      arm.position.set(x, -38);
+      arm.position.set(x * (isWarden ? 1.3 : 1), -38);
       arm.rotation = side * 0.12;
       this.body.addChild(arm);
     }
-    this.mug.rect(-4, 0, 8, 8).fill(C.paper);
-    this.mug.rect(0, 0, 4, 8).fill(C.paperShade);
-    this.mug.rect(4, 2, 3, 4).stroke({ width: 1.5, color: C.paper });
+    this.mug.rect(-4, 0, 8, 8).fill(this.mugTint);
+    this.mug.rect(0, 0, 4, 8).fill(shade(this.mugTint, -0.2));
+    this.mug.rect(4, 2, 3, 4).stroke({ width: 1.5, color: this.mugTint });
     this.mug.position.set(0, 14);
     this.mug.visible = false;
     this.armR.addChild(this.mug);
 
-    // head (pivot at neck)
     const hg = new Graphics();
     hg.roundRect(-7, -16, 14, 15, 3).fill(skin);
     hg.roundRect(0, -16, 7, 15, 3).fill(shade(skin, -0.14));
@@ -101,7 +130,6 @@ export class CharacterSprite extends Container {
     hg.rect(-4, -8, 2, 2).fill(C.ink);
     hg.rect(2, -8, 2, 2).fill(C.ink);
     hg.rect(-2, -4, 4, 1).fill(shade(skin, -0.4));
-    // hair styles
     switch (Math.abs(look.hair) % 6) {
       case 0:
         hg.roundRect(-7, -18, 14, 6, 3).fill(hair);
@@ -140,12 +168,18 @@ export class CharacterSprite extends Container {
       this.head.position.set(-3, -37);
     }
 
-    // bubble and name tag live above the head, outside the body scale
+    // sleeping letters
+    for (let i = 0; i < 2; i++) {
+      const z = label("z", { fontSize: 11 + i * 3, fill: C.paper, family: "panel", weight: "600" });
+      z.position.set(6 + i * 8, -10 - i * 12);
+      this.zz.addChild(z);
+    }
+    this.zz.visible = false;
+
     this.bubble.visible = false;
     this.tag.visible = false;
-    this.addChild(this.bubble, this.tag);
+    this.addChild(this.bubble, this.tag, this.zz);
     this.setTag(name);
-
     this.eventMode = "static";
     this.cursor = "pointer";
   }
@@ -163,21 +197,25 @@ export class CharacterSprite extends Container {
     this.tag.position.set(0, -this.bodyHeight - 22);
   }
 
-  setBubble(text: string | null) {
+  // Paper task label. Big enough to read the three words from across the room. Alert style for blocked.
+  setBubble(text: string | null, style: "task" | "alert" | "chat" = "task") {
     this.bubble.removeChildren();
     if (!text) {
       this.bubble.visible = false;
       return;
     }
-    const t = label(text, { fontSize: 12, fill: C.ink, family: "panel", weight: "600" });
-    const w = Math.min(150, t.width + 16);
+    const alert = style === "alert";
+    const t = label(text, { fontSize: style === "chat" ? 12 : 14, fill: alert ? C.red : C.ink, family: "panel", weight: "600" });
+    const w = Math.min(190, t.width + 20);
+    const h = 28;
     const g = new Graphics();
-    g.roundRect(-w / 2 + 2, -20, w, 24, 2).fill(C.paperShade);
-    g.roundRect(-w / 2, -22, w, 24, 2).fill(C.paper);
-    g.rect(-w / 2, -22, w, 3).fill(shade(C.paper, -0.08));
-    g.circle(-w / 2 + 7, -19, 2).fill(C.red);
-    g.poly([-5, 2, 5, 2, 0, 7]).fill(C.paper);
-    t.position.set(-w / 2 + 8, -20);
+    g.roundRect(-w / 2 + 2, -h + 2, w, h, 2).fill(C.paperShade);
+    g.roundRect(-w / 2, -h, w, h, 2).fill(C.paper);
+    g.rect(-w / 2, -h, w, 3).fill(alert ? C.red : shade(C.paper, -0.08));
+    if (alert) g.roundRect(-w / 2, -h, w, h, 2).stroke({ width: 1.5, color: C.red });
+    g.circle(-w / 2 + 8, -h + 8, 2).fill(alert ? C.red : C.brassDark);
+    g.poly([-5, 0, 5, 0, 0, 6]).fill(C.paper);
+    t.position.set(-w / 2 + 10, -h + 5);
     this.bubble.addChild(g, t);
     this.bubble.position.set(0, -this.bodyHeight - 12);
     this.bubble.visible = true;
@@ -185,39 +223,89 @@ export class CharacterSprite extends Container {
 
   showTag(show: boolean) {
     this.tag.visible = show;
-    if (show && this.bubble.visible) this.tag.position.set(0, -this.bodyHeight - 46);
-    else this.tag.position.set(0, -this.bodyHeight - 22);
+    this.tag.position.set(0, -this.bodyHeight - (this.bubble.visible ? 52 : 22));
   }
 
   setFacing(dir: number) {
     this.facing = dir < 0 ? -1 : 1;
-    this.body.scale.x = Math.abs(this.body.scale.x) * this.facing;
+    this.body.scale.x = this.scaleBase * this.facing;
   }
 
   setPose(pose: Pose) {
     if (this.pose === pose) return;
     this.pose = pose;
-    const seated = pose === "sit_idle" || pose === "sit_type" || pose === "dim";
-    this.legL.visible = !seated;
-    this.legR.visible = !seated;
-    this.body.position.y = seated ? 14 : 0;
+    const seated = pose === "sit_idle" || pose === "sit_type" || pose === "dim" || pose === "feet_up" || pose === "asleep" || pose === "spin" || pose === "stretch";
+    this.legL.visible = !seated || pose === "feet_up";
+    this.legR.visible = !seated || pose === "feet_up";
+    this.legL.rotation = 0;
+    this.legR.rotation = 0;
+    this.body.position.set(0, seated ? 14 : 0);
+    this.body.rotation = 0;
+    this.torso.rotation = this.look.slouch && !this.isWarden ? -0.14 : 0;
     this.alpha = pose === "dim" ? 0.6 : 1;
     this.armL.rotation = -0.12;
     this.armR.rotation = 0.12;
     this.head.rotation = 0;
     this.mug.visible = false;
-    if (seated) {
-      this.armL.rotation = -0.9;
-      this.armR.rotation = 0.9;
+    this.zz.visible = false;
+    switch (pose) {
+      case "sit_idle":
+        // leaning back, arms crossed on the chest
+        this.torso.rotation += 0.12;
+        this.armL.rotation = -1.7;
+        this.armR.rotation = 1.7;
+        break;
+      case "sit_type":
+        // leaning in over the keyboard
+        this.torso.rotation -= 0.12;
+        this.armL.rotation = -1.05;
+        this.armR.rotation = 1.05;
+        break;
+      case "dim":
+        this.armL.rotation = -1.7;
+        this.armR.rotation = 1.7;
+        break;
+      case "feet_up":
+        this.torso.rotation += 0.3;
+        this.legL.rotation = -1.4;
+        this.legR.rotation = -1.5;
+        this.legL.position.y = -12;
+        this.legR.position.y = -12;
+        this.armL.rotation = -2.6;
+        this.armR.rotation = 2.6;
+        break;
+      case "asleep":
+        this.torso.rotation += 0.18;
+        this.head.rotation = 0.45;
+        this.armL.rotation = -0.3;
+        this.armR.rotation = 0.3;
+        this.zz.visible = true;
+        break;
+      case "raise":
+        this.armR.rotation = Math.PI * 0.92;
+        this.head.rotation = -0.22;
+        break;
+      case "pace":
+        this.armL.rotation = -0.55;
+        this.armR.rotation = 0.55;
+        break;
+      case "coffee":
+        this.armR.rotation = 2.6;
+        this.mug.visible = true;
+        break;
+      case "drink":
+        this.armR.rotation = 2.5;
+        this.mug.visible = true;
+        break;
+      case "chat":
+        this.armR.rotation = 1.2;
+        break;
+      default:
+        break;
     }
-    if (pose === "raise") {
-      this.armR.rotation = Math.PI * 0.92;
-      this.head.rotation = -0.22;
-    }
-    if (pose === "pace") {
-      this.armL.rotation = -0.55;
-      this.armR.rotation = 0.55;
-    }
+    if (pose === "feet_up") return;
+    this.legL.position.y = -18;
+    this.legR.position.y = -18;
   }
 
   update(dtMs: number) {
@@ -225,44 +313,24 @@ export class CharacterSprite extends Container {
     const s = this.t / 1000;
     switch (this.pose) {
       case "sit_idle":
-      case "dim": {
+      case "dim":
         this.torso.scale.y = 1 + Math.sin(s * TAU * 0.25) * 0.015;
-        if (this.gesture === "none" && this.t > this.nextGestureAt) {
-          this.gesture = Math.random() < 0.55 && this.mug.parent ? "sip" : "stretch";
-          this.gestureUntil = this.t + (this.gesture === "sip" ? 1400 : 1600);
-          this.nextGestureAt = this.t + 6000 + Math.random() * 10000;
-        }
-        if (this.gesture === "sip") {
-          const k = Math.sin(Math.min(1, (this.gestureUntil - this.t) / 1400) * Math.PI);
-          this.mug.visible = true;
-          this.armR.rotation = 0.9 + k * 1.9;
-          if (this.t > this.gestureUntil) {
-            this.gesture = "none";
-            this.mug.visible = false;
-            this.armR.rotation = 0.9;
-          }
-        } else if (this.gesture === "stretch") {
-          const k = Math.sin(Math.min(1, 1 - (this.gestureUntil - this.t) / 1600) * Math.PI);
-          this.armL.rotation = -0.9 - k * 2.2;
-          this.armR.rotation = 0.9 + k * 2.2;
-          if (this.t > this.gestureUntil) {
-            this.gesture = "none";
-            this.armL.rotation = -0.9;
-            this.armR.rotation = 0.9;
-          }
-        }
+        this.head.rotation = Math.sin(s * TAU * 0.15) * 0.05;
         break;
-      }
       case "sit_type": {
-        this.armL.rotation = -0.95 + Math.sin(s * TAU * 3.5) * 0.08;
-        this.armR.rotation = 0.95 - Math.sin(s * TAU * 3.5 + 1.2) * 0.08;
-        this.head.rotation = Math.sin(s * TAU * 0.4) * 0.03;
+        // hands hammer the keys: fast alternating strokes, shoulders bob, head nods a little
+        const k = s * TAU * 5.5;
+        this.armL.rotation = -1.05 + Math.max(0, Math.sin(k)) * 0.35;
+        this.armR.rotation = 1.05 - Math.max(0, Math.sin(k + Math.PI)) * 0.35;
+        this.body.position.y = 14 + Math.abs(Math.sin(k)) * 0.8;
+        this.head.rotation = Math.sin(s * TAU * 0.8) * 0.04;
         this.bubble.position.y = -this.bodyHeight - 12 + Math.sin(s * TAU * 0.5) * 2;
         break;
       }
       case "walk":
       case "pace": {
-        this.walkPhase += dtMs / 1000 * TAU * 1.6;
+        const rate = this.pose === "pace" ? 1.1 : 1.6;
+        this.walkPhase += (dtMs / 1000) * TAU * rate;
         const sw = Math.sin(this.walkPhase);
         this.legL.rotation = sw * 0.45;
         this.legR.rotation = -sw * 0.45;
@@ -273,17 +341,44 @@ export class CharacterSprite extends Container {
         }
         break;
       }
-      case "raise": {
+      case "raise":
         this.armR.rotation = Math.PI * 0.92 + Math.sin(s * TAU * 1.2) * 0.12;
         this.body.position.y = -Math.abs(Math.sin(s * TAU * 0.6)) * 1.5;
         break;
-      }
-      case "look_out": {
+      case "look_out":
+      case "coffee":
         this.head.rotation = -0.06 + Math.sin(s * TAU * 0.2) * 0.03;
+        if (this.pose === "coffee") this.armR.rotation = 2.6 + Math.sin(s * TAU * 0.3) * 0.25;
+        break;
+      case "stretch": {
+        const k = (Math.sin(s * TAU * 0.5) + 1) / 2;
+        this.armL.rotation = -1.7 - k * 1.4;
+        this.armR.rotation = 1.7 + k * 1.4;
+        this.torso.rotation = 0.12 + k * 0.1;
         break;
       }
+      case "spin":
+        this.spinPhase += (dtMs / 1000) * TAU * 1.4;
+        this.body.scale.x = this.scaleBase * Math.cos(this.spinPhase) * this.facing;
+        break;
+      case "asleep":
+        this.torso.scale.y = 1 + Math.sin(s * TAU * 0.12) * 0.02;
+        this.zz.alpha = 0.5 + Math.sin(s * TAU * 0.5) * 0.5;
+        this.zz.position.set(8, -this.bodyHeight + 8 + Math.sin(s * TAU * 0.25) * 3);
+        break;
+      case "drink":
+        this.armR.rotation = 2.5 + Math.sin(s * TAU * 0.5) * 0.2;
+        break;
+      case "chat":
+        this.armR.rotation = 1.2 + Math.sin(s * TAU * 1.3) * 0.3;
+        this.head.rotation = Math.sin(s * TAU * 0.6) * 0.08;
+        break;
+      case "feet_up":
+        this.torso.scale.y = 1 + Math.sin(s * TAU * 0.2) * 0.015;
+        break;
       default:
         break;
     }
+    if (this.pose !== "spin") this.body.scale.x = this.scaleBase * this.facing;
   }
 }

@@ -224,6 +224,7 @@ Each phase ends with a deploy, the URL, a 5 line summary and what is needed from
 - Stop for a visual review. Iterate until Saaqib says it looks like a game.
 
 ### Phase 3: Panels
+- Panels are styled as clipboards or brass framed screens sliding out of the building, in the palette. Never generic cards (Saaqib, 2026-09-29).
 - Character, floor and Warden panels. Editable names. Approval queue UI with approve, reject and feedback. Setup clipboard with paste boxes and status. Ideas inbox. Top bar with the simulation toggle.
 - Needs from Saaqib: nothing new, but this is when the clipboard can take real keys.
 
@@ -244,8 +245,8 @@ Each phase ends with a deploy, the URL, a 5 line summary and what is needed from
 ### Phase 7: Budget dynamics and polish
 - Weekly budget review, level up and down, ceiling approval item. Unlock logic for Floor 1 and Ground with the floor_unlock approval item. Sound. Tests. README. Performance pass for 60 fps.
 
-### Phase 8 (optional, last): phone layout
-- Zoomed building that scrolls on phones. Parked by Saaqib on 2026-09-29, only if asked.
+### Phase 8: merged into Phase 2
+- The zoomed, scrolling phone layout was built in the Phase 2 fix batch (2026-09-29).
 
 ## 7. Risks and how they are handled
 

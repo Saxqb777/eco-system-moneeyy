@@ -48,5 +48,5 @@ export const DESK_SLOTS: Record<string, number[]> = {
 };
 
 export const WORKSHOP = { x: 1010, benchX: 1120 };
-export const PENTHOUSE = { deskX: 960, paceMin: 470, paceMax: 1180, windowX: 560 };
+export const PENTHOUSE = { deskX: 1060, paceMin: 480, paceMax: 940, windowX: 600, window2X: 800 };
 export const LIFT_DOOR_X = BUILDING.interiorX + 22; // where riders stand before boarding

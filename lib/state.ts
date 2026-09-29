@@ -29,6 +29,7 @@ export interface TowerState {
     strategyNote: string | null;
     pausedReason: string | null;
     throttled: boolean;
+    behindTarget: boolean;
     missingSetup: string[];
     isBusiness: boolean;
     agents: Array<{
@@ -97,6 +98,7 @@ export async function getTowerState(db: Db, now = new Date()): Promise<TowerStat
       strategyNote: f.strategyNote,
       pausedReason: f.pausedReason,
       throttled: !!f.throttledUntil && f.throttledUntil.getTime() > now.getTime(),
+      behindTarget: f.status === "paused" || (!!f.throttledUntil && f.throttledUntil.getTime() > now.getTime()) || (!!f.strategyUpdatedAt && now.getTime() - f.strategyUpdatedAt.getTime() < 7 * 24 * 60 * 60 * 1000),
       missingSetup: (FLOOR_REQUIREMENTS[f.slug] ?? []).filter((k) => !presentSetup.has(k)),
       isBusiness: f.isBusiness,
       agents: agentRows

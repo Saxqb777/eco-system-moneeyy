@@ -8,36 +8,59 @@ export interface Shell {
   back: Container; // behind interiors
   front: Container; // in front of characters (slab edges, columns)
   facadeGlow: Graphics; // window glow on the side facade, alpha follows darkness
-  skylineGlow: Graphics;
 }
 
-export function buildSkyline(): { base: Graphics; glow: Graphics } {
-  const base = new Graphics();
-  const glow = new Graphics();
-  const far = shade(C.skyNightBottom, -0.15);
-  const near = shade(C.skyNightTop, -0.1);
-  // far row
+export interface Skyline {
+  far: Container;
+  near: Container;
+  glowFar: Graphics;
+  glowNear: Graphics;
+  cells: { x: number; y: number; on: boolean }[];
+}
+
+// Two rows of dark buildings behind the tower. The far row moves less when the camera pans.
+export function buildSkyline(): Skyline {
+  const far = new Container();
+  const near = new Container();
+  const baseFar = new Graphics();
+  const baseNear = new Graphics();
+  const glowFar = new Graphics();
+  const glowNear = new Graphics();
+  const cells: { x: number; y: number; on: boolean }[] = [];
+  const farColor = shade(C.skyNightBottom, -0.15);
+  const nearColor = shade(C.skyNightTop, -0.1);
   const farBlocks = [
-    [20, 620, 90], [130, 560, 70], [210, 660, 120], [1290, 600, 80], [1380, 520, 60], [1450, 640, 110], [1560, 580, 40],
+    [20, 620, 90], [130, 560, 70], [210, 660, 120], [1290, 600, 80], [1380, 520, 60], [1450, 640, 110], [1560, 580, 40], [330, 690, 60], [1240, 660, 50],
   ];
   for (const [x, top, w] of farBlocks) {
-    base.rect(x!, top!, w!, GROUND_Y - top!).fill(far);
+    baseFar.rect(x!, top!, w!, GROUND_Y - top!).fill(farColor);
     for (let r = 0; r < 6; r++) for (let c = 0; c < 3; c++) {
-      if (((r * 7 + c * 3 + x!) % 5) < 2) glow.rect(x! + 10 + c * 22, top! + 14 + r * 30, 8, 10).fill(C.glow);
+      const cx = x! + 10 + c * 22;
+      const cy = top! + 14 + r * 30;
+      if (cx + 8 > x! + w! - 4) continue;
+      const on = ((r * 7 + c * 3 + x!) % 5) < 2;
+      cells.push({ x: cx, y: cy, on });
+      if (on) glowFar.rect(cx, cy, 8, 10).fill(C.glow);
     }
   }
-  // near row
   const nearBlocks = [
     [0, 700, 110], [110, 740, 60], [180, 690, 100], [1240, 720, 90], [1330, 680, 70], [1410, 730, 120], [1530, 700, 70],
   ];
   for (const [x, top, w] of nearBlocks) {
-    base.rect(x!, top!, w!, GROUND_Y - top!).fill(near);
-    base.rect(x!, top!, w!, 6).fill(shade(near, 0.15));
+    baseNear.rect(x!, top!, w!, GROUND_Y - top!).fill(nearColor);
+    baseNear.rect(x!, top!, w!, 6).fill(shade(nearColor, 0.15));
     for (let r = 0; r < 5; r++) for (let c = 0; c < 4; c++) {
-      if (((r * 5 + c * 11 + x!) % 7) < 3) glow.rect(x! + 8 + c * 24, top! + 16 + r * 26, 9, 11).fill(C.glow);
+      const cx = x! + 8 + c * 24;
+      const cy = top! + 16 + r * 26;
+      if (cx + 9 > x! + w! - 4) continue;
+      const on = ((r * 5 + c * 11 + x!) % 7) < 3;
+      cells.push({ x: cx, y: cy, on });
+      if (on) glowNear.rect(cx, cy, 9, 11).fill(C.glow);
     }
   }
-  return { base, glow };
+  far.addChild(baseFar, glowFar);
+  near.addChild(baseNear, glowNear);
+  return { far, near, glowFar, glowNear, cells };
 }
 
 export function buildShell(): Shell {
@@ -46,7 +69,6 @@ export function buildShell(): Shell {
   const g = new Graphics();
   const f = new Graphics();
   const facadeGlow = new Graphics();
-  const skylineGlow = new Graphics();
 
   // Ground and pavement
   g.rect(0, GROUND_Y, WORLD.w, WORLD.h - GROUND_Y).fill(0x14161c);
@@ -112,7 +134,7 @@ export function buildShell(): Shell {
 
   back.addChild(g, facadeGlow);
   front.addChild(f);
-  return { back, front, facadeGlow, skylineGlow };
+  return { back, front, facadeGlow };
 }
 
 export function buildSky(): Graphics {

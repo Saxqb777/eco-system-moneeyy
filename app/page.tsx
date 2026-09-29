@@ -10,11 +10,13 @@ export const dynamic = "force-dynamic";
 
 export default async function GamePage() {
   let state: TowerState;
+  let soundEnabled = false;
   if (mockEnabled()) {
     state = mockState();
   } else {
     const db = getDb();
     const settingsMap = await getSettings(db);
+    soundEnabled = asBool(settingsMap.sound_enabled, false);
     if (asBool(settingsMap.simulation_mode, true)) {
       await runSimulation(db, new Date(), { maxSlices: 36 }).catch(() => null);
     }
@@ -23,7 +25,7 @@ export default async function GamePage() {
   return (
     <div className="game">
       <TopBar simulationMode={state.simulationMode} />
-      <TowerCanvas initialState={state} />
+      <TowerCanvas initialState={state} soundEnabled={soundEnabled} />
     </div>
   );
 }

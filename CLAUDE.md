@@ -34,8 +34,8 @@ Read this file first in every session. It is the cross chat memory for this repo
 ## Status
 - Phase 0 (plan): delivered and approved 2026-09-29. Answers in docs/QUESTIONS.md.
 - Phase 1 (skeleton): delivered 2026-09-29, accepted by Saaqib (he started Phase 2). main is now the default and production branch. From here on: work on the dev branch, one pull request per phase, never push to main.
-- Phase 2 (design): concepts shown 2026-09-29, Saaqib picked style B (low poly) and font pair 1 (Barlow Condensed plus IBM Plex Sans). Step 2 built 2026-09-29: the PixiJS building (scene/), lift, characters, day and night, roof counters, running on simulation data. Waiting for Saaqib's visual review on the branch preview URL. The old status page moved to /status.
-- Phase 3 and later: not started.
+- Phase 2 (design): concepts shown 2026-09-29, Saaqib picked style B (low poly) and font pair 1 (Barlow Condensed plus IBM Plex Sans). Step 2 built 2026-09-29 and approved with fixes. Fix and polish batch (lift with landing doors, covered desks, centred labels, bigger Warden, obvious poses, receptionist, penthouse rug, phone zoom, ambient motion, idle variety, paper flights, coin drops, blocked lamp and alert, cap hit amber, level up fanfare, parallax and floor zoom, haze and sandstorm, Warden moods, name plates and quirks from the db, sound pack, Low Effects toggle) delivered for review on the branch preview URL. The old status page moved to /status.
+- Phase 3 (panels): not started. Rule from Saaqib: panels are clipboards or brass framed screens sliding out of the building, matching the palette, never generic cards.
 
 ## Accounts and services seen from this environment (2026-09-29)
 - GitHub: Saxqb777. This repo (eco-system-moneeyy) is public. The proxy authenticates api.github.com calls as Saxqb777 but blocks the Actions secrets endpoints, and repository setting changes (default branch) are refused by the permission layer: ask Saaqib for those.

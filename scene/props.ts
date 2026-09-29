@@ -1,7 +1,7 @@
 // Hand placed props, all flat shaded vector shapes. Positions are the base point (bottom centre).
 import { Container, Graphics } from "pixi.js";
 import { C, shade } from "./palette";
-import { facetBox, plane, tri, twoTone } from "./draw";
+import { facetBox, label, plane, tri, twoTone } from "./draw";
 
 export function desk(x: number, y: number, w = 84, accent: number = C.wood): Graphics {
   const g = new Graphics();
@@ -281,4 +281,222 @@ export function twoToneWallStrip(x: number, y: number, w: number, h: number, col
   const g = new Graphics();
   twoTone(g, x, y, w, h, color);
   return g;
+}
+
+// Phase 2 fixes and polish props
+
+// A desk and monitor under a dust cloth: the shapes read through the cloth, folds hang down,
+// a chair leg pokes out on the left and, every other desk, a lamp pokes out on the right.
+export function coveredDesk(x: number, y: number, withLamp: boolean): Graphics {
+  const g = new Graphics();
+  // things poking out from under the cloth
+  g.rect(x - 44, y - 14, 4, 14).fill(shade(C.charcoalLight, -0.1)); // chair leg
+  g.rect(x - 48, y - 3, 12, 3).fill(shade(C.charcoalLight, -0.3));
+  if (withLamp) {
+    g.rect(x + 44, y - 44, 2, 40).fill(C.brassDark);
+    g.poly([x + 36, y - 44, x + 54, y - 44, x + 51, y - 54, x + 39, y - 54]).fill(0xc9b48f);
+  }
+  // cloth silhouette: desk block with a monitor bump, folds down the front
+  const top = y - 36;
+  const cloth = [
+    x - 40, y, x - 42, top + 4, x - 36, top, x - 12, top, x - 8, top - 22, x + 10, top - 24, x + 14, top, x + 38, top, x + 44, top + 6, x + 42, y,
+  ];
+  g.poly(cloth).fill(C.dust);
+  // shaded right side of the monitor bump and desk
+  g.poly([x + 2, top - 24, x + 10, top - 24, x + 14, top, x + 4, top]).fill(C.dustDark);
+  g.poly([x + 14, top, x + 38, top, x + 44, top + 6, x + 42, y, x + 22, y]).fill(shade(C.dust, -0.12));
+  // hanging folds
+  for (let i = 0; i < 5; i++) {
+    const fx = x - 34 + i * 16;
+    g.poly([fx, top + 6, fx + 5, top + 6, fx + 3, y, fx - 2, y]).fill(shade(C.dust, i % 2 ? -0.18 : 0.1));
+  }
+  g.rect(x - 40, y - 2, 82, 2).fill(shade(C.dust, -0.35));
+  return g;
+}
+
+export function waterCooler(x: number, y: number): Graphics {
+  const g = new Graphics();
+  facetBox(g, x - 10, y - 40, 20, 40, C.paper, 0.3);
+  g.rect(x - 7, y - 30, 14, 6).fill(0x3b6f8f);
+  g.rect(x - 4, y - 24, 8, 4).fill(C.charcoalLight);
+  // bottle
+  g.roundRect(x - 9, y - 68, 18, 30, 5).fill({ color: 0x8fd0e6, alpha: 0.9 });
+  g.roundRect(x - 1, y - 68, 10, 30, 5).fill({ color: 0x6fb6d0, alpha: 0.9 });
+  g.rect(x - 4, y - 72, 8, 5).fill(0x3b6f8f);
+  // paper cups
+  g.rect(x + 12, y - 36, 5, 7).fill(C.paper);
+  g.rect(x + 12, y - 44, 5, 7).fill(C.paperShade);
+  return g;
+}
+
+export interface Fan {
+  container: Container;
+  blades: Container;
+}
+
+export function ceilingFan(x: number, y: number): Fan {
+  const container = new Container();
+  const rod = new Graphics();
+  rod.rect(x - 2, y, 4, 22).fill(C.brassDark);
+  rod.circle(x, y + 24, 5).fill(C.brass);
+  const blades = new Container();
+  const b = new Graphics();
+  for (let i = 0; i < 4; i++) {
+    const a = (i * Math.PI) / 2;
+    const cx = Math.cos(a), sy = Math.sin(a) * 0.35;
+    b.poly([0, 0, cx * 30 - sy * 4, sy * 30 + cx * 4 * 0.35, cx * 30 + sy * 4, sy * 30 - cx * 4 * 0.35]).fill(i % 2 ? C.woodDark : C.wood);
+  }
+  blades.addChild(b);
+  blades.position.set(x, y + 24);
+  container.addChild(rod, blades);
+  return { container, blades };
+}
+
+export interface DeskLamp {
+  container: Container;
+  setOn(on: boolean): void;
+}
+
+// A small brass desk lamp that turns red when its worker is blocked.
+export function deskLamp(x: number, y: number): DeskLamp {
+  const container = new Container();
+  const base = new Graphics();
+  base.rect(x - 5, y - 2, 10, 2).fill(C.brassDark);
+  base.rect(x - 1, y - 18, 2, 16).fill(C.brassDark);
+  const shadeG = new Graphics();
+  const glow = new Graphics();
+  container.addChild(base, glow, shadeG);
+  const draw = (on: boolean) => {
+    shadeG.clear();
+    shadeG.poly([x - 8, y - 18, x + 8, y - 18, x + 6, y - 28, x - 6, y - 28]).fill(on ? C.red : C.brassDark);
+    glow.clear();
+    if (on) {
+      glow.poly([x - 8, y - 18, x + 8, y - 18, x + 20, y + 2, x - 20, y + 2]).fill({ color: C.red, alpha: 0.22 });
+      glow.circle(x, y - 23, 3).fill({ color: 0xff8a80, alpha: 0.9 });
+    }
+  };
+  draw(false);
+  return { container, setOn: draw };
+}
+
+export function keyboard(x: number, y: number): Graphics {
+  const g = new Graphics();
+  g.roundRect(x - 14, y - 4, 28, 5, 1).fill(C.charcoalLight);
+  for (let i = 0; i < 6; i++) g.rect(x - 12 + i * 4.3, y - 3, 3, 1.5).fill(shade(C.charcoalLight, 0.4));
+  g.rect(x - 9, y - 1, 18, 1).fill(shade(C.charcoalLight, 0.3));
+  return g;
+}
+
+export function speakerSwitch(x: number, y: number, on: boolean): Graphics {
+  const g = new Graphics();
+  facetBox(g, x - 16, y - 24, 32, 24, C.charcoal, 0.4);
+  g.rect(x - 10, y - 18, 8, 12).fill(on ? C.brassLight : C.stoneDark);
+  g.poly([x - 2, y - 18, x + 6, y - 22, x + 6, y - 2, x - 2, y - 6]).fill(on ? C.brassLight : C.stoneDark);
+  if (on) {
+    g.moveTo(x + 9, y - 16).lineTo(x + 12, y - 12).lineTo(x + 9, y - 8).stroke({ width: 1.5, color: C.brassLight });
+  } else {
+    g.moveTo(x + 9, y - 16).lineTo(x + 13, y - 8).stroke({ width: 1.5, color: C.red });
+    g.moveTo(x + 13, y - 16).lineTo(x + 9, y - 8).stroke({ width: 1.5, color: C.red });
+  }
+  return g;
+}
+
+export function coin(): Graphics {
+  const g = new Graphics();
+  g.circle(0, 0, 7).fill(C.brassDark);
+  g.circle(-1, -1, 6).fill(C.real);
+  g.circle(-2, -2, 3).fill(0xfbe7a8);
+  return g;
+}
+
+export function paperSheet(): Graphics {
+  const g = new Graphics();
+  g.rect(-5, -7, 10, 14).fill(C.paper);
+  g.rect(-3, -4, 6, 1).fill(C.muted);
+  g.rect(-3, -1, 6, 1).fill(C.muted);
+  g.rect(-3, 2, 4, 1).fill(C.muted);
+  return g;
+}
+
+// Animated prop variants used by the polish layer
+
+export interface PlantProp {
+  container: Container;
+  leaves: Container;
+}
+
+// A plant whose leaves can sway: the pot stays, the leaves pivot at the soil line.
+export function plantSway(x: number, y: number, tall = 1): PlantProp {
+  const container = new Container();
+  const pot = new Graphics();
+  const ph = 14 * tall;
+  pot.poly([x - 9, y, x + 9, y, x + 7, y - ph, x - 7, y - ph]).fill(0x9a5f3a);
+  pot.rect(x + 1, y - ph, 6, ph).fill(0x7c4a2c);
+  const leaves = new Container();
+  const lg = new Graphics();
+  tri(lg, -2, 0, -20, -22, -6, -30 * tall, C.leaf);
+  tri(lg, 2, 0, 20, -24, 8, -32 * tall, C.leafDark);
+  tri(lg, -4, 0, 4, 0, 0, -40 * tall, C.leaf);
+  tri(lg, -12, -6, 2, -30 * tall, -2, -16, shade(C.leaf, 0.2));
+  leaves.addChild(lg);
+  leaves.position.set(x, y - ph);
+  container.addChild(pot, leaves);
+  return { container, leaves };
+}
+
+export interface MonitorProp {
+  container: Container;
+  redraw(seed: number, on: boolean): void;
+}
+
+// A monitor whose screen content changes now and then, like someone actually working.
+export function monitorProp(x: number, y: number, on: boolean): MonitorProp {
+  const container = new Container();
+  const frame = new Graphics();
+  frame.rect(x - 3, y - 6, 6, 6).fill(C.charcoalLight);
+  frame.rect(x - 8, y - 1, 16, 2).fill(C.charcoalLight);
+  frame.roundRect(x - 15, y - 26, 30, 21, 2).fill(C.charcoalDark);
+  const screen = new Graphics();
+  container.addChild(frame, screen);
+  const redraw = (seed: number, lit: boolean) => {
+    screen.clear();
+    screen.rect(x - 13, y - 24, 26, 17).fill(lit ? C.screen : 0x2a3138);
+    if (!lit) return;
+    let s = seed >>> 0 || 1;
+    const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+    const rows = 3 + Math.floor(rnd() * 2);
+    for (let i = 0; i < rows; i++) {
+      const w = 6 + Math.floor(rnd() * 16);
+      screen.rect(x - 11, y - 21 + i * 4, w, 2).fill(shade(C.screen, 0.2 + rnd() * 0.3));
+    }
+    if (rnd() < 0.4) screen.rect(x - 11 + Math.floor(rnd() * 14), y - 9, 6, 2).fill(C.paper);
+  };
+  redraw(1, on);
+  return { container, redraw };
+}
+
+export function namePlate(x: number, y: number, name: string): Container {
+  const c = new Container();
+  const t = label(name.toUpperCase(), { fontSize: 9, fill: C.ink, spacing: 1 });
+  const w = t.width + 10;
+  const g = new Graphics();
+  g.rect(0, 0, w, 12).fill(C.brassDark);
+  g.rect(1, 1, w - 2, 10).fill(C.brass);
+  t.position.set(5, 1);
+  c.addChild(g, t);
+  c.position.set(x - w / 2, y);
+  return c;
+}
+
+export function openSign(x: number, y: number): Container {
+  const c = new Container();
+  const g = new Graphics();
+  g.rect(x - 1, y - 14, 2, 14).fill(C.brassDark);
+  g.rect(x - 20, y, 40, 16).fill(C.paper);
+  g.rect(x - 20, y, 40, 2).fill(C.paperShade);
+  g.rect(x - 20, y, 40, 16).stroke({ width: 1.5, color: C.brassDark });
+  const t = label("OPEN", { fontSize: 11, fill: C.red, spacing: 2 });
+  t.position.set(x - t.width / 2, y + 1);
+  c.addChild(g, t);
+  return c;
 }

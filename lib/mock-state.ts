@@ -17,10 +17,11 @@ export function mockState(now = new Date()): TowerState {
     strategyNote: f.slug === "docledger" ? "Jebel Ali forwarders answer faster. Scout shifts there this week." : null,
     pausedReason: null,
     throttled: false,
+    behindTarget: f.slug === "docledger",
     missingSetup: f.slug === "deals" ? ["affiliate_amazon_ae", "deals_channel"] : [],
     isBusiness: f.isBusiness,
     agents: AGENTS.filter((a) => a.floorSlug === f.slug).map((a, i) => {
-      const status = a.kind === "warden" ? "idle" : a.slug === "docledger_chaser" ? "blocked" : i % 2 === 0 ? "working" : "idle";
+      const status = a.kind === "warden" ? "idle" : a.slug === "docledger_chaser" ? "blocked" : a.slug === "deals_editor" ? "idle" : i % 2 === 0 ? "working" : "idle";
       const titles: Record<string, string> = {
         docledger_scout: "Find freight forwarders",
         docledger_writer: "Draft outreach email",

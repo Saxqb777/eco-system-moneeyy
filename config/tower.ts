@@ -127,19 +127,19 @@ export interface AgentDef {
   kind: "warden" | "worker" | "builder";
   modelKey: "warden" | "worker" | "builder";
   playbookKey: string;
-  sprite: { hair: number; glasses: boolean; mug: boolean; slouch: boolean; coat: boolean; tone: number };
+  sprite: { hair: number; glasses: boolean; mug: boolean; slouch: boolean; coat: boolean; tone: number; mugColor: string; quirk: string };
 }
 
 export const AGENTS: AgentDef[] = [
-  { slug: "warden", floorSlug: "penthouse", name: "Warden", role: "warden", kind: "warden", modelKey: "warden", playbookKey: "warden", sprite: { hair: 0, glasses: false, mug: false, slouch: false, coat: true, tone: 0 } },
-  { slug: "docledger_scout", floorSlug: "docledger", name: "Scout", role: "scout", kind: "worker", modelKey: "worker", playbookKey: "docledger.scout", sprite: { hair: 1, glasses: false, mug: true, slouch: false, coat: false, tone: 1 } },
-  { slug: "docledger_analyst", floorSlug: "docledger", name: "Analyst", role: "analyst", kind: "worker", modelKey: "worker", playbookKey: "docledger.analyst", sprite: { hair: 2, glasses: true, mug: false, slouch: false, coat: false, tone: 2 } },
-  { slug: "docledger_writer", floorSlug: "docledger", name: "Writer", role: "writer", kind: "worker", modelKey: "worker", playbookKey: "docledger.writer", sprite: { hair: 3, glasses: false, mug: true, slouch: false, coat: false, tone: 3 } },
-  { slug: "docledger_chaser", floorSlug: "docledger", name: "Chaser", role: "chaser", kind: "worker", modelKey: "worker", playbookKey: "docledger.chaser", sprite: { hair: 4, glasses: true, mug: true, slouch: true, coat: false, tone: 1 } },
-  { slug: "docledger_builder", floorSlug: "docledger", name: "Builder", role: "builder", kind: "builder", modelKey: "builder", playbookKey: "docledger.builder", sprite: { hair: 5, glasses: true, mug: false, slouch: false, coat: false, tone: 2 } },
-  { slug: "deals_scout", floorSlug: "deals", name: "Scout", role: "scout", kind: "worker", modelKey: "worker", playbookKey: "deals.scout", sprite: { hair: 2, glasses: false, mug: false, slouch: false, coat: false, tone: 3 } },
-  { slug: "deals_editor", floorSlug: "deals", name: "Editor", role: "editor", kind: "worker", modelKey: "worker", playbookKey: "deals.editor", sprite: { hair: 0, glasses: true, mug: true, slouch: false, coat: false, tone: 0 } },
-  { slug: "deals_publisher", floorSlug: "deals", name: "Publisher", role: "publisher", kind: "worker", modelKey: "worker", playbookKey: "deals.publisher", sprite: { hair: 3, glasses: false, mug: true, slouch: true, coat: false, tone: 2 } },
+  { slug: "warden", floorSlug: "penthouse", name: "Warden", role: "warden", kind: "warden", modelKey: "warden", playbookKey: "warden", sprite: { hair: 0, glasses: false, mug: false, slouch: false, coat: true, tone: 0, mugColor: "#2B2F3A", quirk: "window" } },
+  { slug: "docledger_scout", floorSlug: "docledger", name: "Scout", role: "scout", kind: "worker", modelKey: "worker", playbookKey: "docledger.scout", sprite: { hair: 1, glasses: false, mug: true, slouch: false, coat: false, tone: 1, mugColor: "#C9963B", quirk: "stretch" } },
+  { slug: "docledger_analyst", floorSlug: "docledger", name: "Analyst", role: "analyst", kind: "worker", modelKey: "worker", playbookKey: "docledger.analyst", sprite: { hair: 2, glasses: true, mug: false, slouch: false, coat: false, tone: 2, mugColor: "#2A9D8F", quirk: "spin" } },
+  { slug: "docledger_writer", floorSlug: "docledger", name: "Writer", role: "writer", kind: "worker", modelKey: "worker", playbookKey: "docledger.writer", sprite: { hair: 3, glasses: false, mug: true, slouch: false, coat: false, tone: 3, mugColor: "#F3E9D2", quirk: "cooler" } },
+  { slug: "docledger_chaser", floorSlug: "docledger", name: "Chaser", role: "chaser", kind: "worker", modelKey: "worker", playbookKey: "docledger.chaser", sprite: { hair: 4, glasses: true, mug: true, slouch: true, coat: false, tone: 1, mugColor: "#C94F7C", quirk: "nap" } },
+  { slug: "docledger_builder", floorSlug: "docledger", name: "Builder", role: "builder", kind: "builder", modelKey: "builder", playbookKey: "docledger.builder", sprite: { hair: 5, glasses: true, mug: false, slouch: false, coat: false, tone: 2, mugColor: "#5DA9E9", quirk: "chat" } },
+  { slug: "deals_scout", floorSlug: "deals", name: "Scout", role: "scout", kind: "worker", modelKey: "worker", playbookKey: "deals.scout", sprite: { hair: 2, glasses: false, mug: false, slouch: false, coat: false, tone: 3, mugColor: "#F08A24", quirk: "cooler" } },
+  { slug: "deals_editor", floorSlug: "deals", name: "Editor", role: "editor", kind: "worker", modelKey: "worker", playbookKey: "deals.editor", sprite: { hair: 0, glasses: true, mug: true, slouch: false, coat: false, tone: 0, mugColor: "#5FA55A", quirk: "spin" } },
+  { slug: "deals_publisher", floorSlug: "deals", name: "Publisher", role: "publisher", kind: "worker", modelKey: "worker", playbookKey: "deals.publisher", sprite: { hair: 3, glasses: false, mug: true, slouch: true, coat: false, tone: 2, mugColor: "#E0B04A", quirk: "stretch" } },
 ];
 
 export interface SetupItemDef {

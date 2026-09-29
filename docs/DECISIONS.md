@@ -22,3 +22,4 @@ Append only. Newest entries at the bottom. Each entry: id, date, decision, who d
 - D013 (Claude): the temporary status page runs a simulation catch up on every open, so the building is alive on first load even before the hourly cron runs.
 - D014 (Claude): the tick route accepts the owner cookie as well as the cron bearer secret, so Run Warden now can come from the game.
 - D015 (Claude): Vercel Authentication (the team default deployment protection) is switched off on the tower project because it would block the cron and the Telegram webhook. The owner passcode protects the game instead.
+- D016 (Claude): simulation mode is covered by an integration test on PGlite (a real Postgres in process) that applies the real migration, runs the real seed, simulates hours of activity and checks the invariants. It found and fixed a JSON null bug before anyone saw it. CI runs typecheck, tests and build on every push.

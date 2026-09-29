@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { DEFAULT_SETTINGS } from "@/config/tower";
 import type { Db } from "@/db/client";
 import { settings } from "@/db/schema";
@@ -19,11 +19,17 @@ export async function getSetting<T>(db: Db, key: string, fallback: T): Promise<T
   return (row.value as T) ?? fallback;
 }
 
+// JSON null must reach Postgres as the jsonb value null, not as SQL NULL (the column is not null).
+export function jsonValue(value: unknown) {
+  return value === null || value === undefined ? sql`'null'::jsonb` : (value as object);
+}
+
 export async function setSetting(db: Db, key: string, value: unknown): Promise<void> {
+  const v = jsonValue(value);
   await db
     .insert(settings)
-    .values({ key, value: value as object, updatedAt: new Date() })
-    .onConflictDoUpdate({ target: settings.key, set: { value: value as object, updatedAt: new Date() } });
+    .values({ key, value: v, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: settings.key, set: { value: v, updatedAt: new Date() } });
 }
 
 export function asNumber(v: unknown, fallback: number): number {

@@ -8,8 +8,9 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 | # | Item | Needed for | Needed by | Status |
 |---|------|------------|-----------|--------|
 | 1 | Answers to docs/QUESTIONS.md | Everything | Phase 1 start | done 2026-09-29 |
-| 2 | Nothing: the heartbeat authenticates with a GitHub OIDC token, no secrets needed | Hourly heartbeat | Done | done 2026-09-29 |
+| 2 | Nothing: the heartbeat authenticates with a GitHub OIDC token, no secrets needed | Hourly heartbeat | Done | done 2026-09-29, but GitHub has not fired the schedule yet (three hourly slots missed), see 2c |
 | 2b | Two clicks: GitHub default branch to main, Vercel production branch to main | Pull request flow | Done | done 2026-09-29 by Saaqib |
+| 2c | Backup heartbeat: a free cron-job.org job that calls /api/tick every hour with the CRON_SECRET from Vercel, or a one line edit to the tick workflow on main | Hourly heartbeat until GitHub's scheduler wakes up | Now (about 3 minutes) | missing |
 | 3 | Anthropic API key | Leaving simulation mode, every real agent run | Phase 4 | missing |
 | 4 | Telegram bot token and your chat id | Warden messages, approvals over Telegram, morning brief | Phase 4 | missing |
 | 5 | DocLedger GitHub repo URL and a GitHub token for it | Builder | Phase 5 | missing (repo likely Saxqb777/docledger, confirm) |
@@ -33,6 +34,20 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 - GitHub: repo Settings, General, Default branch, switch to main. (My session is not allowed to change repository settings.)
 - Vercel: project the-tower, Settings, Git, Production Branch, set to main. Until then production deploys from claude/relaxed-ritchie-kwg8g6, which currently holds the same commit as main.
 - If you prefer, make the repo private first. Private repos on GitHub Free get 2,000 Actions minutes a month. My estimate for The Tower is about 1,000 minutes a month.
+
+### 2c. Backup heartbeat (about 3 minutes, pick one or do both)
+- What happened: the tick workflow is active on main, but GitHub has not started a single scheduled run (slots 20:07, 21:07 and 22:07 UTC on 2026-09-29 all missed). The schedule was registered while the dev branch was still the default. My nudge commit to main only touched README.md, and GitHub usually re registers schedules only when the workflow file itself changes on the default branch. My session is not allowed to read the CRON_SECRET value, so I cannot register an external caller myself.
+- Way A, no secrets (try this first): on GitHub open .github/workflows/tick.yml on main, click the pencil, change the first comment line in any small way (for example add "Re registered on 30 Sep."), commit straight to main. Then wait for the next :07 UTC slot.
+- Way B, cron-job.org (works even if GitHub never wakes up):
+  1. Vercel: project the-tower, Settings, Environment Variables, find CRON_SECRET, click the eye icon, copy the value. If Vercel refuses to show it, type a new long random value into it, save, redeploy production, and use that new value below.
+  2. cron-job.org: create a free account, click Create cronjob.
+     - Title: The Tower heartbeat
+     - URL: https://the-tower-saxqb777s-projects.vercel.app/api/tick?trigger=cron
+     - Schedule: custom, every hour at minute 12 (minute 12, every hour, every day, any timezone).
+     - Advanced tab: Request method POST. Headers: add one header with key Authorization and value "Bearer " plus the secret (one space between Bearer and the secret). The alternative header x-tower-key with just the secret as the value works once the Phase 2 pull request is merged.
+     - Save, then use the test run button once. A 200 reply with "ok":true and "via":"cron_secret" means it works.
+  3. Tell me in chat. I then report the first heartbeat row from the ticks table.
+- The free tier stops waiting after 30 seconds. A tick today takes a second or two. I keep ticks short in later phases: the caller only kicks work off, long runs happen in the background.
 
 ### 3. Anthropic API key
 - console.anthropic.com, API Keys, Create Key. Name it the-tower.

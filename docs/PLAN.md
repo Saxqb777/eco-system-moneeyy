@@ -244,6 +244,9 @@ Each phase ends with a deploy, the URL, a 5 line summary and what is needed from
 ### Phase 7: Budget dynamics and polish
 - Weekly budget review, level up and down, ceiling approval item. Unlock logic for Floor 1 and Ground with the floor_unlock approval item. Sound. Tests. README. Performance pass for 60 fps.
 
+### Phase 8 (optional, last): phone layout
+- Zoomed building that scrolls on phones. Parked by Saaqib on 2026-09-29, only if asked.
+
 ## 7. Risks and how they are handled
 
 - Store pages may block server fetches (Amazon.ae, Noon). Fallback order: fetch from Vercel, fetch from the GitHub Actions runner, web search. Deals still post with plain links when no affiliate id exists.

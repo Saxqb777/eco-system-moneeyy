@@ -101,8 +101,9 @@ export async function getTowerState(db: Db, now = new Date()): Promise<TowerStat
       behindTarget: f.status === "paused" || (!!f.throttledUntil && f.throttledUntil.getTime() > now.getTime()) || (!!f.strategyUpdatedAt && now.getTime() - f.strategyUpdatedAt.getTime() < 7 * 24 * 60 * 60 * 1000),
       missingSetup: (FLOOR_REQUIREMENTS[f.slug] ?? []).filter((k) => !presentSetup.has(k)),
       isBusiness: f.isBusiness,
+      // A locked floor stands empty: its dust sheets show, its old crew does not (Deals closed 2026-09-30).
       agents: agentRows
-        .filter((a) => a.floorId === f.id)
+        .filter((a) => a.floorId === f.id && f.status !== "locked")
         .map((a) => {
           const t = a.currentTaskId ? taskById.get(a.currentTaskId) : undefined;
           const total = a.tasksDone + a.tasksFailed;

@@ -186,6 +186,10 @@ export async function advanceGrowth(db: Db, now: Date, created: Record<string, n
     }
     bump("founder_report");
   }
+
+  // Social runs the DocLedger Facebook Page (D074).
+  const { advanceSocial } = await import("./social");
+  await advanceSocial(db, floor, now, created);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -271,6 +275,8 @@ export interface CompanyPulse {
   trials: number;
   clients: number;
   mrrUsd: number;
+  // The DocLedger Facebook Page (D074)
+  social: { connected: boolean; autoPost: boolean; followers: number | null; postsWeek: number; viewsWeek: number; reactionsWeek: number; commentsWeek: number };
 }
 
 export async function companyPulse(db: Db, now: Date): Promise<CompanyPulse> {
@@ -286,5 +292,10 @@ export async function companyPulse(db: Db, now: Date): Promise<CompanyPulse> {
     trials: f.trials,
     clients: f.clients,
     mrrUsd: f.mrrUsd,
+    social: await (async () => {
+      const { socialView } = await import("./social");
+      const v = await socialView(db, now);
+      return { connected: v.connected, autoPost: v.autoPost, followers: v.followers, postsWeek: v.week.posts, viewsWeek: v.week.views, reactionsWeek: v.week.reactions, commentsWeek: v.week.comments };
+    })(),
   };
 }

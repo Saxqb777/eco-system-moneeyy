@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { CompanyView } from "@/lib/company";
-import { Empty, Key, Sheet, since, usePoll, usd, when } from "./shared";
+import { Empty, Key, Sheet, post, since, usePoll, usd, when } from "./shared";
 
 const OWNER_LABEL: Record<string, string> = { scout: "Scout", analyst: "Analyst", writer: "Writer", chaser: "Chaser", partners: "Partners", product: "Product", marketer: "Marketer", success: "Success" };
 const IDEA_STATE: Record<CompanyView["ideas"][number]["state"], string> = { waiting: "Waiting on you", running: "Running", ended: "Ended" };
@@ -120,6 +120,8 @@ export function CompanyTab({ onApprovals }: { onApprovals: () => void }) {
         ))}
       </Sheet>
 
+      <SocialSheet social={c.social} onChanged={q.reload} />
+
       <Sheet title="Marketer's pack, for you to post">
         {!pack ? <div className="muted">The first pack arrives within a day.</div> : null}
         {pack?.linkedin.map((p, i) => (
@@ -173,5 +175,73 @@ export function CompanyTab({ onApprovals }: { onApprovals: () => void }) {
         </Sheet>
       ) : null}
     </>
+  );
+}
+
+const PLAN_STATE: Record<string, string> = { planned: "Planned", drafting: "Writing", drafted: "Written", skipped: "Skipped" };
+const POST_STATE: Record<string, string> = { draft: "Waiting on you", approved: "Approved, posts at the next hour", posted: "Posted", rejected: "Turned down" };
+
+// Social runs the DocLedger Facebook Page (D074): the week's plan, the latest posts with their numbers, and the
+// auto posting switch once the owner has turned it on.
+function SocialSheet({ social: s, onChanged }: { social: CompanyView["social"]; onChanged?: () => void }) {
+  const [busy, setBusy] = useState(false);
+  async function toggle(on: boolean) {
+    if (busy) return;
+    setBusy(true);
+    await post("/api/company", { action: "auto_post", on });
+    setBusy(false);
+    onChanged?.();
+  }
+  const w = s.week;
+  return (
+    <Sheet title="Social, the DocLedger Facebook Page">
+      {!s.connected ? <div className="muted">Not connected yet. Paste the Page ID and token in the Setup tab (DocLedger Facebook Page). Social already plans the week, and starts writing posts the moment the Page is connected.</div> : null}
+      {s.connected ? (
+        <div className="kpis">
+          <div className="kpi"><b>{s.followers ?? "?"}</b><span>Followers</span></div>
+          <div className="kpi"><b>{w.posts}</b><span>Posts this week</span></div>
+          <div className="kpi"><b>{w.views}</b><span>Views</span></div>
+          <div className="kpi"><b>{w.reactions}</b><span>Reactions</span></div>
+          <div className="kpi"><b>{w.comments}</b><span>Comments</span></div>
+          <div className="kpi"><b>{w.shares}</b><span>Shares</span></div>
+        </div>
+      ) : null}
+      <div className="h-top">
+        <span className="muted">
+          {s.autoPost ? `Auto posting is on, at most ${s.postsPerDay} a day.` : `Every post waits on your tap. After 10 approved in a row (${s.trustApprovedInARow} so far), the Tower asks to switch on auto posting.`}
+        </span>
+        {s.autoPost ? (
+          <Key small onClick={() => void toggle(false)} disabled={busy}>
+            Turn off
+          </Key>
+        ) : null}
+      </div>
+      {s.plan ? (
+        <div className="post-card">
+          <b>This week&apos;s plan, from {when(s.plan.at)}</b>
+          {s.plan.items.map((i, k) => (
+            <div key={k} className="muted">
+              Day {i.day + 1}, {i.theme}: {i.idea} <em>({PLAN_STATE[i.status] ?? i.status})</em>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="muted">The first plan comes on the next heartbeat after 08:00 Dubai.</div>
+      )}
+      {s.recent.map((p) => (
+        <div key={p.id} className="post-card">
+          <div className="h-top">
+            <b>{POST_STATE[p.status] ?? p.status}</b>
+            <span className="muted">{p.postedAt ? since(p.postedAt) : ""}</span>
+          </div>
+          <pre>{p.text}</pre>
+          {p.stats ? (
+            <div className="muted">
+              {p.stats.reactions} reactions, {p.stats.comments} comments, {p.stats.shares} shares{p.stats.views !== null ? `, ${p.stats.views} views` : ""}
+            </div>
+          ) : null}
+        </div>
+      ))}
+    </Sheet>
   );
 }

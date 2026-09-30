@@ -10,6 +10,7 @@ import { DOCLEDGER, docledgerKnowledge } from "@/config/docledger";
 import { normaliseCountry, regionFor, skippedCountries } from "@/lib/markets";
 import { DEALS_PLAYBOOKS } from "./deals-playbooks";
 import { GROWTH_PLAYBOOKS } from "./growth-playbooks";
+import { SOCIAL_PLAYBOOKS } from "./social-playbooks";
 import { experimentLines } from "./experiments";
 import { REPLY_INTENTS, autoSendAllowed, isHot, notifyHotLead, snoozeLead } from "./docledger-autonomy";
 import { STYLE, input, logEvent, num, str, type Playbook, type PlaybookContext, type TaskRow } from "./playbook-core";
@@ -402,6 +403,7 @@ export const PLAYBOOKS: Record<string, Playbook> = {
   follow_up: followUp,
   ...DEALS_PLAYBOOKS,
   ...GROWTH_PLAYBOOKS,
+  ...SOCIAL_PLAYBOOKS,
 };
 
 export function playbookFor(kind: string): Playbook | null {

@@ -24,6 +24,7 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 | 11 | Consulting site URL | Ground floor (locked until unlock rule is met) | Later | missing |
 | 12 | X account keys (optional) | Deal posts also go to X for reach | When you want it | missing: developer.x.com app with Read and write, paste API Key, API Key Secret, Access Token, Access Token Secret separated by spaces in the box "X account for deal posts" |
 | 13 | Facebook Page id and token (optional) | Deal posts also go to your Facebook Page | When you want it | missing: a Page for the deals, a Meta app with pages_manage_posts, a Page token that does not expire; paste the Page ID and the token separated by a space |
+| 15 | DocLedger Facebook Page: Page ID and a Page token | Social posts to the Page (D074) | When you can | missing: steps in section 12 below, paste "PAGEID TOKEN" in the box "DocLedger Facebook Page". Social plans the week already, posts start once it is here |
 | 14 | Business postal address (optional) | DocLedger emails to US companies (US law wants an address under the signature) | When you want US leads | missing: paste the address to print under your signature in the box "Business postal address". Until then the Scout skips the US |
 
 ## Steps per item
@@ -108,6 +109,16 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 
 ### 11. Consulting site URL
 - Only needed when Ground floor unlocks (first DocLedger demo booked and budget level 2 or higher).
+
+### 12. DocLedger Facebook Page (D074)
+Social, the seventh person on the Growth floor, runs the Page. It needs the Page ID and a Page token that does not expire.
+1. Facebook, Pages, Create new Page: name it DocLedger, category Software. Add the logo and a cover (the sales page screenshots work).
+2. developers.facebook.com, My Apps, Create App. Pick the use case for managing everything on your Page. Your own Page needs no Meta review while the app stays yours.
+3. Tools, Graph API Explorer: pick the app, then Get Token, Get Page Access Token. Tick pages_show_list, pages_manage_posts, pages_read_engagement, pages_read_user_engagement, pages_manage_engagement and read_insights. Choose the DocLedger Page and continue.
+4. Tools, Access Token Debugger: paste the token, Extend Access Token, copy the long token.
+5. Back in the Graph API Explorer, paste the long token and ask for me/accounts. The DocLedger entry shows the Page id and an access_token: that Page token does not expire.
+6. In the game: Warden, Setup, "DocLedger Facebook Page": paste the Page id, a space, then that Page token.
+What happens next: posts start within the hour (09:00 to 21:00 Dubai, at most 2 a day). Every post waits on your tap with the picture shown. After 10 approved in a row the Tower asks once to post on its own; turn it off any time in the Company tab. Answers to comments always wait on you.
 
 ## What I set up myself (no action from you, but I ask before doing it)
 - Neon: the tower database, schema, migrations.

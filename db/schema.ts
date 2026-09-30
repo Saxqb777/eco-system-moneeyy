@@ -335,6 +335,8 @@ export const deals = pgTable("deals", {
   currency: text("currency").notNull().default("AED"),
   category: text("category"),
   imageUrl: text("image_url"),
+  sourceUrl: text("source_url"),
+  sourceDate: text("source_date"),
   foundByTaskId: uuid("found_by_task_id"),
   status: text("status").notNull().default("found"),
   expiresAt: ts("expires_at"),

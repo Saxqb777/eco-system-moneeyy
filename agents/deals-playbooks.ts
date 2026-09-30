@@ -1,4 +1,4 @@
-// Deals Engine playbooks: Scout fetches real store pages, Editor writes short posts with tracked links.
+// Deals Engine playbooks: Scout searches for deals and keeps only those with a store page and a dated source, Editor writes short posts with tracked links.
 import { and, desc, eq, sql } from "drizzle-orm";
 import { deals, floors, posts } from "@/db/schema";
 import { affiliateTags, affiliateUrl, isAmazonDeal, shortCode, withDisclosure } from "@/lib/affiliate";
@@ -21,13 +21,46 @@ export function dealKey(store: string, url: string, title: string): string {
   }
 }
 
+const SOURCE_MAX_AGE_DAYS = 4;
+
+// True when the link is a page on the store's own site (subdomains included), never a lookalike or a redirect.
+export function onHost(url: string, host: string): boolean {
+  try {
+    const h = new URL(url).hostname.toLowerCase();
+    return (h === host || h.endsWith(`.${host}`)) && /^https?:$/.test(new URL(url).protocol);
+  } catch {
+    return false;
+  }
+}
+
+function cleanSource(url: string): string | null {
+  try {
+    const u = new URL(url);
+    return /^https?:$/.test(u.protocol) ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+export function parseSourceDate(s: string): Date | null {
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const d = new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 const findDeals: Playbook = {
   kind: "find_deals",
-  webSearchMaxUses: 2,
+  webSearchMaxUses: 6,
   webFetchMaxUses: 8,
-  maxTokens: 3500,
-  system: `You are Scout on the Deals Engine floor of The Tower. Find real, current discounts on UAE online stores: Amazon.ae first, then Noon, Sharaf DG, Carrefour UAE and Talabat. Fetch the store deal pages directly with the fetch tool (for example https://www.amazon.ae/deals, https://www.noon.com/uae-en/deals/, https://uae.sharafdg.com/deals/) and read the prices from the page. Use web search only when a page will not load.
-Return up to 20 deals you actually saw, each with the product page URL, the price now, the price before, and the discount. Skip anything under 15 percent off, anything already in the known list, and anything with no visible before price. Prefer useful everyday products: electronics, home, kitchen, baby, groceries in bulk.
+  maxTokens: 6000,
+  system: `You are Scout on the Deals Engine floor of The Tower. Find real, current discounts a shopper in the UAE can buy today: Amazon.ae first, then Noon, Sharaf DG, Carrefour UAE and Talabat.
+How to work:
+1. Search first. Look for today's deals, for example: Amazon.ae deals today, Amazon.ae price drop, Noon deals UAE today, and deal roundups from UAE news and lifestyle sites such as Khaleej Times, Gulf News, Time Out Dubai and What's On. Prefer pages dated in the last three days.
+2. Open the most promising results with the fetch tool: deal roundup pages and store product pages. The fetch tool only opens links that appeared in your search results or in pages you already fetched. Store pages often refuse it; a roundup page or a search result that shows both prices is enough.
+3. Every deal needs its product page on the store's own site, for Amazon a https://www.amazon.ae/.../dp/XXXXXXXXXX link. If the source only has a short or tracking link (amzn.to, amzn.eu, another site's redirect), search the product name on the store to find the real page. Never return a tracking link.
+4. Record where you read the prices (sourceUrl) and the date that page shows (sourceDate as YYYY-MM-DD, empty if the page has no date).
+Keep only deals with a visible price now and price before, at least 15 percent off, not in the known list. Never guess or estimate a price. Prefer useful everyday products: electronics, home, kitchen, baby, groceries in bulk. Return up to 12 deals. Returning none with an honest note is fine.
 ${STYLE}`,
   schema: {
     type: "object",
@@ -39,7 +72,7 @@ ${STYLE}`,
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["store", "title", "url", "price", "wasPrice", "discountPct", "category", "imageUrl"],
+          required: ["store", "title", "url", "price", "wasPrice", "discountPct", "category", "imageUrl", "sourceUrl", "sourceDate"],
           properties: {
             store: { type: "string", enum: ["amazon_ae", "noon", "sharaf_dg", "carrefour", "talabat"] },
             title: { type: "string" },
@@ -49,6 +82,8 @@ ${STYLE}`,
             discountPct: { type: "number" },
             category: { type: "string" },
             imageUrl: { type: "string", description: "product image URL or empty" },
+            sourceUrl: { type: "string", description: "the page where you read both prices" },
+            sourceDate: { type: "string", description: "date shown on the source page as YYYY-MM-DD, or empty" },
           },
         },
       },
@@ -57,7 +92,7 @@ ${STYLE}`,
   },
   async prepare(task, ctx) {
     const recent = await ctx.db.select({ title: deals.title }).from(deals).where(eq(deals.simulated, false)).orderBy(desc(deals.createdAt)).limit(120);
-    const focus = str(input(task).instructions) || "Amazon.ae deals page first, then Noon.";
+    const focus = str(input(task).instructions) || "Search for today's Amazon.ae deals first, then Noon.";
     return { user: `Focus from Warden: ${focus}\nToday: ${ctx.now.toISOString().slice(0, 10)}\nKnown already (skip): ${recent.map((r) => r.title).join("; ") || "nothing yet"}\n\nFind today's deals and return the JSON object.` };
   },
   async absorb(task, output, ctx) {
@@ -65,6 +100,11 @@ ${STYLE}`,
     const tags = await affiliateTags(ctx.db);
     let inserted = 0;
     let skipped = 0;
+    const why: Record<string, number> = {};
+    const skip = (reason: string) => {
+      skipped += 1;
+      why[reason] = (why[reason] ?? 0) + 1;
+    };
     for (const raw of rows) {
       const r = (raw ?? {}) as Record<string, unknown>;
       const store = str(r.store, 20);
@@ -73,27 +113,53 @@ ${STYLE}`,
       const price = num(r.price, 0);
       const was = num(r.wasPrice, 0);
       const host = STORE_HOSTS[store];
-      if (!store || !title || !url || price <= 0 || was <= price || !host || !url.includes(host)) {
-        skipped += 1;
+      if (!store || !title || !host || price <= 0 || was <= price) {
+        skip("incomplete");
+        continue;
+      }
+      if (!onHost(url, host)) {
+        skip("not a store page");
+        continue;
+      }
+      const source = cleanSource(str(r.sourceUrl, 500));
+      if (!source) {
+        skip("no source");
+        continue;
+      }
+      const sourceDate = parseSourceDate(str(r.sourceDate, 20));
+      if (sourceDate && ctx.now.getTime() - sourceDate.getTime() > SOURCE_MAX_AGE_DAYS * 24 * 3600 * 1000) {
+        skip("stale source");
         continue;
       }
       const discount = Math.round(((was - price) / was) * 100);
       if (discount < 15) {
-        skipped += 1;
+        skip("under 15 percent");
         continue;
       }
       const aff = affiliateUrl(url, store, tags);
       const [ins] = await ctx.db
         .insert(deals)
-        .values({ floorId: ctx.floorId, store, title, url, affiliateUrl: aff.url, price: price.toFixed(2), wasPrice: was.toFixed(2), discountPct: String(discount), currency: "AED", category: str(r.category, 40) || null, imageUrl: str(r.imageUrl, 500) || null, foundByTaskId: task.id, status: "found", dedupeKey: dealKey(store, url, title), expiresAt: new Date(ctx.now.getTime() + 3 * 24 * 3600 * 1000), simulated: false, createdAt: ctx.now, updatedAt: ctx.now })
+        .values({ floorId: ctx.floorId, store, title, url, affiliateUrl: aff.url, price: price.toFixed(2), wasPrice: was.toFixed(2), discountPct: String(discount), currency: "AED", category: str(r.category, 40) || null, imageUrl: str(r.imageUrl, 500) || null, sourceUrl: source, sourceDate: sourceDate ? sourceDate.toISOString().slice(0, 10) : null, foundByTaskId: task.id, status: "found", dedupeKey: dealKey(store, url, title), expiresAt: new Date(ctx.now.getTime() + 3 * 24 * 3600 * 1000), simulated: false, createdAt: ctx.now, updatedAt: ctx.now })
         .onConflictDoNothing()
         .returning({ id: deals.id });
       if (ins) inserted += 1;
-      else skipped += 1;
+      else skip("already known");
     }
-    return { summary: `Found ${inserted} deal${inserted === 1 ? "" : "s"}${skipped ? `, ${skipped} skipped` : ""}`, extra: { found: inserted, skipped, note: str(output.note, 300) } };
+    return { summary: `Found ${inserted} deal${inserted === 1 ? "" : "s"}${skipped ? `, ${skipped} skipped` : ""}`, extra: { found: inserted, skipped, skippedWhy: why, note: str(output.note, 300) } };
   },
 };
+
+function sourceLine(deal: typeof deals.$inferSelect): string {
+  const prices = `AED ${Number(deal.price).toFixed(0)}, was AED ${Number(deal.wasPrice).toFixed(0)}`;
+  if (!deal.sourceUrl) return `Prices (${prices}) have no source page: check the store before approving.`;
+  let site = deal.sourceUrl;
+  try {
+    site = new URL(deal.sourceUrl).hostname.replace(/^www\./, "");
+  } catch {
+    /* keep the raw link */
+  }
+  return `Prices (${prices}) read on ${site}, ${deal.sourceDate ? `dated ${deal.sourceDate}` : "undated"}. Open the preview link to check before approving.`;
+}
 
 const writePost: Playbook = {
   kind: "write_post",
@@ -126,8 +192,9 @@ ${STYLE}`,
     const { id: approvalId } = await raiseApproval(ctx.db, {
       type: "public_post",
       summary: `Post to the deals channel: ${title}`,
-      content: { body, store: deal.store, dealId: deal.id, postId: row?.id ?? null, title, affiliateUrl: deal.affiliateUrl ?? deal.url, channel },
-      riskNote: deal.affiliateUrl && deal.affiliateUrl !== deal.url ? "Public post on the Telegram channel with an affiliate link." : "Public post on the Telegram channel with a plain link (no affiliate id for this store yet).",
+      content: { body, store: deal.store, dealId: deal.id, postId: row?.id ?? null, title, affiliateUrl: deal.affiliateUrl ?? deal.url, channel, sourceUrl: deal.sourceUrl, sourceDate: deal.sourceDate, price: deal.price, wasPrice: deal.wasPrice },
+      riskNote: `${deal.affiliateUrl && deal.affiliateUrl !== deal.url ? "Public post on the Telegram channel with an affiliate link." : "Public post on the Telegram channel with a plain link (no affiliate id for this store yet)."} ${sourceLine(deal)}`,
+      previewUrl: deal.sourceUrl ?? deal.url,
       taskId: task.id,
       agentId: ctx.agentId,
       floorId: ctx.floorId,

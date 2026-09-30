@@ -4,9 +4,10 @@ import { collectBatches } from "@/agents/batches";
 import { setAnthropicFactory } from "@/agents/client";
 import { advancePipelines } from "@/agents/pipeline";
 import { latestPostedDeals, publishPost, recordClick, refreshChannelSubscribers } from "@/agents/deals";
+import { onHost, parseSourceDate } from "@/agents/deals-playbooks";
 import { handleTaskBatchResult, submitQueuedTasks } from "@/agents/workers";
 import type { Db } from "@/db/client";
-import { approvals, clicks, deals, floors, posts, setupItems, tasks } from "@/db/schema";
+import { approvals, clicks, deals, floors, messagesOut, posts, setupItems, tasks } from "@/db/schema";
 import { AMAZON_DISCLOSURE, affiliateUrl, isAmazonDeal, withDisclosure } from "@/lib/affiliate";
 import { applyApprovalDecision } from "@/lib/approvals";
 import { encryptSecret } from "@/lib/crypto";
@@ -54,6 +55,18 @@ describe("Deals Engine", () => {
     expect(affiliateUrl("https://www.noon.com/uae-en/p/N123", "noon", { ...tags, noon: "https://go.net/?u={url}" }).earns).toBe(true);
   });
 
+  it("accepts only real store pages and fresh dated sources", () => {
+    expect(onHost("https://www.amazon.ae/dp/B0X1234567", "amazon.ae")).toBe(true);
+    expect(onHost("https://amazon.ae/dp/B0X1234567", "amazon.ae")).toBe(true);
+    expect(onHost("https://amazon.ae.example.com/dp/B0X", "amazon.ae")).toBe(false);
+    expect(onHost("https://example.com/?u=amazon.ae", "amazon.ae")).toBe(false);
+    expect(onHost("https://amzn.to/3abc", "amazon.ae")).toBe(false);
+    expect(onHost("javascript:alert(1)", "amazon.ae")).toBe(false);
+    expect(parseSourceDate("2026-10-05")?.toISOString()).toBe("2026-10-05T00:00:00.000Z");
+    expect(parseSourceDate("5 Oct 2026")).toBeNull();
+    expect(parseSourceDate("")).toBeNull();
+  });
+
   it("adds the Amazon disclosure once, only for Amazon deals", () => {
     expect(AMAZON_DISCLOSURE).toBe("As an Amazon Associate I earn from qualifying purchases.");
     expect(isAmazonDeal({ store: "amazon_ae" })).toBe(true);
@@ -71,10 +84,14 @@ describe("Deals Engine", () => {
       if (text.includes("Find today's deals")) {
         return {
           deals: [
-            { store: "amazon_ae", title: "Anker 65W GaN charger", url: "https://www.amazon.ae/dp/B0ANKER6500", price: 89, wasPrice: 145, discountPct: 38, category: "electronics", imageUrl: "" },
-            { store: "noon", title: "Philips air fryer 6L", url: "https://www.noon.com/uae-en/p/N40001", price: 299, wasPrice: 399, discountPct: 25, category: "kitchen", imageUrl: "" },
-            { store: "amazon_ae", title: "Tiny discount thing", url: "https://www.amazon.ae/dp/B0TINY00001", price: 95, wasPrice: 100, discountPct: 5, category: "x", imageUrl: "" },
-            { store: "amazon_ae", title: "Wrong host", url: "https://example.com/x", price: 10, wasPrice: 50, discountPct: 80, category: "x", imageUrl: "" },
+            { store: "amazon_ae", title: "Anker 65W GaN charger", url: "https://www.amazon.ae/dp/B0ANKER6500", price: 89, wasPrice: 145, discountPct: 38, category: "electronics", imageUrl: "", sourceUrl: "https://www.khaleejtimes.com/shopping/amazon-deals-today", sourceDate: "2026-10-05" },
+            { store: "noon", title: "Philips air fryer 6L", url: "https://www.noon.com/uae-en/p/N40001", price: 299, wasPrice: 399, discountPct: 25, category: "kitchen", imageUrl: "", sourceUrl: "https://www.noon.com/uae-en/p/N40001", sourceDate: "" },
+            { store: "amazon_ae", title: "Tiny discount thing", url: "https://www.amazon.ae/dp/B0TINY00001", price: 95, wasPrice: 100, discountPct: 5, category: "x", imageUrl: "", sourceUrl: "https://gulfnews.com/deals", sourceDate: "2026-10-05" },
+            { store: "amazon_ae", title: "Wrong host", url: "https://example.com/x", price: 10, wasPrice: 50, discountPct: 80, category: "x", imageUrl: "", sourceUrl: "https://example.com/x", sourceDate: "2026-10-05" },
+            { store: "amazon_ae", title: "Lookalike host", url: "https://amazon.ae.example.com/dp/B0LOOKALIKE", price: 10, wasPrice: 50, discountPct: 80, category: "x", imageUrl: "", sourceUrl: "https://gulfnews.com/deals", sourceDate: "2026-10-05" },
+            { store: "amazon_ae", title: "Tracking link", url: "https://amzn.to/3abcdef", price: 10, wasPrice: 50, discountPct: 80, category: "x", imageUrl: "", sourceUrl: "https://gulfnews.com/deals", sourceDate: "2026-10-05" },
+            { store: "amazon_ae", title: "Old roundup deal", url: "https://www.amazon.ae/dp/B0OLDROUND1", price: 10, wasPrice: 50, discountPct: 80, category: "x", imageUrl: "", sourceUrl: "https://www.timeoutdubai.com/shopping/deals", sourceDate: "2026-09-20" },
+            { store: "amazon_ae", title: "No source", url: "https://www.amazon.ae/dp/B0NOSOURCE1", price: 10, wasPrice: 50, discountPct: 80, category: "x", imageUrl: "", sourceUrl: "", sourceDate: "" },
           ],
           note: "Amazon page loaded, Noon loaded",
         };
@@ -94,6 +111,11 @@ describe("Deals Engine", () => {
     expect(found).toHaveLength(2);
     const anker = found.find((d) => d.title.startsWith("Anker"))!;
     expect(anker.affiliateUrl).toContain("tag=thetower-21");
+    expect(anker.sourceUrl).toBe("https://www.khaleejtimes.com/shopping/amazon-deals-today");
+    expect(anker.sourceDate).toBe("2026-10-05");
+    expect(found.find((d) => d.title.startsWith("Philips"))!.sourceDate).toBeNull();
+    const [scoutTask] = await db.select().from(tasks).where(and(eq(tasks.kind, "find_deals"), eq(tasks.simulated, false))).limit(1);
+    expect((scoutTask!.output as Record<string, unknown>).skippedWhy).toEqual({ "under 15 percent": 1, "not a store page": 3, "stale source": 1, "no source": 1 });
     expect(Number(anker.discountPct)).toBe(39);
 
     const a2 = await advancePipelines(db, TEN);
@@ -108,6 +130,15 @@ describe("Deals Engine", () => {
     for (const d of drafts) expect(d.body.includes(AMAZON_DISCLOSURE)).toBe((await storeOf(d)) === "amazon_ae");
     const pending = await db.select().from(approvals).where(and(eq(approvals.type, "public_post"), eq(approvals.status, "pending")));
     expect(pending).toHaveLength(2);
+    const storeOfAp = (p: (typeof pending)[number]) => (p.content as Record<string, unknown>).store;
+    const ankerAp = pending.find((p) => storeOfAp(p) === "amazon_ae")!;
+    expect(ankerAp.previewUrl).toBe("https://www.khaleejtimes.com/shopping/amazon-deals-today");
+    expect(ankerAp.riskNote).toContain("read on khaleejtimes.com, dated 2026-10-05");
+    const noonAp = pending.find((p) => storeOfAp(p) === "noon")!;
+    expect(noonAp.riskNote).toContain("undated");
+    const queued = await db.select().from(messagesOut).where(eq(messagesOut.relatedId, ankerAp.id));
+    expect(queued).toHaveLength(1);
+    expect(queued[0]!.body).toContain("Preview: https://www.khaleejtimes.com/shopping/amazon-deals-today");
 
     // approve one: it waits for its slot, then posts to the channel
     const first = pending[0]!;

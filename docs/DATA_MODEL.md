@@ -300,6 +300,8 @@ Indexes on (occurred_at) and (floor_id, occurred_at). The roof counters, the pet
 | currency | text | AED |
 | category | text | |
 | image_url | text | |
+| source_url | text | page where Scout read both prices; shown as the approval preview link (migration 0002) |
+| source_date | text | date shown on that page, YYYY-MM-DD, null when undated; sources older than 4 days are dropped |
 | found_by_task_id | uuid | |
 | status | text | found, selected, posted, expired, rejected |
 | expires_at | timestamptz | |

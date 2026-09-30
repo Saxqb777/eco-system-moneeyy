@@ -167,13 +167,34 @@ export async function ensureWebhook(db: Db): Promise<{ status: string; reason?: 
   const s = await getSettings(db);
   const current = s.telegram_webhook as { url?: string; token?: string } | null;
   const tokenHint = cfg.token.slice(-6);
-  if (current?.url === url && current?.token === tokenHint) return { status: "ok" };
-  try {
-    const res = await api(cfg.token, "setWebhook", { url, secret_token: secret, allowed_updates: ["message", "callback_query"], drop_pending_updates: false });
-    if (!res.ok) return { status: "failed", reason: res.description ?? "setWebhook failed" };
-    await setSetting(db, "telegram_webhook", { url, token: tokenHint, at: new Date().toISOString() });
-    return { status: "registered" };
-  } catch (err) {
-    return { status: "failed", reason: err instanceof Error ? err.message : String(err) };
+  let status = "ok";
+  if (current?.url !== url || current?.token !== tokenHint) {
+    try {
+      const res = await api(cfg.token, "setWebhook", { url, secret_token: secret, allowed_updates: ["message", "callback_query"], drop_pending_updates: false });
+      if (!res.ok) return { status: "failed", reason: res.description ?? "setWebhook failed" };
+      await setSetting(db, "telegram_webhook", { url, token: tokenHint, at: new Date().toISOString() });
+      status = "registered";
+    } catch (err) {
+      return { status: "failed", reason: err instanceof Error ? err.message : String(err) };
+    }
   }
+  // Telegram's own view of the webhook, kept for diagnosis: pending updates and the last delivery error.
+  try {
+    const info = await api(cfg.token, "getWebhookInfo", {});
+    const r = (info.result ?? {}) as { url?: string; pending_update_count?: number; last_error_date?: number; last_error_message?: string };
+    if (info.ok && typeof r === "object") {
+      await setSetting(db, "telegram_webhook_info", {
+        url: r.url ?? null,
+        pending: r.pending_update_count ?? 0,
+        lastError: r.last_error_message ?? null,
+        lastErrorAt: r.last_error_date ? new Date(r.last_error_date * 1000).toISOString() : null,
+        checkedAt: new Date().toISOString(),
+      });
+      if (r.url && r.url !== url) return { status: "failed", reason: `Telegram points at ${r.url}, not this Tower` };
+      if (r.last_error_message) return { status, reason: `last delivery error: ${r.last_error_message}` };
+    }
+  } catch {
+    // diagnosis only
+  }
+  return { status };
 }

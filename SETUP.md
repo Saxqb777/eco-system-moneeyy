@@ -14,7 +14,7 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 | 2c | Backup heartbeat: not needed any more, the schedule fires since the Phase 2 merge touched the workflow file on main (first run 2026-09-29 22:55 UTC) | Hourly heartbeat | Done | done 2026-09-29 |
 | 3 | Anthropic API key | Leaving simulation mode, every real agent run | Done | done 2026-09-30 07:28 UTC, simulation off, first real batch and Warden run 07:40 to 07:43 UTC |
 | 4 | Telegram bot token, then pair your chat with /pair | Warden messages, approvals over Telegram, morning brief | Done | done 2026-09-30, chat paired, first four messages delivered 08:18 UTC |
-| 5 | DocLedger GitHub repo URL and a GitHub token for it | Builder (nightly at 02:00 Dubai, built in Phase 5) | Now | the live app is Saxqb777/Petty-Cash- (D069). Paste https://github.com/Saxqb777/Petty-Cash- in the repo box and a new fine grained token for Petty-Cash- only (Contents and Pull requests, read and write). The old values point at Saxqb777/docledger, which is not the live app |
+| 5 | DocLedger GitHub repo URL and a GitHub token for it | Builder (nightly at 02:00 Dubai, built in Phase 5) | Done | done 2026-09-30 18:35 UTC: Saxqb777/Petty-Cash- (the live app, D069) and a token for it |
 | 6 | Calendar booking link | Chaser demo booking | Done | done 2026-09-30 (cal.com 15 min link) |
 | 7 | Resend API key and sending address | Sending approved outreach emails | Done | done 2026-09-30: key, sender Saaqib Khan <saaqib@docledger.site>, domain docledger.site Verified in Resend (confirmed by Saaqib's screenshot about 09:20 UTC) |
 | 8 | DocLedger price line and signature block (the pitch itself is in the repo) | Writer and Chaser | Now | missing |
@@ -83,8 +83,8 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 - Replies, two ways: (a) Resend Receiving: add the MX record for a subdomain, create a webhook for email.received pointing at https://the-tower-saxqb777s-projects.vercel.app/api/email/inbound, paste the signing secret under "Resend webhook secret". (b) Forward by hand on Telegram: /reply Gulf Crescent Freight: their text. Chaser picks it up either way.
 
 ### 7c. DocLedger sales page and demo (D070)
-- Your one tap: merge https://github.com/Saxqb777/Petty-Cash-/pull/1 on GitHub. Before that, try it on https://demo-preview.docledger.site (the demo) and https://demo-preview.docledger.site/welcome (the sales page).
-- After the merge Claude moves docledger.site to the app, opens demo.docledger.site, and has the Writer redraft the emails with the new pitch; each one waits for your Approve.
+- Done 2026-09-30: https://docledger.site is the DocLedger app with its sales page for visitors, https://demo.docledger.site is the public demo (a sample company per visitor, its own database). Emails link to the demo set up for each company.
+- Changes to the app come as pull requests on Saxqb777/Petty-Cash-; you merge them.
 
 ### 7b. Company website on docledger.site (D067)
 - Nothing for you to do. The Tower's deployment serves the DocLedger home page on https://docledger.site (and www redirects there). Only the home page and the per company previews live on that domain; the game stays on the Tower address.

@@ -82,7 +82,7 @@ export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ sta
       webSearchMaxUses: prepared.webSearchMaxUses ?? playbook.webSearchMaxUses,
       webFetchMaxUses: prepared.webFetchMaxUses ?? playbook.webFetchMaxUses,
     };
-    items.push({ customId: `task:${t.id}`, call });
+    items.push({ customId: `task_${t.id}`, call });
     budgetLeft -= EST_TASK_USD;
     floorSpend[floor.id] = (floorSpend[floor.id] ?? 0) + EST_TASK_USD;
   }
@@ -90,7 +90,7 @@ export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ sta
 
   const submitted = await submitBatch(db, items, now);
   for (const item of items) {
-    const taskId = item.customId.slice("task:".length);
+    const taskId = item.customId.slice("task_".length);
     const t = queued.find((x) => x.id === taskId)!;
     await db.update(tasks).set({ status: "running", startedAt: now, batchId: submitted?.batchId ?? null, batchCustomId: item.customId, attempts: t.attempts + 1, updatedAt: now }).where(eq(tasks.id, taskId));
     await db.update(agents).set({ status: "working", currentTaskId: taskId, updatedAt: now }).where(eq(agents.id, t.agentId!));
@@ -102,7 +102,7 @@ export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ sta
 
 // A worker's batch result: absorb the output into rows, hand the task to Warden for review.
 export async function handleTaskBatchResult(db: Db, r: CollectedResult, now = new Date()): Promise<void> {
-  const taskId = r.customId.slice("task:".length);
+  const taskId = r.customId.slice("task_".length);
   const [t] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
   if (!t || t.status !== "running") return;
   const agent = t.agentId ? (await db.select().from(agents).where(eq(agents.id, t.agentId)).limit(1))[0] : undefined;

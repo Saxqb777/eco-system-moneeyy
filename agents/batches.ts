@@ -5,7 +5,7 @@ import { batches } from "@/db/schema";
 import { buildParams, getClient, modelFor, parseJson, recordRun, textOf, usageOf, type ModelCall } from "./client";
 
 export interface BatchItem {
-  customId: string; // "warden:<runId>" or "task:<taskId>"
+  customId: string; // "warden_<runId>" or "task_<taskId>", letters, digits, underscore and hyphen only
   call: ModelCall;
 }
 

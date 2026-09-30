@@ -38,6 +38,7 @@ export async function POST(req: Request) {
   const value = (body.value ?? "").trim();
   if (!value) return bad("value is empty");
   if (item.kind === "url" && !/^https?:\/\//.test(value)) return bad("Expected a URL starting with http");
+  if (item.key === "telegram_chat_id" && !/^-?\d{5,20}$/.test(value)) return bad("A chat id is a number. Easiest: open your bot in Telegram and send the /pair line shown here.");
 
   const hint = item.kind === "secret" ? secretHint(value) : value.length > 80 ? `${value.slice(0, 77)}...` : value;
   await db
@@ -45,7 +46,8 @@ export async function POST(req: Request) {
     .set({ status: "present", valueEncrypted: encryptSecret(value), hint, providedAt: new Date() })
     .where(eq(setupItems.key, item.key));
   // The brief asks for Warden to speak within 5 minutes of the key landing: an instant run after this response.
-  if (item.key === "anthropic_api_key") {
+  // The Telegram token gets the same treatment so the webhook registers at once and /pair works straight away.
+  if (item.key === "anthropic_api_key" || item.key === "telegram_bot_token" || item.key === "deals_channel") {
     after(async () => {
       await runTick("setup").catch(() => null);
     });

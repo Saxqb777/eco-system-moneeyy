@@ -56,12 +56,12 @@ export async function runWarden(db: Db, opts: { mode: "sync" | "batch"; trigger:
     messages: [{ role: "user", content: `Snapshot for this run:\n${JSON.stringify(snapshot)}\n\nDecide and return the JSON object.` }],
     schema: WARDEN_SCHEMA,
     maxTokens: 3000,
-    customId: `warden:${runId}`,
+    customId: `warden_${runId}`,
   };
 
   if (opts.mode === "batch") {
     try {
-      const submitted = await submitBatch(db, [{ customId: `warden:${runId}`, call }], now);
+      const submitted = await submitBatch(db, [{ customId: `warden_${runId}`, call }], now);
       await db.update(wardenRuns).set({ batchId: submitted?.batchId ?? null }).where(eq(wardenRuns.id, runId));
       return { status: "submitted", runId };
     } catch (err) {
@@ -87,7 +87,7 @@ export async function runWarden(db: Db, opts: { mode: "sync" | "batch"; trigger:
 
 // Called by the tick's collect step when a scheduled batch run comes back.
 export async function handleWardenBatchResult(db: Db, r: CollectedResult, now = new Date()): Promise<void> {
-  const runId = r.customId.slice("warden:".length);
+  const runId = r.customId.slice("warden_".length);
   const [run] = await db.select().from(wardenRuns).where(eq(wardenRuns.id, runId)).limit(1);
   if (!run || run.status !== "submitted") return;
   const warden = await wardenAgent(db);

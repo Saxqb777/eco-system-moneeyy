@@ -41,7 +41,7 @@ export const WARDEN_SCHEMA: Record<string, unknown> = {
           agent: { type: "string", description: "worker slug from the snapshot" },
           kind: { type: "string", description: "playbook kind for that worker" },
           title: { type: "string", description: "three or four words, shown above the worker's head" },
-          priority: { type: "integer", minimum: 1, maximum: 9 },
+          priority: { type: "integer" },
           input: { type: "string", description: "one line of instructions or context for the worker, may be empty" },
         },
       },
@@ -54,7 +54,7 @@ export const WARDEN_SCHEMA: Record<string, unknown> = {
         required: ["taskId", "score", "reason", "decision"],
         properties: {
           taskId: { type: "string" },
-          score: { type: "integer", minimum: 1, maximum: 10 },
+          score: { type: "integer" },
           reason: { type: "string" },
           decision: { type: "string", enum: ["accept", "reject"] },
         },
@@ -81,7 +81,7 @@ export const WARDEN_SCHEMA: Record<string, unknown> = {
     },
     budgetMoves: {
       type: "array",
-      items: { type: "object", additionalProperties: false, required: ["from", "to", "usd"], properties: { from: { type: "string" }, to: { type: "string" }, usd: { type: "number", minimum: 0 } } },
+      items: { type: "object", additionalProperties: false, required: ["from", "to", "usd"], properties: { from: { type: "string" }, to: { type: "string" }, usd: { type: "number" } } },
     },
     approvalsToRaise: {
       type: "array",

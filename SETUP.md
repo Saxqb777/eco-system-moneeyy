@@ -16,7 +16,7 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 | 4 | Telegram bot token, then pair your chat with /pair | Warden messages, approvals over Telegram, morning brief | Done | done 2026-09-30, chat paired, first four messages delivered 08:18 UTC |
 | 5 | DocLedger GitHub repo URL and a GitHub token for it | Builder (nightly at 02:00 Dubai, built in Phase 5) | Done | done 2026-09-30 (Saxqb777/docledger plus token), first Builder night is 22:00 UTC |
 | 6 | Calendar booking link | Chaser demo booking | Done | done 2026-09-30 (cal.com 15 min link) |
-| 7 | Resend API key and sending address | Sending approved outreach emails | Done | done 2026-09-30 09:06 UTC: key, sender Saaqib Khan <saaqib@docledger.site>. Domain docledger.site verification at Resend was half way at 09:10 (reply records verified, DKIM and SPF pending); sends fail until it shows Verified |
+| 7 | Resend API key and sending address | Sending approved outreach emails | Done | done 2026-09-30: key, sender Saaqib Khan <saaqib@docledger.site>, domain docledger.site Verified in Resend (confirmed by Saaqib's screenshot about 09:20 UTC) |
 | 8 | DocLedger price line and signature block (the pitch itself is in the repo) | Writer and Chaser | Now | missing |
 | 8b | Resend webhook secret for replies (optional) | Chaser reads replies itself | Done | done 2026-09-30 09:06 UTC |
 | 9 | Affiliate IDs: Amazon.ae tag, Noon, others | Deals Engine earning (posts run without them, links stay plain) | Now | missing |

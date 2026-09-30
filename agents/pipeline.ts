@@ -148,7 +148,8 @@ async function executeApproved(db: Db, now: Date): Promise<{ executed: number; d
     let result: { ok: boolean; error?: string } = { ok: false, error: "no executor" };
     if (a.type === "outreach_email") {
       const { sendOutreach } = await import("@/lib/email");
-      result = await sendOutreach(db, a, now);
+      // The owner's own words go out at any hour; the workers' emails wait for the reader's working day.
+      result = await sendOutreach(db, a, now, { anyHour: (a.content as Record<string, unknown> | null)?.ownerSent === true });
     } else if (a.type === "public_post") {
       const { publishPost } = await import("@/agents/deals");
       result = await publishPost(db, a, now);

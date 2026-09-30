@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { agents, approvals, clicks, deals, floors, posts, taskEvents, tasks } from "@/db/schema";
 import { isAmazonDeal, withDisclosure } from "@/lib/affiliate";
+import { raiseApproval } from "@/lib/approvals";
 import { clipboardValue } from "@/lib/clipboard";
 import { getSettings, setSetting } from "@/lib/settings";
 import { fitForX, postToFacebook, postToX, type Destination, type SocialResult } from "@/lib/social";
@@ -15,9 +16,37 @@ async function logEvent(db: Db, e: { taskId?: string | null; agentId?: string | 
   await db.insert(taskEvents).values({ taskId: e.taskId ?? null, agentId: e.agentId ?? null, floorId: e.floorId ?? null, type: e.type, message: e.message, data: e.data ?? null, createdAt: e.at });
 }
 
+export const DEALS_AUTO_DECISION = "Auto approve deals posts";
+const WEEK_MS = 7 * 24 * 3600 * 1000;
+
+// The owner wants the Deals floor to run on its own (2026-09-30). The Tower asks him once, by code rather than by
+// Warden's memory: when the floor is live and not on auto, and no such item is waiting or was asked this week.
+export async function maybeRaiseDealsAutoApprove(db: Db, floor: typeof floors.$inferSelect, now: Date): Promise<boolean> {
+  if (floor.autoApprove || floor.status !== "live") return false;
+  const [open] = await db
+    .select({ id: approvals.id })
+    .from(approvals)
+    .where(and(eq(approvals.type, "decision"), sql`${approvals.content} ->> 'autoApproveFloor' = 'deals'`, sql`(${approvals.status} = 'pending' or ${approvals.createdAt} >= ${new Date(now.getTime() - WEEK_MS)})`))
+    .limit(1);
+  if (open) return false;
+  await raiseApproval(
+    db,
+    {
+      type: "decision",
+      summary: DEALS_AUTO_DECISION,
+      content: { autoApproveFloor: "deals", text: "Let the Deals floor post on its own: deal posts, teasers, recaps, polls, quizzes and share asks in your groups go out at their planned times without a tap. You watch the channel and the game." },
+      riskNote: "Every deal post carries a store link checked against a dated source page, Amazon posts carry the disclosure line, at most 10 deal posts a day. /pause deals stops the floor at once.",
+      floorId: floor.id,
+    },
+    now,
+  );
+  return true;
+}
+
 export async function advanceDeals(db: Db, now: Date, created: Record<string, number>): Promise<void> {
   const [floor] = await db.select().from(floors).where(eq(floors.slug, "deals")).limit(1);
   if (!floor || floor.status !== "live") return;
+  await maybeRaiseDealsAutoApprove(db, floor, now);
   const crew = await db.select().from(agents).where(eq(agents.floorId, floor.id));
   const scout = crew.find((a) => a.slug === "deals_scout");
   const editor = crew.find((a) => a.slug === "deals_editor");

@@ -8,6 +8,7 @@ import { channelChatId } from "@/lib/telegram";
 import { clipboardValue } from "@/lib/clipboard";
 import { findShareSpots, writeEngagement } from "./deals-engagement";
 import { STYLE, input, logEvent, num, str, type Playbook } from "./playbook-core";
+import { plainDashes } from "@/lib/text";
 
 const STORE_LABEL: Record<string, string> = { amazon_ae: "Amazon.ae", noon: "Noon", sharaf_dg: "Sharaf DG", carrefour: "Carrefour", talabat: "Talabat" };
 const STORE_HOSTS: Record<string, string> = { amazon_ae: "amazon.ae", noon: "noon.com", sharaf_dg: "sharafdg.com", carrefour: "carrefouruae.com", talabat: "talabat.com" };
@@ -185,8 +186,8 @@ ${STYLE}`,
     const [floor] = deal.floorId ? await ctx.db.select().from(floors).where(eq(floors.id, deal.floorId)).limit(1) : [];
     const base = (process.env.APP_URL ?? "https://the-tower-saxqb777s-projects.vercel.app").replace(/\/$/, "");
     const code = shortCode();
-    const title = str(output.title, 80) || deal.title;
-    const text = str(output.body, 600);
+    const title = plainDashes(str(output.title, 80)) || deal.title;
+    const text = plainDashes(str(output.body, 600));
     const body = withDisclosure(`${text}\n${base}/go/${code}`, isAmazonDeal(deal));
     const channel = channelChatId(await clipboardValue(ctx.db, "deals_channel")) ?? "";
     const [row] = await ctx.db.insert(posts).values({ floorId: deal.floorId, kind: "deal", dealIds: [deal.id], body, channel: "telegram_channel", status: "draft", shortCode: code, scheduledAt: await nextSlot(ctx.db, ctx.now), simulated: false, createdAt: ctx.now, updatedAt: ctx.now }).returning({ id: posts.id });

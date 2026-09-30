@@ -1,7 +1,7 @@
 // DocLedger runs mostly on its own. After the owner has approved ten emails in a row, the Tower asks once to send
 // routine emails without a tap (first emails, follow ups, answers to simple questions), at most a set number a day.
 // Hot replies (someone wants a demo, a price, a trial) always go to the owner with their words and a suggested answer.
-import { and, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, notInArray, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { approvals, floors, leads, outreach } from "@/db/schema";
 import { raiseApproval } from "@/lib/approvals";
@@ -18,11 +18,12 @@ export type ReplyIntent = "no_reply" | "question" | "interested" | "booking" | "
 export const REPLY_INTENTS: ReplyIntent[] = ["no_reply", "question", "interested", "booking", "not_now", "no", "unsubscribe", "out_of_office", "other"];
 
 // The last ten emails the owner decided himself: all approved means the Writer and Chaser have earned his trust.
+// His own /send emails do not count: they are his words, not the workers'.
 export async function trustEarned(db: Db): Promise<{ earned: boolean; approvedInARow: number }> {
   const rows = await db
     .select({ status: approvals.status })
     .from(approvals)
-    .where(and(eq(approvals.type, "outreach_email"), eq(approvals.simulated, false), inArray(approvals.status, ["approved", "rejected"]), ne(approvals.decidedVia, "auto")))
+    .where(and(eq(approvals.type, "outreach_email"), eq(approvals.simulated, false), inArray(approvals.status, ["approved", "rejected"]), notInArray(approvals.decidedVia, ["auto", "owner"])))
     .orderBy(desc(approvals.decidedAt))
     .limit(TRUST_APPROVALS);
   let inARow = 0;

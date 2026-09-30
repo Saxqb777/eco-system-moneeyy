@@ -477,7 +477,38 @@ function CeilingRaise({ current, onChanged }: { current: number; onChanged?: () 
   );
 }
 
-// Run Warden now: an instant run, limited to one an hour per trigger.
+type TickSteps = {
+  collect?: { collected?: number };
+  advance?: { created?: Record<string, number>; executed?: number };
+  submit?: { submitted?: number; direct?: number };
+  deliver?: { sent?: number };
+  warden?: { status?: string; reason?: string; summary?: string };
+};
+
+// What the whole run did, in one line: the floors always move, even when Warden rests.
+export function runSummary(steps: TickSteps | undefined): string {
+  if (!steps) return "Done";
+  const parts: string[] = [];
+  const created = Object.values(steps.advance?.created ?? {}).reduce((a, b) => a + b, 0);
+  if (steps.collect?.collected) parts.push(`${steps.collect.collected} results came back`);
+  if (created) parts.push(`${created} new tasks`);
+  const worked = steps.submit?.submitted ?? 0;
+  const done = steps.submit?.direct ?? 0;
+  if (worked) parts.push(done ? `${worked} tasks worked, ${done} finished already` : `${worked} tasks sent to work`);
+  if (steps.advance?.executed) parts.push(`${steps.advance.executed} approved items carried out`);
+  if (steps.deliver?.sent) parts.push(`${steps.deliver.sent} messages sent to your phone`);
+  const floors = parts.length ? `Floors: ${parts.join(", ")}.` : "Floors checked: nothing waiting.";
+  const w = steps.warden;
+  let warden = "";
+  if (w?.status === "applied") warden = ` Warden: ${w.summary ?? "decisions applied"}`;
+  else if (w?.status === "simulated") warden = " Warden: simulation is on, paste the Anthropic key and switch it off for a real run.";
+  else if (w?.status === "skipped" && /already happened this hour/.test(w.reason ?? "")) warden = " Warden already thought in the last hour, so he rests until then.";
+  else if (w?.status === "failed") warden = ` Warden failed: ${w.reason ?? "unknown"}`;
+  else if (w?.status) warden = ` Warden: ${w.status}${w.reason ? `, ${w.reason}` : ""}`;
+  return floors + warden;
+}
+
+// Run the Tower now: the whole heartbeat on demand, plus an instant Warden run (one an hour).
 export function WardenControls({ warden }: { warden: WardenSummary | null }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
@@ -485,20 +516,18 @@ export function WardenControls({ warden }: { warden: WardenSummary | null }) {
   async function run() {
     if (busy) return;
     setBusy(true);
-    setNote("Warden is reading the floors");
+    setNote("The Tower is working the floors");
     const res = await post("/api/tick?trigger=manual", {});
     setBusy(false);
-    const w = (res as { steps?: { warden?: { status?: string; reason?: string; summary?: string } } }).steps?.warden;
-    if (!res.ok) setNote(res.error ?? "The tick failed");
-    else if (!w) setNote("Tick done");
-    else if (w.status === "applied") setNote(`Done: ${w.summary ?? "decisions applied"}`);
-    else if (w.status === "simulated") setNote("Simulation is on: Warden's runs are simulated. Paste the Anthropic key and switch simulation off for a real run.");
-    else setNote(`${w.status}${w.reason ? `: ${w.reason}` : ""}`);
+    const r = res as { skipped?: string; steps?: TickSteps };
+    if (!res.ok) setNote(res.error ?? "The run failed");
+    else if (r.skipped === "busy") setNote("The Tower is already working. Try again in a minute.");
+    else setNote(runSummary(r.steps));
   }
   return (
     <div className="actions" style={{ marginTop: 0 }}>
       <Key onClick={() => void run()} disabled={busy}>
-        Run Warden now
+        Run the Tower now
       </Key>
       <span className="note-s light">{note || (last ? `Last run ${when(last.startedAt)}: ${last.summary ?? last.status}` : "No runs yet")}</span>
     </div>

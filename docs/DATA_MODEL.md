@@ -14,7 +14,7 @@ Postgres on Neon, managed with Drizzle. Conventions:
 ### settings
 | column | type | notes |
 |--------|------|-------|
-| key | text, pk | simulation_mode, daily_cap_usd (1.70), hard_ceiling_usd (5.00), budget_level (1), timezone (Asia/Dubai), warden_interval_hours (4), brief_hour_local (8), model_overrides, sound_enabled, owner_chat_id, launch_date |
+| key | text, pk | simulation_mode, daily_cap_usd (1.70), hard_ceiling_usd (5.00), budget_level (1), timezone (Asia/Dubai), warden_interval_hours (4), brief_hour_local (8), model_overrides, sound_enabled, owner_chat_id, launch_date, express_until (ISO time, D057), tick_lock ({holder, at}: the one running tick; updated_at older than 6 minutes means free, D058) |
 | value | jsonb | |
 | updated_at | timestamptz | |
 
@@ -97,7 +97,7 @@ Postgres on Neon, managed with Drizzle. Conventions:
 | review_reason | text | |
 | feedback | text | from a rejection or from Saaqib |
 | parent_task_id | uuid | pipeline lineage |
-| batch_id | text | Anthropic batch id |
+| batch_id | text | Anthropic batch id, or "direct" (writing task run straight away, D059) or "express" (clean run, D057) |
 | batch_custom_id | text | |
 | attempts | int | |
 | blocked_reason | text | |
@@ -137,7 +137,7 @@ Index on (task_id, id) and on (created_at) for the live stream.
 | floor_id | uuid | |
 | telegram_message_id | bigint | to edit the message after a decision |
 | decided_at | timestamptz | |
-| decided_via | text | ui, telegram, auto |
+| decided_via | text | ui, telegram, auto, owner (his own /send email, or a draft his own email replaced, D060) |
 | executed_at | timestamptz | when the side effect ran |
 | execution_result | jsonb | |
 | simulated | boolean | |

@@ -163,6 +163,11 @@ export async function applyWardenDecisions(db: Db, runId: string, d: WardenDecis
         out.skipped.push("auto send for DocLedger is raised by the Tower at the trust point");
         continue;
       }
+      // The Deals ask is raised by the Tower too (once a week at most), so Warden never doubles it.
+      if (slug === "deals") {
+        out.skipped.push("auto approve for Deals is raised by the Tower itself");
+        continue;
+      }
       content.autoApproveFloor = slug;
     }
     if (a.type === "floor_unlock") {

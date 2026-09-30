@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { collectBatches } from "@/agents/batches";
 import { getDb } from "@/db/client";
@@ -10,6 +11,7 @@ import { dubaiParts } from "@/lib/time";
 import { runSimulation } from "@/sim/generator";
 import { handleWardenBatchResult, runWarden, scheduledRunExists } from "@/warden/decide";
 import { expressActive } from "@/agents/workers";
+import { HEARTBEAT_GAP_MS, acquireTickLock, heartbeatDue, lastScheduledTickAt, releaseTickLock, type HeartbeatSource } from "@/warden/heartbeat";
 
 export type TickTrigger = "cron" | "manual" | "setup" | "idea" | "blocked" | "ui";
 
@@ -19,6 +21,15 @@ export interface TickResult {
   startedAt: string;
   finishedAt: string;
   steps: Record<string, unknown>;
+  // Set when no tick ran: another one was running, or a scheduled one ran moments ago.
+  skipped?: "busy" | "fresh";
+}
+
+export interface TickOptions {
+  // Who knocked, kept on the tick row for diagnosis.
+  via?: HeartbeatSource | string;
+  // Scheduled knocks skip when a scheduled tick started less than this long ago.
+  minGapMs?: number;
 }
 
 // Handlers for batch results by custom id prefix. worker outputs use "task_".
@@ -35,12 +46,34 @@ export function batchResultHandler(): ResultHandler {
   };
 }
 
+function skippedTick(trigger: TickTrigger, now: Date, skipped: "busy" | "fresh"): TickResult {
+  return { id: "", trigger, startedAt: now.toISOString(), finishedAt: new Date().toISOString(), steps: {}, skipped };
+}
+
 // The heartbeat. Every step is bounded and idempotent, so a late or repeated tick is harmless.
-export async function runTick(trigger: TickTrigger, now = new Date()): Promise<TickResult> {
+// One tick at a time: a second knock while one runs returns "busy" instead of doing the work twice.
+export async function runTick(trigger: TickTrigger, now = new Date(), opts: TickOptions = {}): Promise<TickResult> {
   const db = getDb();
+  const holder = randomUUID();
+  if (!(await acquireTickLock(db, holder, now))) return skippedTick(trigger, now, "busy");
+  try {
+    if (opts.minGapMs && !heartbeatDue(await lastScheduledTickAt(db), now, opts.minGapMs)) return skippedTick(trigger, now, "fresh");
+    return await tickBody(db, trigger, now, opts);
+  } finally {
+    await releaseTickLock(db, holder).catch(() => undefined);
+  }
+}
+
+// A scheduled knock from any clock: runs a tick only when the last scheduled one is older than the gap.
+export async function heartbeatIfDue(via: HeartbeatSource, now = new Date()): Promise<TickResult | null> {
+  if (!heartbeatDue(await lastScheduledTickAt(getDb()), now)) return null;
+  return runTick("cron", now, { via, minGapMs: HEARTBEAT_GAP_MS });
+}
+
+async function tickBody(db: ReturnType<typeof getDb>, trigger: TickTrigger, now: Date, opts: TickOptions): Promise<TickResult> {
   const [row] = await db.insert(ticks).values({ trigger, status: "running", startedAt: now }).returning({ id: ticks.id });
   const tickId = row?.id ?? "";
-  const steps: Record<string, unknown> = {};
+  const steps: Record<string, unknown> = opts.via ? { via: opts.via } : {};
 
   try {
     const settingsMap = await getSettings(db);

@@ -31,6 +31,7 @@ const HELP = [
   "/cap: daily cap, spend today, budget level",
   "/run: Warden runs now (once an hour)",
   "/reply <company>: <their text>, forward an email reply by hand",
+  "/send <company>: <your text>, write to a lead yourself, it goes out now and replaces the drafted answer",
   "Anything else you write becomes an idea in Warden's mail slot.",
 ].join("\n");
 
@@ -167,6 +168,17 @@ export async function processTelegramUpdate(db: Db, u: TelegramUpdate, now = new
         const r = await recordInboundReply(db, { from: m[1]!.trim(), subject: "Forwarded by the owner", text: m[2]!.trim(), company: m[1]!.trim() }, now);
         await sendNow(cfg.token, chatId, r.matched ? `Logged as a reply from ${r.company}. Chaser picks it up on the next heartbeat.` : "No lead matched that name. Check the company name in the floor panel.");
         return { handled: "reply", wantsTick: r.matched ? "manual" : undefined };
+      }
+      case "send": {
+        const m = arg.match(/^([^:]+):\s*([\s\S]+)$/);
+        if (!m) {
+          await sendNow(cfg.token, chatId, "Format: /send <company>: <your text>");
+          return { handled: "send without text" };
+        }
+        const { ownerSend } = await import("@/lib/owner-send");
+        const r = await ownerSend(db, m[1]!, m[2]!, now);
+        await sendNow(cfg.token, chatId, r.message);
+        return { handled: r.ok ? "owner sent" : "owner send failed" };
       }
       case "run":
         await sendNow(cfg.token, chatId, "Warden is on it. Instant runs are limited to one an hour.");

@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { OWNER_COOKIE, verifySessionToken } from "@/lib/auth";
 import { verifyGithubOidc } from "@/lib/github-oidc";
 import { bearerOk, json, unauthorized } from "@/lib/http";
+import { HEARTBEAT_GAP_MS } from "@/warden/heartbeat";
 import { runTick, type TickTrigger } from "@/warden/tick";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +38,8 @@ async function handle(req: Request) {
   const raw = url.searchParams.get("trigger") ?? "cron";
   const trigger = (TRIGGERS.includes(raw as TickTrigger) ? raw : "cron") as TickTrigger;
   try {
-    const result = await runTick(trigger);
+    // Scheduled knocks share the heartbeat's gap, so GitHub and Neon landing together run one tick.
+    const result = await runTick(trigger, new Date(), trigger === "cron" ? { via: caller.via, minGapMs: HEARTBEAT_GAP_MS } : { via: caller.via });
     return json({ ok: true, via: caller.via, ...result });
   } catch (err) {
     return json({ ok: false, error: err instanceof Error ? err.message : String(err) }, { status: 500 });

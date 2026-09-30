@@ -15,15 +15,22 @@ const MAX_PER_BATCH = 20;
 // verification run; everything else stays on batches.
 export const EXPRESS_PER_TICK = 5;
 const EXPRESS_STUCK_MS = 12 * 60 * 1000;
+// The direct lane: short writing tasks (a deal post, a channel post, a first email, a reply) run straight away
+// on every tick, full price but done in seconds, so nothing the owner or a lead waits on sits an hour in a
+// batch. Research with web tools (Scouts, Analyst, share spots) stays on batches at half price.
+export const DIRECT_KINDS = new Set(["write_post", "write_engagement", "draft_outreach", "follow_up"]);
+export const DIRECT_PER_TICK = 4;
+// Task ids a direct or express run marks in tasks.batch_id: no batch row stands behind them.
+const DIRECT_MARKS = ["express", "direct"];
 
 export function expressActive(settingsMap: Record<string, unknown>, now: Date): boolean {
   const v = settingsMap.express_until;
   return typeof v === "string" && Date.parse(v) > now.getTime();
 }
 
-// A tick that died mid express run leaves tasks running with no batch to collect: put them back in the queue.
+// A tick that died mid direct or express run leaves tasks running with no batch to collect: put them back in the queue.
 export async function requeueStuckExpress(db: Db, now: Date): Promise<number> {
-  const stuck = await db.select().from(tasks).where(and(eq(tasks.status, "running"), eq(tasks.batchId, "express"), eq(tasks.simulated, false)));
+  const stuck = await db.select().from(tasks).where(and(eq(tasks.status, "running"), inArray(tasks.batchId, DIRECT_MARKS), eq(tasks.simulated, false)));
   let n = 0;
   for (const t of stuck) {
     if (!t.startedAt || now.getTime() - t.startedAt.getTime() < EXPRESS_STUCK_MS) continue;
@@ -38,8 +45,8 @@ async function logEvent(db: Db, e: { taskId?: string | null; agentId?: string | 
   await db.insert(taskEvents).values({ taskId: e.taskId ?? null, agentId: e.agentId ?? null, floorId: e.floorId ?? null, type: e.type, message: e.message, data: e.data ?? null, createdAt: e.at });
 }
 
-export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ status: string; reason?: string; submitted: number; skipped: number; held: string[] }> {
-  const out = { status: "ok", submitted: 0, skipped: 0, held: [] as string[] };
+export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ status: string; reason?: string; submitted: number; direct: number; skipped: number; held: string[] }> {
+  const out: { status: string; reason?: string; submitted: number; direct: number; skipped: number; held: string[] } = { status: "ok", submitted: 0, direct: 0, skipped: 0, held: [] };
   const client = await getClient(db);
   if (!client) return { ...out, status: "skipped", reason: "No Anthropic API key on the clipboard" };
   const settingsMap = await getSettings(db);
@@ -59,14 +66,19 @@ export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ sta
     .limit(60);
 
   const express = expressActive(settingsMap, now);
-  if (express) await requeueStuckExpress(db, now);
-  const limit = express ? EXPRESS_PER_TICK : MAX_PER_BATCH;
+  await requeueStuckExpress(db, now);
+  // Express sends everything down the direct lane, up to its own limit.
+  const directLimit = express ? EXPRESS_PER_TICK : DIRECT_PER_TICK;
   const items: BatchItem[] = [];
+  const direct = new Set<string>();
+  let batched = 0;
   let busy = 0;
   let budgetLeft = cap - spend.todayUsd;
   const floorSpend = { ...spend.todayByFloor };
   for (const t of queued) {
-    if (items.length >= limit) break;
+    if (direct.size >= directLimit && (express || batched >= MAX_PER_BATCH)) break;
+    const goesDirect = express || DIRECT_KINDS.has(t.kind);
+    if (goesDirect ? direct.size >= directLimit : batched >= MAX_PER_BATCH) continue;
     const floor = t.floorId ? floorById.get(t.floorId) : undefined;
     const agent = t.agentId ? agentById.get(t.agentId) : undefined;
     if (!floor || !agent) {
@@ -82,8 +94,8 @@ export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ sta
       continue;
     }
     if (budgetLeft < EST_TASK_USD) break;
-    // One task at a time per worker, except in express mode where a worker may run several side by side.
-    if (!express && agent.currentTaskId && agent.currentTaskId !== t.id) {
+    // One batch task at a time per worker. Direct tasks finish inside the tick, so a worker may run several.
+    if (!goesDirect && agent.currentTaskId && agent.currentTaskId !== t.id) {
       busy += 1;
       continue;
     }
@@ -114,35 +126,53 @@ export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ sta
       webFetchMaxUses: prepared.webFetchMaxUses ?? playbook.webFetchMaxUses,
     };
     items.push({ customId: `task_${t.id}`, call });
+    if (goesDirect) direct.add(`task_${t.id}`);
+    else batched += 1;
     budgetLeft -= EST_TASK_USD;
     floorSpend[floor.id] = (floorSpend[floor.id] ?? 0) + EST_TASK_USD;
   }
   if (!items.length) return { ...out, status: out.held.length ? "held" : "idle", reason: out.held.length ? `floors near their share of the cap: ${out.held.join(", ")}` : busy ? `${busy} task${busy === 1 ? "" : "s"} waiting for a busy worker` : "nothing queued" };
 
-  const submitted = express ? { batchId: "express" } : await submitBatch(db, items, now);
-  for (const item of items) {
+  let batchItems = items.filter((i) => !direct.has(i.customId));
+  const directItems = items.filter((i) => direct.has(i.customId));
+  let submitted: Awaited<ReturnType<typeof submitBatch>> | null = null;
+  if (batchItems.length) {
+    // A batch that cannot be submitted leaves its tasks queued for the next tick; the direct lane still runs.
+    try {
+      submitted = await submitBatch(db, batchItems, now);
+    } catch (err) {
+      out.reason = `batch submit failed: ${err instanceof Error ? err.message : String(err)}`;
+      batchItems = [];
+    }
+  }
+  const started = [...batchItems, ...directItems];
+  if (!started.length) return { ...out, status: "failed" };
+  const mark = express ? "express" : "direct";
+  for (const item of started) {
     const taskId = item.customId.slice("task_".length);
     const t = queued.find((x) => x.id === taskId)!;
-    await db.update(tasks).set({ status: "running", startedAt: now, batchId: submitted?.batchId ?? null, batchCustomId: item.customId, attempts: t.attempts + 1, updatedAt: now }).where(eq(tasks.id, taskId));
+    const isDirect = direct.has(item.customId);
+    await db.update(tasks).set({ status: "running", startedAt: now, batchId: isDirect ? mark : (submitted?.batchId ?? null), batchCustomId: item.customId, attempts: t.attempts + 1, updatedAt: now }).where(eq(tasks.id, taskId));
     await db.update(agents).set({ status: "working", currentTaskId: taskId, updatedAt: now }).where(eq(agents.id, t.agentId!));
     await logEvent(db, { taskId, agentId: t.agentId, floorId: t.floorId, type: "started", message: `${agentById.get(t.agentId!)?.name ?? "Worker"} started: ${t.title}${express ? " (express)" : ""}`, at: now });
   }
-  out.submitted = items.length;
-  if (express) {
-    // Run them side by side and absorb each result straight away, exactly as a batch result would be.
-    await Promise.all(
-      items.map(async (item) => {
-        let r: CollectedResult;
+  out.submitted = started.length;
+  out.direct = directItems.length;
+  if (directItems.length) {
+    // The model calls run side by side. The results are absorbed one after another, exactly as batch results
+    // are, so rules that count (the daily auto send cap) never see two drafts at once.
+    const results = await Promise.all(
+      directItems.map(async (item): Promise<CollectedResult> => {
         try {
           const res = await callModel(db, { ...item.call, customId: item.customId }, now);
-          r = { customId: item.customId, ok: res.stopReason !== "max_tokens" || res.json !== null, text: res.text, json: res.json, costUsd: res.costUsd, runId: res.runId, error: res.stopReason === "max_tokens" && res.json === null ? "the answer was cut off (max tokens)" : null };
+          return { customId: item.customId, ok: res.stopReason !== "max_tokens" || res.json !== null, text: res.text, json: res.json, costUsd: res.costUsd, runId: res.runId, error: res.stopReason === "max_tokens" && res.json === null ? "the answer was cut off (max tokens)" : null };
         } catch (err) {
-          r = { customId: item.customId, ok: false, text: "", json: null, costUsd: 0, runId: null, error: err instanceof Error ? err.message : String(err) };
+          return { customId: item.customId, ok: false, text: "", json: null, costUsd: 0, runId: null, error: err instanceof Error ? err.message : String(err) };
         }
-        await handleTaskBatchResult(db, r, new Date());
       }),
     );
-    out.status = "express";
+    for (const r of results) await handleTaskBatchResult(db, r, now);
+    if (express) out.status = "express";
   }
   return out;
 }

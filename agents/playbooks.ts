@@ -11,6 +11,7 @@ import { normaliseCountry, regionFor, skippedCountries } from "@/lib/markets";
 import { DEALS_PLAYBOOKS } from "./deals-playbooks";
 import { REPLY_INTENTS, autoSendAllowed, isHot, notifyHotLead, snoozeLead } from "./docledger-autonomy";
 import { STYLE, input, logEvent, num, str, type Playbook, type PlaybookContext, type TaskRow } from "./playbook-core";
+import { plainDashes } from "@/lib/text";
 export type { Absorbed, Playbook, PlaybookContext, Prepared } from "./playbook-core";
 
 export function dedupeKeyFor(company: string, website: string | null | undefined): string {
@@ -228,16 +229,16 @@ ${STYLE}`,
     const [lead] = await ctx.db.select().from(leads).where(eq(leads.id, leadId)).limit(1);
     if (!lead) return { summary: "Lead vanished before the draft landed" };
     const dm = (lead.decisionMaker ?? {}) as Record<string, string>;
-    let subject = str(output.subject, 120) || DOCLEDGER.subjectExamples[0];
+    let subject = plainDashes(str(output.subject, 120)) || DOCLEDGER.subjectExamples[0];
     if (/\bAI\b/i.test(subject)) subject = DOCLEDGER.subjectExamples[0];
     const previewRaw = (output.preview ?? {}) as Record<string, unknown>;
     const points = Array.isArray(previewRaw.points) ? previewRaw.points.filter((x): x is string => typeof x === "string" && x.trim().length > 0).slice(0, 4) : [];
     const sampleFields = Array.isArray(previewRaw.sampleFields) ? previewRaw.sampleFields.filter((f): f is { field: string; value: string } => !!f && typeof f === "object" && typeof (f as { field?: unknown }).field === "string" && typeof (f as { value?: unknown }).value === "string").slice(0, 8) : [];
-    const preview = str(previewRaw.headline, 120) && points.length >= 2 ? { headline: str(previewRaw.headline, 120), intro: str(previewRaw.intro, 400), points, sampleDocument: str(previewRaw.sampleDocument, 120) || "Shipping line bill", sampleFields } : null;
+    const preview = str(previewRaw.headline, 120) && points.length >= 2 ? { headline: plainDashes(str(previewRaw.headline, 120)), intro: plainDashes(str(previewRaw.intro, 400)), points: points.map(plainDashes), sampleDocument: str(previewRaw.sampleDocument, 120) || "Shipping line bill", sampleFields } : null;
     const base = (process.env.APP_URL ?? "https://the-tower-saxqb777s-projects.vercel.app").replace(/\/$/, "");
     const previewCode = preview ? (lead.previewCode ?? shortCode()) : null;
     const previewUrl = previewCode ? `${base}/for/${previewCode}` : null;
-    let body = str(output.body, 4000);
+    let body = plainDashes(str(output.body, 4000));
     if (previewUrl) {
       const line = `A two minute preview made for ${lead.company}: ${previewUrl}`;
       body = body.includes("{preview}") ? body.replace("{preview}", line) : `${body.trimEnd()}\n\n${line}`;
@@ -346,8 +347,8 @@ ${STYLE}`,
     if (intent === "not_now") await snoozeLead(ctx.db, lead.id, 30, ctx.now);
     const hot = isHot(intent, action);
     const step = o.step + 1;
-    const subject = str(output.subject, 120) || `Re: ${o.subject ?? "DocLedger"}`;
-    const body = str(output.body, 4000);
+    const subject = plainDashes(str(output.subject, 120)) || `Re: ${o.subject ?? "DocLedger"}`;
+    const body = plainDashes(str(output.body, 4000));
     const [row] = await ctx.db.insert(outreach).values({ leadId: lead.id, step, channel: "email", subject, bodyText: body, status: "draft", simulated: false, createdAt: ctx.now, updatedAt: ctx.now }).returning({ id: outreach.id });
     const label = hot ? "Hot lead: answer" : action === "propose_times" ? "Propose demo times to" : action === "book_confirm" ? "Confirm the demo with" : `Send follow up ${step} to`;
     const auto = !hot && (await autoSendAllowed(ctx.db, ctx.floorId, ctx.now));

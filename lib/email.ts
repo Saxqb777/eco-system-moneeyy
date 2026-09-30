@@ -30,7 +30,8 @@ export async function sendEmail(db: Db, m: { to: string; subject: string; text: 
 }
 
 // Runs the side effect of an approved outreach_email item: exactly one send per outreach row.
-export async function sendOutreach(db: Db, a: typeof approvals.$inferSelect, now = new Date()): Promise<{ ok: boolean; error?: string }> {
+// anyHour: the owner wrote this one himself and pressed send, so it goes now, whatever the hour is where they are.
+export async function sendOutreach(db: Db, a: typeof approvals.$inferSelect, now = new Date(), opts: { anyHour?: boolean } = {}): Promise<{ ok: boolean; error?: string }> {
   if (a.status !== "approved") return { ok: false, error: "not approved" };
   const content = (a.content ?? {}) as Record<string, unknown>;
   const outreachId = typeof content.outreachId === "string" ? content.outreachId : null;
@@ -41,7 +42,7 @@ export async function sendOutreach(db: Db, a: typeof approvals.$inferSelect, now
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return { ok: false, error: "no email address for the contact" };
   // Worldwide: an email lands in the reader's working hours, never at night or on their weekend.
   const [lead] = row.leadId ? await db.select({ country: leads.country }).from(leads).where(eq(leads.id, row.leadId)).limit(1) : [];
-  if (lead?.country && !inBusinessHours(lead.country, now)) return { ok: false, error: `waiting for business hours in ${lead.country}` };
+  if (!opts.anyHour && lead?.country && !inBusinessHours(lead.country, now)) return { ok: false, error: `waiting for business hours in ${lead.country}` };
   const sent = await sendEmail(db, { to, subject: row.subject ?? String(content.subject ?? ""), text: row.bodyText ?? String(content.body ?? "") });
   if (!sent.ok) return sent;
   await db.update(outreach).set({ status: "sent", resendId: sent.id ?? null, sentAt: now, updatedAt: now }).where(eq(outreach.id, row.id));

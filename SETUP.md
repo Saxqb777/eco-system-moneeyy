@@ -16,7 +16,7 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 | 4 | Telegram bot token, then pair your chat with /pair | Warden messages, approvals over Telegram, morning brief | Done | done 2026-09-30, chat paired, first four messages delivered 08:18 UTC |
 | 5 | DocLedger GitHub repo URL and a GitHub token for it | Builder (nightly at 02:00 Dubai, built in Phase 5) | Done | done 2026-09-30 (Saxqb777/docledger plus token), first Builder night is 22:00 UTC |
 | 6 | Calendar booking link | Chaser demo booking | Done | done 2026-09-30 (cal.com 15 min link) |
-| 7 | Resend API key and sending address | Sending approved outreach emails | Now | domain docledger.site bought 2026-09-30 at Spaceship, Resend domain and send only key created by Claude, DNS records handed to Saaqib to paste at Spaceship, then verify |
+| 7 | Resend API key and sending address | Sending approved outreach emails | Now | domain docledger.site bought 2026-09-30 at Spaceship. Claude created the Resend domain, the send only key and the six DNS records at Spaceship (via the Spaceship connector), verification started 09:0x UTC. Saaqib pastes key, sending address and webhook secret in the Setup tab |
 | 8 | DocLedger price line and signature block (the pitch itself is in the repo) | Writer and Chaser | Now | missing |
 | 8b | Resend webhook secret for replies (optional) | Chaser reads replies itself | Optional | webhook created 2026-09-30 for email.received, secret handed to Saaqib to paste |
 | 9 | Affiliate IDs: Amazon.ae tag, Noon, others | Deals Engine earning (posts run without them, links stay plain) | Now | missing |
@@ -73,14 +73,14 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 
 ### 7. Resend
 - Status 2026-09-30: domain docledger.site (Spaceship, order 28d0dc4b, renews yearly at 55.39 AED, privacy free). Resend domain created in region eu-west-1 with sending and receiving, tracking off. Send only API key restricted to that domain. Reply webhook created for email.received pointing at /api/email/inbound.
-- DNS at Spaceship (Advanced DNS on the domain), six records:
+- DNS at Spaceship (nameservers are Spaceship basic, launch1/launch2.spaceship.net). Six records, added by Claude through the Spaceship connector on 2026-09-30:
   - TXT, host resend._domainkey, value p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDURZQercKTP9Q0YoDZUl7sEz31dFw66TcKZ8OeHyi48npfVCYCUl4VryAQvqoBPqcjguIf+BnvBKELD8MTfSkHrqKeYvI53jw1blWT2vsMe7U1fDNOdIdNoFb8D/1x0l1nGgNSLJ87CWq/7347WhG8C4Db2LVYt6qnKSpVinzWnwIDAQAB
   - MX, host send, value feedback-smtp.eu-west-1.amazonses.com, priority 10
   - TXT, host send, value v=spf1 include:amazonses.com ~all
   - CNAME, host rsend, value send.forge.rmta.net
   - MX, host @, value inbound-smtp.eu-west-1.amazonaws.com, priority 10 (replies)
   - TXT, host _dmarc, value v=DMARC1; p=none;
-- The domain was also added to the Vercel team (zone on, nameservers not pointed). Vercel's DNS upload endpoint is closed to this environment, so DNS stays at Spaceship for now.
+- The domain was also added to the Vercel team (zone on, nameservers not pointed, inert). Vercel's DNS upload endpoint is closed to this environment, so DNS lives at Spaceship.
 - resend.com, add and verify your sending domain, then API Keys, Create. Paste under "Resend API key". Paste the from address (on that domain) under "Sending address".
 - Approved outreach emails are sent by the next heartbeat. Nothing goes out without your Approve.
 - Replies, two ways: (a) Resend Receiving: add the MX record for a subdomain, create a webhook for email.received pointing at https://the-tower-saxqb777s-projects.vercel.app/api/email/inbound, paste the signing secret under "Resend webhook secret". (b) Forward by hand on Telegram: /reply Gulf Crescent Freight: their text. Chaser picks it up either way.

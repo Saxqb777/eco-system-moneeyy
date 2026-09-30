@@ -360,6 +360,7 @@ export const posts = pgTable("posts", {
   telegramMessageId: bigint("telegram_message_id", { mode: "number" }),
   shortCode: text("short_code").unique(),
   clicks: integer("clicks").notNull().default(0),
+  extra: jsonb("extra"),
   simulated: simulated(),
   createdAt: createdAt(),
   updatedAt: updatedAt(),

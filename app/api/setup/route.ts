@@ -5,6 +5,7 @@ import { setupItems } from "@/db/schema";
 import { encryptSecret, secretHint } from "@/lib/crypto";
 import { bad, json, readJson } from "@/lib/http";
 import { mockEnabled, mockSetup } from "@/lib/mock-state";
+import { parseFacebookPage, parseXCredentials } from "@/lib/social";
 import { channelChatId, pairingCode } from "@/lib/telegram";
 import { runTick } from "@/warden/tick";
 
@@ -37,6 +38,8 @@ export async function POST(req: Request) {
 
   let value = (body.value ?? "").trim();
   if (!value) return bad("value is empty");
+  if (item.key === "x_credentials" && !parseXCredentials(value)) return bad("Paste four values separated by spaces: API Key, API Key Secret, Access Token, Access Token Secret.");
+  if (item.key === "facebook_page" && !parseFacebookPage(value)) return bad("Paste the Page ID (numbers) and the Page access token, separated by a space.");
   if (item.key === "deals_channel") {
     const clean = channelChatId(value);
     if (!clean) return bad("Paste the channel handle like @uaedailydeals (or its t.me link).");

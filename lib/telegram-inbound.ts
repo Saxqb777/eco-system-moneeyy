@@ -4,6 +4,7 @@ import type { Db } from "@/db/client";
 import { approvals, floors, ideas } from "@/db/schema";
 import { applyApprovalDecision } from "@/lib/approvals";
 import { buildBrief, formatBrief } from "@/lib/brief";
+import { recordBotChat, type ChatMemberUpdate } from "@/lib/channel";
 import { setFloorPaused } from "@/lib/detail";
 import { asBool, asNumber, getSettings, setSetting } from "@/lib/settings";
 import { getTowerState } from "@/lib/state";
@@ -14,6 +15,7 @@ export interface TelegramUpdate {
   update_id: number;
   message?: { message_id: number; text?: string; chat: { id: number | string }; from?: { id: number | string; first_name?: string } };
   callback_query?: { id: string; data?: string; from: { id: number | string }; message?: { message_id: number; text?: string; chat: { id: number | string } } };
+  my_chat_member?: ChatMemberUpdate;
 }
 
 export interface InboundResult {
@@ -41,6 +43,11 @@ function findFloor(rows: Array<{ slug: string; name: string }>, needle: string) 
 export async function processTelegramUpdate(db: Db, u: TelegramUpdate, now = new Date()): Promise<InboundResult> {
   const cfg = await getTelegramConfig(db);
   if (!cfg) return { handled: "stored, no bot token on the clipboard" };
+
+  if (u.my_chat_member) {
+    const chat = await recordBotChat(db, u.my_chat_member, cfg.chatId, now);
+    return { handled: `bot is ${chat.status} in ${chat.title}` };
+  }
 
   if (u.callback_query) {
     const cb = u.callback_query;

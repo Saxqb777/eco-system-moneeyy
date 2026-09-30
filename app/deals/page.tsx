@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { latestPostedDeals } from "@/agents/deals";
 import { getDb } from "@/db/client";
 import { AMAZON_DISCLOSURE } from "@/lib/affiliate";
@@ -5,6 +6,12 @@ import { clipboardValue } from "@/lib/clipboard";
 import { channelChatId } from "@/lib/telegram";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "UAE Daily Deals: Amazon.ae and Noon discounts, checked by hand",
+  description: "Real discounts for shoppers in the UAE, 15 percent off or more, checked before they are posted. New deals every day on Telegram.",
+  alternates: { canonical: `${(process.env.APP_URL ?? "https://the-tower-saxqb777s-projects.vercel.app").replace(/\/$/, "")}/deals` },
+};
 
 const STORE_LABEL: Record<string, string> = { amazon_ae: "Amazon.ae", noon: "Noon", sharaf_dg: "Sharaf DG", carrefour: "Carrefour", talabat: "Talabat" };
 
@@ -36,7 +43,9 @@ export default async function DealsPage() {
         {rows.map(({ post, deal }) => (
           <li key={post.id} className="deal">
             <div className="deal-store">{STORE_LABEL[deal.store] ?? deal.store}</div>
-            <h2>{deal.title}</h2>
+            <h2>
+              <a href={`/deals/${post.shortCode}`}>{deal.title}</a>
+            </h2>
             <div className="deal-price">
               <span className="now">AED {Number(deal.price).toFixed(0)}</span>
               <span className="was">AED {Number(deal.wasPrice).toFixed(0)}</span>

@@ -3,8 +3,10 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { deals, floors, posts } from "@/db/schema";
 import { affiliateTags, affiliateUrl, isAmazonDeal, shortCode, withDisclosure } from "@/lib/affiliate";
 import { raiseApproval } from "@/lib/approvals";
+import { destinationLabel, socialDestinations } from "@/lib/social";
 import { channelChatId } from "@/lib/telegram";
 import { clipboardValue } from "@/lib/clipboard";
+import { findShareSpots, writeEngagement } from "./deals-engagement";
 import { STYLE, input, logEvent, num, str, type Playbook } from "./playbook-core";
 
 const STORE_LABEL: Record<string, string> = { amazon_ae: "Amazon.ae", noon: "Noon", sharaf_dg: "Sharaf DG", carrefour: "Carrefour", talabat: "Talabat" };
@@ -189,11 +191,12 @@ ${STYLE}`,
     const channel = channelChatId(await clipboardValue(ctx.db, "deals_channel")) ?? "";
     const [row] = await ctx.db.insert(posts).values({ floorId: deal.floorId, kind: "deal", dealIds: [deal.id], body, channel: "telegram_channel", status: "draft", shortCode: code, scheduledAt: await nextSlot(ctx.db, ctx.now), simulated: false, createdAt: ctx.now, updatedAt: ctx.now }).returning({ id: posts.id });
     const auto = !!floor?.autoApprove;
+    const destinations = await socialDestinations(ctx.db);
     const { id: approvalId } = await raiseApproval(ctx.db, {
       type: "public_post",
       summary: `Post to the deals channel: ${title}`,
-      content: { body, store: deal.store, dealId: deal.id, postId: row?.id ?? null, title, affiliateUrl: deal.affiliateUrl ?? deal.url, channel, sourceUrl: deal.sourceUrl, sourceDate: deal.sourceDate, price: deal.price, wasPrice: deal.wasPrice },
-      riskNote: `${deal.affiliateUrl && deal.affiliateUrl !== deal.url ? "Public post on the Telegram channel with an affiliate link." : "Public post on the Telegram channel with a plain link (no affiliate id for this store yet)."} ${sourceLine(deal)}`,
+      content: { body, store: deal.store, dealId: deal.id, postId: row?.id ?? null, title, affiliateUrl: deal.affiliateUrl ?? deal.url, channel, sourceUrl: deal.sourceUrl, sourceDate: deal.sourceDate, price: deal.price, wasPrice: deal.wasPrice, destinations },
+      riskNote: `${deal.affiliateUrl && deal.affiliateUrl !== deal.url ? "Public post on the Telegram channel with an affiliate link." : "Public post on the Telegram channel with a plain link (no affiliate id for this store yet)."}${destinationLabel(destinations)} ${sourceLine(deal)}`,
       previewUrl: deal.sourceUrl ?? deal.url,
       taskId: task.id,
       agentId: ctx.agentId,
@@ -211,7 +214,7 @@ ${STYLE}`,
 async function nextSlot(db: Parameters<Playbook["prepare"]>[1]["db"], now: Date): Promise<Date> {
   const dubaiNow = new Date(now.getTime() + 4 * 3600 * 1000);
   const day = new Date(Date.UTC(dubaiNow.getUTCFullYear(), dubaiNow.getUTCMonth(), dubaiNow.getUTCDate()));
-  const [taken] = await db.select({ n: sql<string>`count(*)` }).from(posts).where(and(eq(posts.simulated, false), sql`${posts.scheduledAt} >= ${new Date(day.getTime() - 4 * 3600 * 1000)}`));
+  const [taken] = await db.select({ n: sql<string>`count(*)` }).from(posts).where(and(eq(posts.simulated, false), eq(posts.kind, "deal"), sql`${posts.scheduledAt} >= ${new Date(day.getTime() - 4 * 3600 * 1000)}`));
   const used = Number(taken?.n ?? 0);
   let hour = Math.max(10, dubaiNow.getUTCHours() + 1) + used;
   let dayOffset = 0;
@@ -223,4 +226,4 @@ async function nextSlot(db: Parameters<Playbook["prepare"]>[1]["db"], now: Date)
   return new Date(Math.max(slotUtc, now.getTime()));
 }
 
-export const DEALS_PLAYBOOKS: Record<string, Playbook> = { find_deals: findDeals, write_post: writePost };
+export const DEALS_PLAYBOOKS: Record<string, Playbook> = { find_deals: findDeals, write_post: writePost, write_engagement: writeEngagement, find_share_spots: findShareSpots };

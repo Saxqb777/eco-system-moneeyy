@@ -18,8 +18,10 @@ const STATE_LABEL: Record<ThreadState, string> = {
 const HOW_LABEL: Record<NonNullable<MailMessage["how"]>, string> = {
   auto: "Sent on its own",
   approved: "Approved by you",
+  yours: "Written by you",
   waiting: "Waiting for your tap",
   rejected: "Rejected by you",
+  replaced: "Replaced by your own answer",
   draft: "Draft",
 };
 

@@ -5,7 +5,7 @@ import type { Db } from "@/db/client";
 import { approvals, leads, outreach } from "@/db/schema";
 
 export type ThreadState = "hot" | "waiting" | "replied" | "sent" | "drafting" | "paused" | "demo" | "closed";
-export type SentHow = "auto" | "approved" | "waiting" | "rejected" | "draft";
+export type SentHow = "auto" | "approved" | "yours" | "waiting" | "rejected" | "replaced" | "draft";
 
 export interface MailThread {
   leadId: string;
@@ -48,7 +48,9 @@ type LeadRow = typeof leads.$inferSelect;
 function howSent(a: ApprovalRow | undefined): SentHow {
   if (!a) return "draft";
   if (a.status === "pending") return "waiting";
-  if (a.status === "rejected") return "rejected";
+  // decidedVia "owner": he wrote it himself with /send, or his own answer replaced this draft.
+  if (a.status === "rejected") return a.decidedVia === "owner" ? "replaced" : "rejected";
+  if (a.decidedVia === "owner") return "yours";
   return a.decidedVia === "auto" ? "auto" : "approved";
 }
 

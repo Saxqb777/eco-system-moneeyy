@@ -21,6 +21,29 @@ export interface RaiseApprovalInput {
 }
 
 // Creates the row and, for real items, rings the red phone on Telegram with inline buttons.
+const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+const clip = (v: string, n: number) => (v.length > n ? `${v.slice(0, n).trimEnd()} [cut, full text in the game]` : v);
+
+// What exactly the owner is approving, so a tap on the phone is an informed one: the email itself, the post
+// itself, or the decision's own words. A hot reply's words and answer come in their own message right after.
+export function approvalDetail(type: ApprovalType, content: Record<string, unknown>): string {
+  if (type === "outreach_email") {
+    if (content.hot === true) return "Their words and the suggested answer come in the next message.";
+    const to = [str(content.toName), str(content.to) ? `<${str(content.to)}>` : ""].filter(Boolean).join(" ");
+    const lines = [`To: ${to || "no address yet"}${str(content.company) ? `, ${str(content.company)}` : ""}`];
+    if (str(content.subject)) lines.push(`Subject: ${str(content.subject)}`);
+    if (str(content.body)) lines.push("", clip(str(content.body), 2200));
+    return lines.join("\n");
+  }
+  if (type === "public_post") {
+    const poll = content.poll as { question?: string; options?: string[] } | null | undefined;
+    if (poll?.question) return `Poll: ${poll.question}\n${(poll.options ?? []).map((o) => `  ${o}`).join("\n")}`;
+    return str(content.body) ? `Post:\n${clip(str(content.body), 1800)}` : "";
+  }
+  if (type === "decision" || type === "spend_increase") return clip(str(content.text), 1200);
+  return "";
+}
+
 export async function raiseApproval(db: Db, input: RaiseApprovalInput, now = new Date()): Promise<{ id: string }> {
   const [row] = await db
     .insert(approvals)
@@ -43,6 +66,8 @@ export async function raiseApproval(db: Db, input: RaiseApprovalInput, now = new
   const id = row?.id ?? "";
   if (!input.simulated && id && !input.autoApproved) {
     const lines = [`Approval needed: ${input.summary}`];
+    const detail = approvalDetail(input.type, input.content ?? {});
+    if (detail) lines.push("", detail, "");
     if (input.riskNote) lines.push(`Risk: ${input.riskNote}`);
     if (input.previewUrl) lines.push(`Preview: ${input.previewUrl}`);
     lines.push("Reject asks for one line of feedback.");

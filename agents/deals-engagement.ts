@@ -13,6 +13,7 @@ import { getSettings, setSetting } from "@/lib/settings";
 import { channelChatId, enqueueMessage } from "@/lib/telegram";
 import { dubaiDayStartUtc, dubaiParts } from "@/lib/time";
 import { STYLE, input, logEvent, str, type Playbook } from "./playbook-core";
+import { plainDashes } from "@/lib/text";
 
 export type EngagementType = "teaser" | "recap" | "poll" | "quiz" | "share_ask" | "milestone";
 
@@ -233,23 +234,23 @@ ${STYLE}`,
     const [floor] = ctx.floorId ? await ctx.db.select().from(floors).where(eq(floors.id, ctx.floorId)).limit(1) : [];
     const channel = channelChatId(await clipboardValue(ctx.db, "deals_channel"));
     const link = channel ? `https://t.me/${channel.replace(/^@/, "")}` : "";
-    let text = str(output.text, 900);
+    let text = plainDashes(str(output.text, 900));
     let poll: { question: string; options: string[]; quiz: boolean; correct: number | null; explanation: string | null } | null = null;
     let dealIds: string[] = [];
     let hint: Date | null = null;
 
     if (type === "poll") {
-      const question = str(output.pollQuestion, 300);
-      const options = (Array.isArray(output.pollOptions) ? output.pollOptions : []).map((o) => str(o, 100)).filter(Boolean).slice(0, 5);
+      const question = plainDashes(str(output.pollQuestion, 300));
+      const options = (Array.isArray(output.pollOptions) ? output.pollOptions : []).map((o) => plainDashes(str(o, 100))).filter(Boolean).slice(0, 5);
       if (!question || options.length < 2) return { summary: "Poll draft was incomplete, nothing posted" };
       poll = { question, options, quiz: false, correct: null, explanation: null };
       text = question;
     } else if (type === "quiz") {
       const deal = await quizDeal(ctx.db, i, ctx.now);
-      const question = str(output.pollQuestion, 300);
+      const question = plainDashes(str(output.pollQuestion, 300));
       if (!deal || !question) return { summary: "Quiz draft was incomplete, nothing posted" };
       const q = quizOptions(Number(deal.price), Number(deal.wasPrice), deal.id);
-      poll = { question, options: q.options, quiz: true, correct: q.correct, explanation: str(output.explanation, 200) || `It is AED ${Number(deal.price).toFixed(0)}, down from AED ${Number(deal.wasPrice).toFixed(0)}. See it on ${base()}/deals` };
+      poll = { question, options: q.options, quiz: true, correct: q.correct, explanation: plainDashes(str(output.explanation, 200)) || `It is AED ${Number(deal.price).toFixed(0)}, down from AED ${Number(deal.wasPrice).toFixed(0)}. See it on ${base()}/deals` };
       dealIds = [deal.id];
       text = question;
     } else {

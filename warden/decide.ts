@@ -1,8 +1,9 @@
 // One Warden run: snapshot in, one decision object out, code applies it. Batch for the schedule, sync for instant runs.
 import { and, desc, eq, gte } from "drizzle-orm";
 import type { Db } from "@/db/client";
-import { agentRuns, agents, budgetLedger, floors, wardenRuns } from "@/db/schema";
+import { agentRuns, agents, budgetLedger, floors, messagesOut, wardenRuns } from "@/db/schema";
 import { asBool, getSettings } from "@/lib/settings";
+import { enqueueMessage } from "@/lib/telegram";
 import { callModel, getClient, type ModelCall } from "@/agents/client";
 import { submitBatch, type CollectedResult } from "@/agents/batches";
 import { applyWardenDecisions } from "./apply";
@@ -20,6 +21,23 @@ export interface WardenRunResult {
 }
 
 const INSTANT_LIMIT_MS = 60 * 60 * 1000;
+const FAIL_ALERT_GAP_MS = 6 * 60 * 60 * 1000;
+
+// A failed Warden run reaches the owner's phone, at most once every six hours, so a silent brain never goes unnoticed.
+export async function alertWardenFailed(db: Db, reason: string, now = new Date()): Promise<boolean> {
+  const [recent] = await db
+    .select({ id: messagesOut.id })
+    .from(messagesOut)
+    .where(and(eq(messagesOut.kind, "warden_failed"), gte(messagesOut.createdAt, new Date(now.getTime() - FAIL_ALERT_GAP_MS))))
+    .limit(1);
+  if (recent) return false;
+  await enqueueMessage(db, {
+    kind: "warden_failed",
+    body: `Warden's run failed: ${reason.slice(0, 300)}\nThe floors keep working on their own rules and Warden tries again on his next slot. Nothing is needed from you unless this message repeats.`,
+    now,
+  });
+  return true;
+}
 
 async function wardenAgent(db: Db) {
   const [w] = await db.select().from(agents).where(eq(agents.kind, "warden")).limit(1);
@@ -67,6 +85,7 @@ export async function runWarden(db: Db, opts: { mode: "sync" | "batch"; trigger:
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await db.update(wardenRuns).set({ status: "failed", summary: `Batch submit failed: ${message}`, finishedAt: now }).where(eq(wardenRuns.id, runId));
+      await alertWardenFailed(db, `batch submit: ${message}`, now);
       return { status: "failed", runId, reason: message };
     }
   }
@@ -81,6 +100,7 @@ export async function runWarden(db: Db, opts: { mode: "sync" | "batch"; trigger:
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await db.update(wardenRuns).set({ status: "failed", summary: `Run failed: ${message}`, finishedAt: new Date() }).where(eq(wardenRuns.id, runId));
+    await alertWardenFailed(db, message, now);
     return { status: "failed", runId, reason: message };
   }
 }
@@ -97,11 +117,13 @@ export async function handleWardenBatchResult(db: Db, r: CollectedResult, now = 
   }
   if (!r.ok) {
     await db.update(wardenRuns).set({ status: "failed", summary: `Batch result failed: ${r.error ?? "unknown"}`, agentRunId: r.runId, finishedAt: now }).where(eq(wardenRuns.id, runId));
+    await alertWardenFailed(db, r.error ?? "the batch result failed", now);
     return;
   }
   const decisions = parseDecisions(r.json);
   if (!decisions) {
     await db.update(wardenRuns).set({ status: "failed", summary: "Warden returned no usable decision object", agentRunId: r.runId, costUsd: r.costUsd.toFixed(6), finishedAt: now }).where(eq(wardenRuns.id, runId));
+    await alertWardenFailed(db, "Warden returned no usable decision object", now);
     return;
   }
   const applied = await applyWardenDecisions(db, runId, decisions, now);

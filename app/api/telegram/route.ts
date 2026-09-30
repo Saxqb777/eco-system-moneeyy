@@ -6,7 +6,8 @@ import { processTelegramUpdate, type TelegramUpdate } from "@/lib/telegram-inbou
 import { runTick } from "@/warden/tick";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// A command may start a whole tick after the answer (Warden, direct tasks), and /send waits for the tick lock.
+export const maxDuration = 300;
 
 // Telegram posts every update here with the secret token header. Each update is stored once, then handled.
 export async function POST(req: Request) {

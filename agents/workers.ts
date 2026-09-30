@@ -62,6 +62,7 @@ export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ sta
   if (express) await requeueStuckExpress(db, now);
   const limit = express ? EXPRESS_PER_TICK : MAX_PER_BATCH;
   const items: BatchItem[] = [];
+  let busy = 0;
   let budgetLeft = cap - spend.todayUsd;
   const floorSpend = { ...spend.todayByFloor };
   for (const t of queued) {
@@ -81,7 +82,11 @@ export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ sta
       continue;
     }
     if (budgetLeft < EST_TASK_USD) break;
-    if (agent.currentTaskId && agent.currentTaskId !== t.id) continue; // one task at a time per worker
+    // One task at a time per worker, except in express mode where a worker may run several side by side.
+    if (!express && agent.currentTaskId && agent.currentTaskId !== t.id) {
+      busy += 1;
+      continue;
+    }
     const playbook = playbookFor(t.kind);
     if (!playbook) {
       await db.update(tasks).set({ status: "failed", blockedReason: `No playbook for ${t.kind}`, finishedAt: now, updatedAt: now }).where(eq(tasks.id, t.id));
@@ -112,7 +117,7 @@ export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ sta
     budgetLeft -= EST_TASK_USD;
     floorSpend[floor.id] = (floorSpend[floor.id] ?? 0) + EST_TASK_USD;
   }
-  if (!items.length) return { ...out, status: out.held.length ? "held" : "idle", reason: out.held.length ? `floors near their share of the cap: ${out.held.join(", ")}` : "nothing queued" };
+  if (!items.length) return { ...out, status: out.held.length ? "held" : "idle", reason: out.held.length ? `floors near their share of the cap: ${out.held.join(", ")}` : busy ? `${busy} task${busy === 1 ? "" : "s"} waiting for a busy worker` : "nothing queued" };
 
   const submitted = express ? { batchId: "express" } : await submitBatch(db, items, now);
   for (const item of items) {

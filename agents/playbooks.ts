@@ -2,47 +2,12 @@
 // structured answer back into rows. Every playbook forbids hyphens and em dashes in its output (rule 7).
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
-import { leads, outreach, taskEvents, tasks } from "@/db/schema";
+import { leads, outreach, tasks } from "@/db/schema";
 import { raiseApproval } from "@/lib/approvals";
 import { clipboardValue } from "@/lib/clipboard";
 import { DEALS_PLAYBOOKS } from "./deals-playbooks";
-
-type TaskRow = typeof tasks.$inferSelect;
-type LeadRow = typeof leads.$inferSelect;
-
-export interface PlaybookContext {
-  db: Db;
-  now: Date;
-  floorId: string | null;
-  agentId: string | null;
-  agentName: string;
-}
-
-export interface Prepared {
-  user: string;
-  webSearchMaxUses?: number;
-  webFetchMaxUses?: number;
-}
-
-export interface Absorbed {
-  summary: string;
-  extra?: Record<string, unknown>;
-}
-
-export interface Playbook {
-  kind: string;
-  system: string;
-  schema: Record<string, unknown>;
-  maxTokens: number;
-  webSearchMaxUses: number;
-  webFetchMaxUses?: number;
-  prepare(task: TaskRow, ctx: PlaybookContext): Promise<Prepared | { skip: string }>;
-  absorb(task: TaskRow, output: Record<string, unknown>, ctx: PlaybookContext): Promise<Absorbed>;
-}
-
-const STYLE = "Write plain English in short sentences. Never use hyphens or em dashes in any text you produce, use commas or colons instead. Never invent facts: only report what you saw on a page or in the input.";
-
-export { STYLE, logEvent, str, num, input };
+import { STYLE, input, logEvent, num, str, type Playbook, type PlaybookContext, type TaskRow } from "./playbook-core";
+export type { Absorbed, Playbook, PlaybookContext, Prepared } from "./playbook-core";
 
 export function dedupeKeyFor(company: string, website: string | null | undefined): string {
   const name = company.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -54,14 +19,6 @@ export function dedupeKeyFor(company: string, website: string | null | undefined
   }
   return domain ? `${name}|${domain}` : name;
 }
-
-async function logEvent(db: Db, e: { taskId?: string | null; agentId?: string | null; floorId?: string | null; type: string; message: string; data?: unknown; at: Date }) {
-  await db.insert(taskEvents).values({ taskId: e.taskId ?? null, agentId: e.agentId ?? null, floorId: e.floorId ?? null, type: e.type, message: e.message, data: e.data ?? null, createdAt: e.at });
-}
-
-const str = (v: unknown, max = 2000) => (typeof v === "string" ? v.trim().slice(0, max) : "");
-const num = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
-const input = (t: TaskRow) => (t.input ?? {}) as Record<string, unknown>;
 
 async function facts(db: Db): Promise<string> {
   return (await clipboardValue(db, "docledger_product_facts")) ?? "DocLedger: one ledger for every shipping document a freight forwarder handles, so the team sees what is missing before customs asks. Pricing and signature not pasted yet.";
@@ -317,4 +274,3 @@ export async function openTasksOfKind(db: Db, agentId: string, kind: string): Pr
   return Number(r?.n ?? 0);
 }
 
-export type { LeadRow };

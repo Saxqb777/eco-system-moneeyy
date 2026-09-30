@@ -4,7 +4,7 @@ import { deals, floors, posts } from "@/db/schema";
 import { affiliateTags, affiliateUrl, shortCode } from "@/lib/affiliate";
 import { raiseApproval } from "@/lib/approvals";
 import { clipboardValue } from "@/lib/clipboard";
-import { STYLE, input, logEvent, num, str, type Playbook } from "./playbooks";
+import { STYLE, input, logEvent, num, str, type Playbook } from "./playbook-core";
 
 const STORE_LABEL: Record<string, string> = { amazon_ae: "Amazon.ae", noon: "Noon", sharaf_dg: "Sharaf DG", carrefour: "Carrefour", talabat: "Talabat" };
 const STORE_HOSTS: Record<string, string> = { amazon_ae: "amazon.ae", noon: "noon.com", sharaf_dg: "sharafdg.com", carrefour: "carrefouruae.com", talabat: "talabat.com" };

@@ -1,5 +1,6 @@
 import { latestPostedDeals } from "@/agents/deals";
 import { getDb } from "@/db/client";
+import { AMAZON_DISCLOSURE } from "@/lib/affiliate";
 import { clipboardValue } from "@/lib/clipboard";
 import { channelChatId } from "@/lib/telegram";
 
@@ -23,6 +24,7 @@ export default async function DealsPage() {
       <header className="deals-head">
         <h1>UAE Daily Deals</h1>
         <p>Real discounts on Amazon.ae, Noon, Sharaf DG, Carrefour and Talabat, checked by hand before they are posted. Some links pay us a small commission at no cost to you.</p>
+        <p className="deals-disclosure">{AMAZON_DISCLOSURE}</p>
         {channel ? (
           <a className="key" href={`https://t.me/${channel.replace(/^@/, "")}`}>
             Join the Telegram channel
@@ -40,7 +42,7 @@ export default async function DealsPage() {
               <span className="was">AED {Number(deal.wasPrice).toFixed(0)}</span>
               <span className="off">{Number(deal.discountPct).toFixed(0)}% off</span>
             </div>
-            <p className="deal-body">{post.body.split("\n").filter((l) => !l.includes("/go/")).join(" ")}</p>
+            <p className="deal-body">{post.body.split("\n").filter((l) => l.trim() && !l.includes("/go/") && l.trim() !== AMAZON_DISCLOSURE).join(" ")}</p>
             <a className="key" href={`/go/${post.shortCode}`} rel="nofollow sponsored">
               Get the deal
             </a>
@@ -48,7 +50,7 @@ export default async function DealsPage() {
           </li>
         ))}
       </ul>
-      <footer className="deals-foot">Prices move fast. Check the store page before you buy.</footer>
+      <footer className="deals-foot">Prices move fast. Check the store page before you buy. {AMAZON_DISCLOSURE}</footer>
     </main>
   );
 }

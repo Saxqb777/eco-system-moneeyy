@@ -2,6 +2,7 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { agents, approvals, clicks, deals, floors, posts, taskEvents, tasks } from "@/db/schema";
+import { isAmazonDeal, withDisclosure } from "@/lib/affiliate";
 import { clipboardValue } from "@/lib/clipboard";
 import { getSettings, setSetting } from "@/lib/settings";
 import { channelChatId, getTelegramConfig, sendNow } from "@/lib/telegram";
@@ -63,7 +64,10 @@ export async function publishPost(db: Db, a: typeof approvals.$inferSelect, now 
   if (!channel) return { ok: false, error: "Telegram deals channel not on the clipboard (paste the @handle)" };
   const cfg = await getTelegramConfig(db);
   if (!cfg) return { ok: false, error: "Telegram bot token not on the clipboard" };
-  const messageId = await sendNow(cfg.token, channel, post.body);
+  const postDeals = post.dealIds.length ? await db.select({ store: deals.store, url: deals.url }).from(deals).where(inArray(deals.id, post.dealIds)) : [];
+  const body = withDisclosure(post.body, postDeals.some((d) => isAmazonDeal(d)));
+  if (body !== post.body) await db.update(posts).set({ body, updatedAt: now }).where(eq(posts.id, post.id));
+  const messageId = await sendNow(cfg.token, channel, body);
   if (!messageId) return { ok: false, error: "the channel refused the post: is the bot an admin with Post messages?" };
   await db.update(posts).set({ status: "posted", postedAt: now, telegramMessageId: messageId, updatedAt: now }).where(eq(posts.id, post.id));
   if (post.dealIds.length) await db.update(deals).set({ status: "posted", updatedAt: now }).where(inArray(deals.id, post.dealIds));

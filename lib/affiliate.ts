@@ -28,6 +28,24 @@ export function affiliateUrl(url: string, store: string, tags: AffiliateTags): {
   }
 }
 
+// Amazon Associates requires this sentence, word for word, wherever Amazon links appear.
+export const AMAZON_DISCLOSURE = "As an Amazon Associate I earn from qualifying purchases.";
+
+export function isAmazonDeal(d: { store: string; url?: string | null }): boolean {
+  if (d.store === "amazon_ae") return true;
+  try {
+    return !!d.url && new URL(d.url).hostname.endsWith("amazon.ae");
+  } catch {
+    return false;
+  }
+}
+
+// Adds the Amazon line at the end of a post once; other stores stay as they are.
+export function withDisclosure(body: string, amazon: boolean): string {
+  if (!amazon || body.includes(AMAZON_DISCLOSURE)) return body;
+  return `${body.trimEnd()}\n\n${AMAZON_DISCLOSURE}`;
+}
+
 export function shortCode(): string {
   const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
   let out = "";

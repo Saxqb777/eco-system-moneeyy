@@ -3,11 +3,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { collectBatches } from "@/agents/batches";
 import { setAnthropicFactory } from "@/agents/client";
 import { advancePipelines } from "@/agents/pipeline";
-import { latestPostedDeals, recordClick, refreshChannelSubscribers } from "@/agents/deals";
+import { latestPostedDeals, publishPost, recordClick, refreshChannelSubscribers } from "@/agents/deals";
 import { handleTaskBatchResult, submitQueuedTasks } from "@/agents/workers";
 import type { Db } from "@/db/client";
 import { approvals, clicks, deals, floors, posts, setupItems, tasks } from "@/db/schema";
-import { affiliateUrl } from "@/lib/affiliate";
+import { AMAZON_DISCLOSURE, affiliateUrl, isAmazonDeal, withDisclosure } from "@/lib/affiliate";
 import { applyApprovalDecision } from "@/lib/approvals";
 import { encryptSecret } from "@/lib/crypto";
 import { setSetting } from "@/lib/settings";
@@ -54,6 +54,17 @@ describe("Deals Engine", () => {
     expect(affiliateUrl("https://www.noon.com/uae-en/p/N123", "noon", { ...tags, noon: "https://go.net/?u={url}" }).earns).toBe(true);
   });
 
+  it("adds the Amazon disclosure once, only for Amazon deals", () => {
+    expect(AMAZON_DISCLOSURE).toBe("As an Amazon Associate I earn from qualifying purchases.");
+    expect(isAmazonDeal({ store: "amazon_ae" })).toBe(true);
+    expect(isAmazonDeal({ store: "other", url: "https://www.amazon.ae/dp/B0X" })).toBe(true);
+    expect(isAmazonDeal({ store: "noon", url: "https://www.noon.com/uae-en/p/N1" })).toBe(false);
+    const once = withDisclosure("Deal\nhttps://x/go/abc123", true);
+    expect(once).toBe(`Deal\nhttps://x/go/abc123\n\n${AMAZON_DISCLOSURE}`);
+    expect(withDisclosure(once, true)).toBe(once);
+    expect(withDisclosure("Deal", false)).toBe("Deal");
+  });
+
   it("scouts real deals, writes posts, rings the phone, posts on schedule and counts clicks", async () => {
     const fake = fakeAnthropic((params) => {
       const text = JSON.stringify(params.messages[0]?.content ?? "");
@@ -93,6 +104,8 @@ describe("Deals Engine", () => {
     expect(drafts).toHaveLength(2);
     expect(drafts[0]!.shortCode).toMatch(/^[a-z0-9]{6}$/);
     expect(drafts[0]!.body).toContain(`/go/${drafts[0]!.shortCode}`);
+    const storeOf = async (p: (typeof drafts)[number]) => (await db.select().from(deals).where(eq(deals.id, p.dealIds[0]!)).limit(1))[0]!.store;
+    for (const d of drafts) expect(d.body.includes(AMAZON_DISCLOSURE)).toBe((await storeOf(d)) === "amazon_ae");
     const pending = await db.select().from(approvals).where(and(eq(approvals.type, "public_post"), eq(approvals.status, "pending")));
     expect(pending).toHaveLength(2);
 
@@ -105,6 +118,8 @@ describe("Deals Engine", () => {
     expect(late.executed).toBe(1);
     const channelSends = tg.calls.filter((c) => c.method === "sendMessage" && c.body.chat_id === "@uaedailydeals");
     expect(channelSends).toHaveLength(1);
+    const [sentPost] = await db.select().from(posts).where(eq(posts.approvalId, first.id)).limit(1);
+    expect(String(channelSends[0]!.body.text).includes(AMAZON_DISCLOSURE)).toBe((await storeOf(sentPost!)) === "amazon_ae");
     const [posted] = await db.select().from(posts).where(eq(posts.approvalId, first.id)).limit(1);
     expect(posted!.status).toBe("posted");
     expect(posted!.telegramMessageId).toBeTruthy();
@@ -140,6 +155,21 @@ describe("Deals Engine", () => {
     const before = tg.calls.filter((c) => c.method === "sendMessage" && c.body.chat_id === "4242" && String(c.body.text).includes("MX Master"));
     expect(before).toHaveLength(0);
   });
+  it("adds the disclosure at publish time to an Amazon post drafted before the rule", async () => {
+    const [dealsFloor] = await db.select().from(floors).where(eq(floors.slug, "deals")).limit(1);
+    const [d] = await db.insert(deals).values({ floorId: dealsFloor!.id, store: "amazon_ae", title: "Old draft deal", url: "https://www.amazon.ae/dp/B0OLDDRAFT1", affiliateUrl: "https://www.amazon.ae/dp/B0OLDDRAFT1?tag=thetower-21", price: "50.00", wasPrice: "80.00", discountPct: "37", status: "selected", dedupeKey: "amazon_ae|/dp/b0olddraft1", simulated: false }).returning();
+    const [p] = await db.insert(posts).values({ floorId: dealsFloor!.id, kind: "deal", dealIds: [d!.id], body: "Old draft deal\nhttps://x/go/oldold", channel: "telegram_channel", status: "approved", shortCode: "oldold", scheduledAt: TEN, simulated: false }).returning();
+    const { id } = await (await import("@/lib/approvals")).raiseApproval(db, { type: "public_post", summary: "Post to the deals channel: Old draft deal", content: { postId: p!.id, title: "Old draft deal" }, autoApproved: true }, TEN);
+    const [a] = await db.select().from(approvals).where(eq(approvals.id, id)).limit(1);
+    const res = await publishPost(db, a!, EVENING);
+    expect(res.ok).toBe(true);
+    const sent = tg.calls.filter((c) => c.method === "sendMessage" && String(c.body.text).startsWith("Old draft deal"));
+    expect(sent).toHaveLength(1);
+    expect(String(sent[0]!.body.text).endsWith(AMAZON_DISCLOSURE)).toBe(true);
+    const [after] = await db.select().from(posts).where(eq(posts.id, p!.id)).limit(1);
+    expect(after!.body.endsWith(AMAZON_DISCLOSURE)).toBe(true);
+  });
+
   it("refreshes the subscriber count even when the channel was pasted as a t.me link", async () => {
     await paste("deals_channel", "t.me/uaedailydeals");
     await setSetting(db, "channel_subscribers_day", "");

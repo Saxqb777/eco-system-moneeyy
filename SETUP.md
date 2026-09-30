@@ -19,7 +19,7 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 | 7 | Resend API key and sending address | Sending approved outreach emails | Done | done 2026-09-30: key, sender Saaqib Khan <saaqib@docledger.site>, domain docledger.site Verified in Resend (confirmed by Saaqib's screenshot about 09:20 UTC) |
 | 8 | DocLedger price line and signature block (the pitch itself is in the repo) | Writer and Chaser | Now | missing |
 | 8b | Resend webhook secret for replies (optional) | Chaser reads replies itself | Done | done 2026-09-30 09:06 UTC |
-| 9 | Affiliate IDs: Amazon.ae tag, Noon, others | Deals Engine earning (posts run without them, links stay plain) | Now | missing |
+| 9 | Affiliate IDs: Amazon.ae tag, Noon, others | Deals Engine earning (posts run without them, links stay plain) | Done for Amazon | Amazon.ae tag themarketde0c-21 saved 2026-09-30 (right account). Noon and others optional |
 | 10 | Telegram deals channel handle, bot added as admin | Publisher posting to the channel | Now | pasted 2026-09-30 as t.me/Themarketdeals: re paste as @Themarketdeals (the bot needs the @ handle), then confirm the bot is admin with Post messages |
 | 11 | Consulting site URL | Ground floor (locked until unlock rule is met) | Later | missing |
 

@@ -1,7 +1,7 @@
 // Deals Engine playbooks: Scout fetches real store pages, Editor writes short posts with tracked links.
 import { and, desc, eq, sql } from "drizzle-orm";
 import { deals, floors, posts } from "@/db/schema";
-import { affiliateTags, affiliateUrl, shortCode } from "@/lib/affiliate";
+import { affiliateTags, affiliateUrl, isAmazonDeal, shortCode, withDisclosure } from "@/lib/affiliate";
 import { raiseApproval } from "@/lib/approvals";
 import { channelChatId } from "@/lib/telegram";
 import { clipboardValue } from "@/lib/clipboard";
@@ -119,7 +119,7 @@ ${STYLE}`,
     const code = shortCode();
     const title = str(output.title, 80) || deal.title;
     const text = str(output.body, 600);
-    const body = `${text}\n${base}/go/${code}`;
+    const body = withDisclosure(`${text}\n${base}/go/${code}`, isAmazonDeal(deal));
     const channel = channelChatId(await clipboardValue(ctx.db, "deals_channel")) ?? "";
     const [row] = await ctx.db.insert(posts).values({ floorId: deal.floorId, kind: "deal", dealIds: [deal.id], body, channel: "telegram_channel", status: "draft", shortCode: code, scheduledAt: await nextSlot(ctx.db, ctx.now), simulated: false, createdAt: ctx.now, updatedAt: ctx.now }).returning({ id: posts.id });
     const auto = !!floor?.autoApprove;

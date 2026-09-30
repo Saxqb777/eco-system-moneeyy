@@ -88,6 +88,21 @@ async function executeApproval(db: Db, a: typeof approvals.$inferSelect, now: Da
       }
       return { requeued: !!a.taskId };
     }
+    case "outreach_email": {
+      const { sendOutreach } = await import("@/lib/email");
+      const r = await sendOutreach(db, { ...a, status: "approved" }, now);
+      return r.ok ? { sent: true } : { deferred: r.error ?? "send failed" };
+    }
+    case "public_post": {
+      const { publishPost } = await import("@/agents/deals");
+      const r = await publishPost(db, { ...a, status: "approved" }, now);
+      return r.ok ? { posted: true } : { deferred: r.error ?? "post failed" };
+    }
+    case "pull_request": {
+      // Builder never merges. Approved means Saaqib merges it himself on GitHub.
+      await db.update(tickets).set({ status: "approved", updatedAt: now }).where(eq(tickets.approvalId, a.id));
+      return { note: "Approved. Merge it on GitHub when you are ready, Builder never merges." };
+    }
     default:
       return { deferred: "executed by the floor pipeline" };
   }

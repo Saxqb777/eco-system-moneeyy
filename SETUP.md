@@ -9,15 +9,16 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 | # | Item | Needed for | Needed by | Status |
 |---|------|------------|-----------|--------|
 | 1 | Answers to docs/QUESTIONS.md | Everything | Phase 1 start | done 2026-09-29 |
-| 2 | Nothing: the heartbeat authenticates with a GitHub OIDC token, no secrets needed | Hourly heartbeat | Done | done 2026-09-29, but GitHub has not fired the schedule yet (three hourly slots missed), see 2c |
+| 2 | Nothing: the heartbeat authenticates with a GitHub OIDC token, no secrets needed | Hourly heartbeat | Done | done 2026-09-29, first scheduled run landed 22:55 UTC the same day |
 | 2b | Two clicks: GitHub default branch to main, Vercel production branch to main | Pull request flow | Done | done 2026-09-29 by Saaqib |
-| 2c | Backup heartbeat: a free cron-job.org job that calls /api/tick every hour with the CRON_SECRET from Vercel, or a one line edit to the tick workflow on main | Hourly heartbeat until GitHub's scheduler wakes up | Now (about 3 minutes) | missing |
+| 2c | Backup heartbeat: not needed any more, the schedule fires since the Phase 2 merge touched the workflow file on main (first run 2026-09-29 22:55 UTC) | Hourly heartbeat | Done | done 2026-09-29 |
 | 3 | Anthropic API key | Leaving simulation mode, every real agent run | Now (Phase 4 is built) | missing |
 | 4 | Telegram bot token, then pair your chat with /pair | Warden messages, approvals over Telegram, morning brief | Now (Phase 4 is built) | missing |
-| 5 | DocLedger GitHub repo URL and a GitHub token for it | Builder | Phase 5 | missing (repo likely Saxqb777/docledger, confirm) |
-| 6 | Calendar booking link | Chaser demo booking | Phase 5 | missing |
-| 7 | Resend API key and verified sending domain | Sending approved outreach emails | Phase 5 | missing |
-| 8 | DocLedger product facts: one paragraph pitch, pricing, your signature block | Writer and Chaser | Phase 5 | missing |
+| 5 | DocLedger GitHub repo URL and a GitHub token for it | Builder (nightly at 02:00 Dubai, built in Phase 5) | Now | missing (repo likely Saxqb777/docledger, confirm) |
+| 6 | Calendar booking link | Chaser demo booking | Now | missing |
+| 7 | Resend API key and sending address | Sending approved outreach emails | Now | missing |
+| 8 | DocLedger product facts: one paragraph pitch, pricing, your signature block | Writer and Chaser | Now | missing |
+| 8b | Resend webhook secret for replies (optional) | Chaser reads replies itself | Optional | missing: without it, forward replies with /reply on Telegram |
 | 9 | Affiliate IDs: Amazon.ae tag, Noon, others | Deals Engine going live | Phase 6 | missing |
 | 10 | Telegram deals channel handle, bot added as admin | Publisher | Phase 6 | missing |
 | 11 | Consulting site URL | Ground floor (locked until unlock rule is met) | Later | missing |
@@ -63,25 +64,20 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 - Works in simulation too, so you can try the bot before pasting the Anthropic key. Simulated approvals never ring the phone, only real ones.
 
 ### 5. DocLedger repo and token
-- Confirm the repo URL (I found https://github.com/Saxqb777/docledger).
-- Create a fine grained personal access token: GitHub Settings, Developer settings, Personal access tokens, Fine grained, Generate new token. Repository access: only the DocLedger repo. Permissions: Contents read and write, Pull requests read and write, Metadata read. Expiry: 1 year.
-- Paste the token into the Warden clipboard. Builder uses it only to push branches and open pull requests. It never merges.
-- Tell me how the repo runs its tests (for example pnpm test) if there is no obvious script.
+- Paste the repo URL (https://github.com/Saxqb777/docledger) under "DocLedger GitHub repo URL".
+- GitHub, Settings, Developer settings, Fine grained tokens, Generate: only that repository, permissions Contents read and write, Pull requests read and write. Paste it under "GitHub token for the DocLedger repo".
+- Builder runs every night at 02:00 Dubai from .github/workflows/builder.yml: top backlog ticket, clone, edit with bash and file tools, run the repo's tests, push branch builder/<ticket>, open a pull request, put a pull_request item on the red phone. Caps 25 tool calls, 0.40 USD, 20 minutes. It never merges. Tickets come from Warden and from your ideas.
 
 ### 6. Calendar booking link
-- Any public booking link works: Cal.com, Calendly, Google Calendar appointment page.
-- Paste the link into the clipboard.
+- Cal.com, Calendly or a Google appointment page. Paste under "Calendar booking link". Chaser puts it in replies to warm leads.
 
 ### 7. Resend
-- resend.com, sign up, Domains, Add domain (the domain you want emails to come from, for example your consulting domain).
-- Add the DNS records Resend shows (SPF, DKIM, and the return path record) at your DNS provider. Wait until Resend shows Verified.
-- API Keys, Create API key, permission Sending access, domain: the one you verified.
-- Paste the API key and the sending address (for example saaqib@yourdomain.com) into the clipboard.
-- Optional for reply handling: Resend inbound email. Add the MX record Resend gives you for a subdomain like reply.yourdomain.com. Chaser then reads replies automatically. Without it you forward replies to Warden by hand.
+- resend.com, add and verify your sending domain, then API Keys, Create. Paste under "Resend API key". Paste the from address (on that domain) under "Sending address".
+- Approved outreach emails are sent by the next heartbeat. Nothing goes out without your Approve.
+- Replies, two ways: (a) Resend Receiving: add the MX record for a subdomain, create a webhook for email.received pointing at https://the-tower-saxqb777s-projects.vercel.app/api/email/inbound, paste the signing secret under "Resend webhook secret". (b) Forward by hand on Telegram: /reply Gulf Crescent Freight: their text. Chaser picks it up either way.
 
 ### 8. DocLedger product facts
-- One paragraph on what DocLedger does for a freight forwarder, the price, and a two line signature (name, title, phone, site).
-- Paste into the clipboard as plain text. Writer uses it in every email.
+- One paragraph on what DocLedger does for a freight forwarder, the price, and your signature block (name, title, phone). Writer and Chaser quote it, so keep it true.
 
 ### 9. Affiliate IDs
 - Amazon.ae: affiliate-program.amazon.ae, create an Associates account, copy your tracking tag (looks like name-21).

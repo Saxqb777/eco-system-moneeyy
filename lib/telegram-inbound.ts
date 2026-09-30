@@ -28,6 +28,7 @@ const HELP = [
   "/pause <floor> and /resume <floor>",
   "/cap: daily cap, spend today, budget level",
   "/run: Warden runs now (once an hour)",
+  "/reply <company>: <their text>, forward an email reply by hand",
   "Anything else you write becomes an idea in Warden's mail slot.",
 ].join("\n");
 
@@ -144,6 +145,17 @@ export async function processTelegramUpdate(db: Db, u: TelegramUpdate, now = new
         const money = simulation ? state.money.simulated : state.money.real;
         await sendNow(cfg.token, chatId, `Daily cap ${asNumber(settingsMap.daily_cap_usd, 1.7).toFixed(2)} USD, spent today ${money.spendTodayUsd.toFixed(2)} USD${simulation ? " (simulated)" : ""}. Budget level ${asNumber(settingsMap.budget_level, 1)}, hard ceiling ${asNumber(settingsMap.hard_ceiling_usd, 5).toFixed(2)} USD.`);
         return { handled: "cap" };
+      }
+      case "reply": {
+        const m = arg.match(/^([^:]+):\s*([\s\S]+)$/);
+        if (!m) {
+          await sendNow(cfg.token, chatId, "Format: /reply <company>: <their text>");
+          return { handled: "reply without text" };
+        }
+        const { recordInboundReply } = await import("@/lib/email");
+        const r = await recordInboundReply(db, { from: m[1]!.trim(), subject: "Forwarded by the owner", text: m[2]!.trim(), company: m[1]!.trim() }, now);
+        await sendNow(cfg.token, chatId, r.matched ? `Logged as a reply from ${r.company}. Chaser picks it up on the next heartbeat.` : "No lead matched that name. Check the company name in the floor panel.");
+        return { handled: "reply", wantsTick: r.matched ? "manual" : undefined };
       }
       case "run":
         await sendNow(cfg.token, chatId, "Warden is on it. Instant runs are limited to one an hour.");

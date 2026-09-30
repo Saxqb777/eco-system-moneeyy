@@ -90,17 +90,17 @@ export default async function DocLedgerSite() {
 
       <section className="preview-sheet">
         <h2>Your own document types</h2>
-        <p>{DOCLEDGER.differentiator}</p>
+        <p>{DOCLEDGER.publicCopy.ownTypes}</p>
       </section>
 
       <section className="preview-sheet">
         <h2>Built for</h2>
-        <p>{DOCLEDGER.idealCustomer}</p>
+        <p>{DOCLEDGER.publicCopy.builtFor}</p>
       </section>
 
       <section className="preview-sheet">
         <h2>Built on your terms</h2>
-        <p>{DOCLEDGER.builtToTheirTerms}</p>
+        <p>{DOCLEDGER.publicCopy.onYourTerms}</p>
       </section>
 
       <footer className="preview-foot">

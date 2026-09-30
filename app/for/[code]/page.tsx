@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { DOCLEDGER } from "@/config/docledger";
 import { getDb } from "@/db/client";
@@ -13,6 +14,25 @@ export interface LeadPreview {
   points: string[];
   sampleDocument: string;
   sampleFields: Array<{ field: string; value: string }>;
+}
+
+// The reader sees the company's name in the tab, never the Tower's; previews stay out of search engines.
+export async function generateMetadata({ params }: { params: Promise<{ code: string }> }): Promise<Metadata> {
+  const { code } = await params;
+  let company: string | null = null;
+  if (/^[a-z0-9]{4,12}$/.test(code)) {
+    try {
+      const [lead] = await getDb().select({ company: leads.company, simulated: leads.simulated }).from(leads).where(eq(leads.previewCode, code)).limit(1);
+      if (lead && !lead.simulated) company = lead.company;
+    } catch {
+      company = null;
+    }
+  }
+  return {
+    title: company ? `Doc Ledger for ${company}` : "Doc Ledger",
+    description: "A two minute preview of Doc Ledger: receipts into accounts.",
+    robots: { index: false, follow: false },
+  };
 }
 
 // A two minute preview made for one company, linked from Writer's first email. Public, no simulated rows.
@@ -55,7 +75,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ code: 
       </section>
       <section className="preview-sheet">
         <h2>Your own document types</h2>
-        <p>{DOCLEDGER.differentiator}</p>
+        <p>{DOCLEDGER.publicCopy.ownTypes}</p>
       </section>
       <footer className="preview-foot">
         <p className="preview-close">{DOCLEDGER.closingLine}</p>

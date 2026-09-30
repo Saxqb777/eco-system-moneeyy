@@ -86,7 +86,7 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 - Nothing for you to do. The Tower's deployment serves the DocLedger home page on https://docledger.site (and www redirects there). Only the home page and the per company previews live on that domain; the game stays on the Tower address.
 - DNS at Spaceship: an A record for @ and a CNAME for www pointing at Vercel, added next to the six email records, which stay as they are.
 - The page words come from config/docledger.ts until the Marketer's first pack arrives, then from his web page words. The booking button uses your calendar link.
-- Once the domain answers, preview links in emails move from the vercel.app address to docledger.site (settings.docledger_site_url).
+- Live since 2026-09-30 about 16:25 UTC: https://docledger.site answers over HTTPS and preview links in new emails use it (settings.docledger_site_url).
 
 ### 8. DocLedger price and signature block
 - The product story, the email rules and the reply walkthrough are in the repo (config/docledger.ts) from your brief of 30 September. Writer and Chaser quote them.

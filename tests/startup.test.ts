@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { collectBatches } from "@/agents/batches";
 import { setAnthropicFactory } from "@/agents/client";
+import { DOCLEDGER } from "@/config/docledger";
 import { activeExperiments, experimentLines } from "@/agents/experiments";
 import { advanceGrowth, founderNumbers, formatFounderReport, ownerMarksLead, standUp } from "@/agents/growth";
 import { handleTaskBatchResult, submitQueuedTasks } from "@/agents/workers";
@@ -234,5 +235,10 @@ describe("The DocLedger Growth floor", () => {
     expect(await docledgerBase(db)).toBe("https://docledger.site");
     expect(await siteLine(db)).toBe("\nCompany website: https://docledger.site");
     await setSetting(db, "docledger_site_url", null);
+    // The public pages speak to the reader: no notes meant for the workers, no dashes (rule 7).
+    for (const text of Object.values(DOCLEDGER.publicCopy)) {
+      expect(text).not.toMatch(/Say that|when they describe|a customer|Couriers, airlines/);
+      expect(text).not.toMatch(/[\u2013\u2014]| - /);
+    }
   });
 });

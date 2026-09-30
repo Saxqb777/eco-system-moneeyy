@@ -6,6 +6,7 @@ import { asBool, getSettings } from "@/lib/settings";
 import { enqueueMessage } from "@/lib/telegram";
 import { callModel, getClient, type ModelCall } from "@/agents/client";
 import { submitBatch, type CollectedResult } from "@/agents/batches";
+import { budgetLeftUsd, WARDEN_RUN_USD } from "@/agents/spend-guard";
 import { applyWardenDecisions } from "./apply";
 import { parseDecisions, WARDEN_SCHEMA, WARDEN_SYSTEM } from "./prompt";
 import { buildSnapshot } from "./snapshot";
@@ -13,7 +14,7 @@ import { buildSnapshot } from "./snapshot";
 export type WardenTrigger = "schedule" | "manual" | "setup" | "idea" | "blocked";
 
 export interface WardenRunResult {
-  status: "applied" | "submitted" | "skipped" | "failed";
+  status: "applied" | "submitted" | "skipped" | "held" | "failed";
   runId?: string;
   reason?: string;
   summary?: string;
@@ -53,6 +54,9 @@ export async function runWarden(db: Db, opts: { mode: "sync" | "batch"; trigger:
     await db.insert(wardenRuns).values({ mode: opts.mode, trigger: opts.trigger, status: "failed", summary: "No Anthropic API key on the clipboard", startedAt: now, finishedAt: now, simulated: false });
     return { status: "failed", reason: "No Anthropic API key on the clipboard" };
   }
+  // Rule 2: Warden thinks only when his run fits under today's cap, work in flight counted.
+  const budget = await budgetLeftUsd(db, now);
+  if (budget.leftUsd < WARDEN_RUN_USD) return { status: "held", reason: `daily cap reached: ${budget.spentUsd.toFixed(2)} of ${budget.capUsd.toFixed(2)} USD spent` };
   if (opts.mode === "sync") {
     const since = new Date(now.getTime() - INSTANT_LIMIT_MS);
     const [recent] = await db

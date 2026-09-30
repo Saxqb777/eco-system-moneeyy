@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { collectBatches } from "@/agents/batches";
 import { getDb } from "@/db/client";
-import { ticks } from "@/db/schema";
+import { approvals, ticks } from "@/db/schema";
 import { buildBrief, formatBrief } from "@/lib/brief";
 import { guardSpend, reviewBudget } from "@/lib/budget";
 import { asBool, asNumber, getSettings, setSetting } from "@/lib/settings";
@@ -150,6 +150,10 @@ async function tickBody(db: ReturnType<typeof getDb>, trigger: TickTrigger, now:
     }
     const { refreshChannelSubscribers } = await import("@/agents/deals");
     steps.deliver = { brief: briefStatus, webhook: (await ensureWebhook(db)).status, subscribers: (await refreshChannelSubscribers(db, now)).status, ...(await deliverMessages(db, now)) };
+
+    // What waits on the owner, so the Run button can say it in one line.
+    const [pending] = await db.select({ n: sql<string>`count(*)` }).from(approvals).where(and(eq(approvals.status, "pending"), eq(approvals.simulated, simulation)));
+    steps.owner = { approvals: Number(pending?.n ?? 0) };
 
     // 8. Simulation keeps history continuous when nobody watches.
     steps.simulation = simulation ? await runSimulation(db, now, { maxSlices: 72 }) : { status: "off" };

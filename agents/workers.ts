@@ -7,8 +7,8 @@ import { asNumber, getSettings } from "@/lib/settings";
 import { callModel, getClient, type ModelCall } from "./client";
 import { submitBatch, type BatchItem, type CollectedResult } from "./batches";
 import { playbookFor } from "./playbooks";
+import { estimateTaskUsd, inFlightUsd } from "./spend-guard";
 
-const EST_TASK_USD = 0.03;
 const MAX_PER_BATCH = 20;
 // Express mode: while settings.express_until is in the future, a tick runs up to this many tasks directly
 // (full price, results in minutes) instead of a batch (half price, results in about an hour). Used for a
@@ -45,8 +45,18 @@ async function logEvent(db: Db, e: { taskId?: string | null; agentId?: string | 
   await db.insert(taskEvents).values({ taskId: e.taskId ?? null, agentId: e.agentId ?? null, floorId: e.floorId ?? null, type: e.type, message: e.message, data: e.data ?? null, createdAt: e.at });
 }
 
-export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ status: string; reason?: string; submitted: number; direct: number; skipped: number; held: string[] }> {
-  const out: { status: string; reason?: string; submitted: number; direct: number; skipped: number; held: string[] } = { status: "ok", submitted: 0, direct: 0, skipped: 0, held: [] };
+export interface SubmitSummary {
+  status: string;
+  reason?: string;
+  submitted: number;
+  direct: number;
+  skipped: number;
+  held: string[]; // floors at their share of the cap
+  paused: string[]; // floors with queued work that are paused
+}
+
+export async function submitQueuedTasks(db: Db, now = new Date()): Promise<SubmitSummary> {
+  const out: SubmitSummary = { status: "ok", submitted: 0, direct: 0, skipped: 0, held: [], paused: [] };
   const client = await getClient(db);
   if (!client) return { ...out, status: "skipped", reason: "No Anthropic API key on the clipboard" };
   const settingsMap = await getSettings(db);
@@ -54,8 +64,9 @@ export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ sta
   const spend = await getSpendSummary(db, false, now);
   if (spend.todayUsd >= cap) return { ...out, status: "held", reason: "daily cap reached" };
 
-  const floorRows = await db.select().from(floors).where(eq(floors.status, "live"));
-  const floorById = new Map(floorRows.map((f) => [f.id, f]));
+  const floorRows = await db.select().from(floors);
+  const floorById = new Map(floorRows.filter((f) => f.status === "live").map((f) => [f.id, f]));
+  const pausedById = new Map(floorRows.filter((f) => f.status === "paused").map((f) => [f.id, f]));
   const agentRows = await db.select().from(agents);
   const agentById = new Map(agentRows.map((a) => [a.id, a]));
   const queued = await db
@@ -67,14 +78,18 @@ export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ sta
 
   const express = expressActive(settingsMap, now);
   await requeueStuckExpress(db, now);
+  // Work already in flight holds its estimate, so ticks one after another cannot fill the day past the cap.
+  const reserved = await inFlightUsd(db, now);
   // Express sends everything down the direct lane, up to its own limit.
   const directLimit = express ? EXPRESS_PER_TICK : DIRECT_PER_TICK;
   const items: BatchItem[] = [];
   const direct = new Set<string>();
   let batched = 0;
   let busy = 0;
-  let budgetLeft = cap - spend.todayUsd;
-  const floorSpend = { ...spend.todayByFloor };
+  let budgetLeft = cap - spend.todayUsd - reserved.totalUsd;
+  const floorSpend: Record<string, number> = { ...spend.todayByFloor };
+  for (const [floorId, usd] of Object.entries(reserved.byFloor)) floorSpend[floorId] = (floorSpend[floorId] ?? 0) + usd;
+  let capReached = false;
   for (const t of queued) {
     if (direct.size >= directLimit && (express || batched >= MAX_PER_BATCH)) break;
     const goesDirect = express || DIRECT_KINDS.has(t.kind);
@@ -82,6 +97,8 @@ export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ sta
     const floor = t.floorId ? floorById.get(t.floorId) : undefined;
     const agent = t.agentId ? agentById.get(t.agentId) : undefined;
     if (!floor || !agent) {
+      const pausedFloor = t.floorId ? pausedById.get(t.floorId) : undefined;
+      if (pausedFloor && !out.paused.includes(pausedFloor.slug)) out.paused.push(pausedFloor.slug);
       out.skipped += 1;
       continue;
     }
@@ -89,11 +106,16 @@ export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ sta
       if (!out.held.includes(floor.slug)) out.held.push(floor.slug);
       continue;
     }
-    if ((floorSpend[floor.id] ?? 0) + EST_TASK_USD > cap * floorShare(settingsMap, floor.slug)) {
+    const estimate = estimateTaskUsd(t.kind);
+    if ((floorSpend[floor.id] ?? 0) + estimate > cap * floorShare(settingsMap, floor.slug)) {
       if (!out.held.includes(floor.slug)) out.held.push(floor.slug);
       continue;
     }
-    if (budgetLeft < EST_TASK_USD) break;
+    if (budgetLeft < estimate) {
+      // a cheaper writing task further down may still fit
+      capReached = true;
+      continue;
+    }
     // One batch task at a time per worker. Direct tasks finish inside the tick, so a worker may run several.
     if (!goesDirect && agent.currentTaskId && agent.currentTaskId !== t.id) {
       busy += 1;
@@ -129,10 +151,14 @@ export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ sta
     items.push({ customId: `task_${t.id}`, call });
     if (goesDirect) direct.add(`task_${t.id}`);
     else batched += 1;
-    budgetLeft -= EST_TASK_USD;
-    floorSpend[floor.id] = (floorSpend[floor.id] ?? 0) + EST_TASK_USD;
+    budgetLeft -= estimate;
+    floorSpend[floor.id] = (floorSpend[floor.id] ?? 0) + estimate;
   }
-  if (!items.length) return { ...out, status: out.held.length ? "held" : "idle", reason: out.held.length ? `floors near their share of the cap: ${out.held.join(", ")}` : busy ? `${busy} task${busy === 1 ? "" : "s"} waiting for a busy worker` : "nothing queued" };
+  if (!items.length) {
+    if (capReached) return { ...out, status: "held", reason: "daily cap reached" };
+    if (out.paused.length && !out.held.length && !busy) return { ...out, status: "held", reason: `floors paused: ${out.paused.join(", ")}` };
+    return { ...out, status: out.held.length ? "held" : "idle", reason: out.held.length ? `floors near their share of the cap: ${out.held.join(", ")}` : busy ? `${busy} task${busy === 1 ? "" : "s"} waiting for a busy worker` : "nothing queued" };
+  }
 
   let batchItems = items.filter((i) => !direct.has(i.customId));
   const directItems = items.filter((i) => direct.has(i.customId));

@@ -230,6 +230,7 @@ textarea.field { resize: vertical; }
 .deals-head h1 { font-family: "Barlow Condensed", sans-serif; font-size: 40px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--brass); margin: 0 0 6px; }
 .deals-head p { color: var(--paper); opacity: 0.85; margin: 0 0 12px; font-size: 14px; }
 .deals-head .key { display: inline-block; text-decoration: none; }
+.deals-head .deals-disclosure { font-size: 13px; opacity: 0.75; margin: -6px 0 12px; }
 .deals-list { list-style: none; padding: 0; margin: 20px 0 0; display: grid; gap: 12px; }
 .deal { background: var(--paper); color: var(--ink); padding: 12px 14px; border: 1px solid var(--paper-shade); box-shadow: 2px 3px 0 rgba(0, 0, 0, 0.35); border-left: 6px solid var(--warn); }
 .deal h2 { font-size: 17px; margin: 2px 0 6px; }

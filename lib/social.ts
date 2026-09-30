@@ -79,14 +79,14 @@ export function fitForX(lines: string[], limit = 280): string {
 
 export interface SocialRequest {
   url: string;
-  method: "POST";
+  method: "POST" | "GET";
   headers: Record<string, string>;
   body: string;
 }
 export type SocialTransport = (r: SocialRequest) => Promise<{ status: number; json: Record<string, unknown> | null }>;
 
 let transport: SocialTransport = async (r) => {
-  const res = await fetch(r.url, { method: r.method, headers: r.headers, body: r.body });
+  const res = await fetch(r.url, { method: r.method, headers: r.headers, body: r.method === "GET" ? undefined : r.body });
   return { status: res.status, json: (await res.json().catch(() => null)) as Record<string, unknown> | null };
 };
 
@@ -127,5 +127,70 @@ export async function postToFacebook(db: Db, message: string, link: string | nul
     return { ok: false, error: `Facebook ${res.status}: ${String(e?.message ?? "post failed").slice(0, 160)}` };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// The DocLedger Facebook Page (D074): the Social worker's own page, on its own clipboard item. Posts with a photo
+// go to /photos with the picture's public address; text posts go to /feed with the link card.
+export const DOCLEDGER_PAGE_KEY = "docledger_facebook_page";
+
+export async function docledgerPage(db: Db): Promise<{ pageId: string; token: string } | null> {
+  return parseFacebookPage(await clipboardValue(db, DOCLEDGER_PAGE_KEY));
+}
+
+function graphError(prefix: string, res: { status: number; json: Record<string, unknown> | null }): string {
+  const e = (res.json?.error ?? null) as { message?: string } | null;
+  return `${prefix} ${res.status}: ${String(e?.message ?? "request failed").slice(0, 160)}`;
+}
+
+export async function postToDocledgerPage(db: Db, post: { message: string; link?: string | null; imageUrl?: string | null }): Promise<SocialResult> {
+  const page = await docledgerPage(db);
+  if (!page) return { ok: false, error: "DocLedger Facebook Page not on the clipboard yet" };
+  const photo = !!post.imageUrl;
+  const form = new URLSearchParams({ access_token: page.token });
+  if (photo) {
+    form.set("url", post.imageUrl!);
+    form.set("caption", post.link ? `${post.message}\n\n${post.link}` : post.message);
+  } else {
+    form.set("message", post.message);
+    if (post.link) form.set("link", post.link);
+  }
+  try {
+    const res = await transport({ url: `https://graph.facebook.com/${GRAPH_VERSION}/${page.pageId}/${photo ? "photos" : "feed"}`, method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: form.toString() });
+    // /photos answers with the photo id and the post id; the post id is what stats and comments hang off.
+    const id = typeof res.json?.post_id === "string" ? res.json.post_id : res.json?.id;
+    if (res.status >= 200 && res.status < 300 && typeof id === "string") return { ok: true, id };
+    return { ok: false, error: graphError("Facebook", res) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function replyOnDocledgerPage(db: Db, commentId: string, message: string): Promise<SocialResult> {
+  const page = await docledgerPage(db);
+  if (!page) return { ok: false, error: "DocLedger Facebook Page not on the clipboard yet" };
+  const form = new URLSearchParams({ access_token: page.token, message });
+  try {
+    const res = await transport({ url: `https://graph.facebook.com/${GRAPH_VERSION}/${commentId}/comments`, method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: form.toString() });
+    const id = res.json?.id;
+    if (res.status >= 200 && res.status < 300 && typeof id === "string") return { ok: true, id };
+    return { ok: false, error: graphError("Facebook", res) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+// A read from the Graph API with the Page token. Null when the Page is not connected or the call fails.
+export async function readDocledgerPage(db: Db, path: string, params: Record<string, string> = {}): Promise<Record<string, unknown> | null> {
+  const page = await docledgerPage(db);
+  if (!page) return null;
+  const q = new URLSearchParams({ ...params, access_token: page.token });
+  const target = path.replace("{page}", page.pageId);
+  try {
+    const res = await transport({ url: `https://graph.facebook.com/${GRAPH_VERSION}/${target}?${q.toString()}`, method: "GET", headers: {}, body: "" });
+    return res.status >= 200 && res.status < 300 ? res.json : null;
+  } catch {
+    return null;
   }
 }

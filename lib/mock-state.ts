@@ -35,6 +35,7 @@ export function mockState(now = new Date()): TowerState {
         growth_marketer: "Write LinkedIn post",
         growth_success: "Welcome a trial",
         growth_finance: "Count the funnel",
+        growth_social: "Facebook post: demo invite",
       };
       return {
         id: `agent_${a.slug}`,
@@ -345,5 +346,26 @@ export function mockCompany(now = new Date()): import("@/lib/company").CompanyVi
     },
     report: { at: ago(now, 600), text: "Founder report from Finance, last 7 days\nLeads found: 11, partners found: 2\nEmails sent: 4, replies: 1, demos: 0" },
     customers: [],
+    social: {
+      connected: true,
+      autoPost: false,
+      postsPerDay: 2,
+      trustApprovedInARow: 3,
+      followers: 42,
+      week: { posts: 3, reactions: 17, comments: 4, shares: 2, views: 380 },
+      plan: {
+        at: ago(now, 1440),
+        items: [
+          { day: 0, theme: "the problem", idea: "Month end in a freight office: the envelope of shipping bills", status: "drafted" },
+          { day: 1, theme: "product tip", idea: "Every charge line, BL and container number from one photo", status: "drafted" },
+          { day: 2, theme: "demo invite", idea: "Try the demo company, no signup", status: "planned" },
+          { day: 3, theme: "UAE finance tip", idea: "Keep the TRN on every bill you save", status: "planned" },
+        ],
+      },
+      recent: [
+        { id: "sp1", text: "Every forwarder knows the envelope: month end, a pile of shipping bills, and someone retyping every charge line.\nDoc Ledger reads the bill from a photo. Your team checks it and saves.\nTry the demo company, no signup.", status: "posted", postedAt: ago(now, 1300), imageUrl: "https://docledger.site/landing/review.jpg", stats: { reactions: 11, comments: 3, shares: 2, views: 240, at: ago(now, 60) } },
+        { id: "sp2", text: "Bills in dollars, euros and yuan? Doc Ledger converts each one into dirhams at the rate of the day.", status: "draft", postedAt: null, imageUrl: "https://docledger.site/landing/records.jpg", stats: null },
+      ],
+    },
   };
 }

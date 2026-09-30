@@ -30,7 +30,7 @@ describe("simulation mode on a real schema", () => {
     const f = await db.select().from(floors);
     const a = await db.select().from(agents);
     expect(f.map((x) => x.slug).sort()).toEqual(["content", "deals", "docledger", "growth", "lobby", "penthouse", "service"]);
-    expect(a).toHaveLength(15);
+    expect(a).toHaveLength(16);
     expect(a.find((x) => x.slug === "warden")?.locationLevel).toBe(5);
   });
 
@@ -86,7 +86,7 @@ describe("simulation mode on a real schema", () => {
     // The Deals Engine is archived (D064): not part of the building any more. The Growth floor needs nothing pasted.
     expect(state.floors.find((f) => f.slug === "deals")).toBeUndefined();
     expect(state.floors.find((f) => f.slug === "growth")?.missingSetup).toEqual([]);
-    expect(state.floors.find((f) => f.slug === "growth")?.agents).toHaveLength(6);
+    expect(state.floors.find((f) => f.slug === "growth")?.agents).toHaveLength(7);
   });
 
   it("routes approvals through the queue and back to the agent on reject", async () => {

@@ -152,8 +152,13 @@ async function executeApproved(db: Db, now: Date): Promise<{ executed: number; d
       // The owner's own words go out at any hour; the workers' emails wait for the reader's working day.
       result = await sendOutreach(db, a, now, { anyHour: (a.content as Record<string, unknown> | null)?.ownerSent === true });
     } else if (a.type === "public_post") {
-      const { publishPost } = await import("@/agents/deals");
-      result = await publishPost(db, a, now);
+      if ((a.content as Record<string, unknown> | null)?.social === "facebook") {
+        const { publishSocial } = await import("@/agents/social");
+        result = await publishSocial(db, a, now);
+      } else {
+        const { publishPost } = await import("@/agents/deals");
+        result = await publishPost(db, a, now);
+      }
     }
     if (result.ok) {
       await db.update(approvals).set({ executedAt: now, executionResult: { ok: true }, updatedAt: now }).where(eq(approvals.id, a.id));

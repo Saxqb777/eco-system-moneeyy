@@ -116,6 +116,12 @@ async function executeApproval(db: Db, a: typeof approvals.$inferSelect, now: Da
         await onTicketDecided(db, content.ticketId, true, now);
         return { ticketId: content.ticketId, status: "backlog" };
       }
+      // Social earned the owner's trust: it posts on the DocLedger Facebook Page on its own from now on (D074).
+      if (content.socialAutoPost === true) {
+        const { setAutoPost } = await import("@/agents/social");
+        await setAutoPost(db, true, now);
+        return { socialAutoPost: true };
+      }
       // A floor rule: Warden asked to auto approve a floor's public posts (Deals Engine after 14 days).
       if (typeof content.autoApproveFloor === "string") {
         await db.update(floors).set({ autoApprove: true, autoApproveSince: now, updatedAt: now }).where(eq(floors.slug, content.autoApproveFloor));
@@ -137,6 +143,12 @@ async function executeApproval(db: Db, a: typeof approvals.$inferSelect, now: Da
       return r.ok ? { sent: true } : { deferred: r.error ?? "send failed" };
     }
     case "public_post": {
+      // The DocLedger Facebook Page (D074) or the Deals channel.
+      if (content.social === "facebook") {
+        const { publishSocial } = await import("@/agents/social");
+        const r = await publishSocial(db, { ...a, status: "approved" }, now);
+        return r.ok ? { posted: true } : { deferred: r.error ?? "post failed" };
+      }
       const { publishPost } = await import("@/agents/deals");
       const r = await publishPost(db, { ...a, status: "approved" }, now);
       return r.ok ? { posted: true } : { deferred: r.error ?? "post failed" };

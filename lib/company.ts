@@ -7,6 +7,7 @@ import { allExperiments } from "@/agents/experiments";
 import { founderNumbers, type FounderNumbers } from "@/agents/growth";
 import { currentRoadmap, type MarketingPack, type RoadmapItem } from "@/agents/growth-playbooks";
 import { getSettings } from "@/lib/settings";
+import { socialView, type SocialView } from "@/agents/social";
 
 export interface CompanyView {
   numbers: FounderNumbers;
@@ -16,6 +17,7 @@ export interface CompanyView {
   marketing: MarketingPack | null;
   report: { at: string; text: string } | null;
   customers: Array<{ id: string; company: string; country: string; status: "trial" | "client"; since: string | null; monthlyUsd: number | null }>;
+  social: SocialView;
 }
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -84,5 +86,6 @@ export async function companyView(db: Db, now = new Date()): Promise<CompanyView
     marketing: (s.docledger_marketing as MarketingPack | null) ?? null,
     report: report?.at && report.text ? { at: report.at, text: report.text } : null,
     customers,
+    social: await socialView(db, now),
   };
 }

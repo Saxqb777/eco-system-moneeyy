@@ -86,12 +86,12 @@ afterAll(async () => {
 });
 
 describe("The DocLedger Growth floor", () => {
-  it("is part of the building with six people, and the Deals Engine is archived", async () => {
+  it("is part of the building with seven people (Social joined, D074), and the Deals Engine is archived", async () => {
     const [growth] = await db.select().from(floors).where(eq(floors.slug, "growth")).limit(1);
     expect(growth!.status).toBe("live");
     expect(growth!.level).toBe(3);
     const crew = await db.select().from(agents).where(eq(agents.floorId, growth!.id));
-    expect(crew.map((a) => a.slug).sort()).toEqual(["growth_finance", "growth_lead", "growth_marketer", "growth_partners", "growth_product", "growth_success"]);
+    expect(crew.map((a) => a.slug).sort()).toEqual(["growth_finance", "growth_lead", "growth_marketer", "growth_partners", "growth_product", "growth_social", "growth_success"]);
     const [dealsFloor] = await db.select().from(floors).where(eq(floors.slug, "deals")).limit(1);
     expect(dealsFloor!.status).toBe("archived");
     const s = await getSettings(db);

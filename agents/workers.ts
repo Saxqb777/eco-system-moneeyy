@@ -18,7 +18,7 @@ const EXPRESS_STUCK_MS = 12 * 60 * 1000;
 // The direct lane: short writing tasks (a deal post, a channel post, a first email, a reply) run straight away
 // on every tick, full price but done in seconds, so nothing the owner or a lead waits on sits an hour in a
 // batch. Research with web tools (Scouts, Analyst, share spots) stays on batches at half price.
-export const DIRECT_KINDS = new Set(["write_post", "write_engagement", "draft_outreach", "follow_up", "marketing_pack", "success_email"]);
+export const DIRECT_KINDS = new Set(["write_post", "write_engagement", "draft_outreach", "follow_up", "marketing_pack", "success_email", "social_post", "social_replies"]);
 export const DIRECT_PER_TICK = 4;
 // Task ids a direct or express run marks in tasks.batch_id: no batch row stands behind them.
 const DIRECT_MARKS = ["express", "direct"];

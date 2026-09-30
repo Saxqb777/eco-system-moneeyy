@@ -41,7 +41,8 @@ export function levelOf(slug: string): number {
 // Desk slots per floor: x of the chair. Workers sit behind their desk, facing out: the desk front is drawn over them.
 export const DESK_SLOTS: Record<string, number[]> = {
   docledger: [480, 610, 740, 870],
-  growth: [490, 605, 720, 835, 950, 1065],
+  // seven since Social joined (D074): a little closer together, the whiteboard still clear at the end
+  growth: [480, 578, 676, 774, 872, 970, 1068],
   deals: [520, 720, 920],
   content: [500, 660, 820, 980],
   service: [500, 660, 820, 980],

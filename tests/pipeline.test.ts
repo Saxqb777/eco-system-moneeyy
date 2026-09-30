@@ -5,7 +5,7 @@ import { setAnthropicFactory } from "@/agents/client";
 import { advancePipelines } from "@/agents/pipeline";
 import { handleTaskBatchResult, submitQueuedTasks } from "@/agents/workers";
 import type { Db } from "@/db/client";
-import { agents, approvals, leads, messagesOut, outreach, setupItems, tasks, tickets } from "@/db/schema";
+import { agents, approvals, floors, leads, messagesOut, outreach, setupItems, tasks, tickets } from "@/db/schema";
 import { applyApprovalDecision } from "@/lib/approvals";
 import { finishBuilderTicket, nextBuilderJob, startBuilderTicket } from "@/lib/builder";
 import { encryptSecret } from "@/lib/crypto";
@@ -18,7 +18,7 @@ import { createHmac } from "node:crypto";
 
 let db: Db;
 let close: () => Promise<void>;
-const MORNING = new Date("2026-10-06T04:00:00Z"); // 08:00 Dubai, Tuesday
+const MORNING = new Date("2026-10-06T06:00:00Z"); // 10:00 Dubai, Tuesday, inside business hours
 
 async function paste(key: string, value: string) {
   await db.update(setupItems).set({ status: "present", valueEncrypted: encryptSecret(value), hint: "set" }).where(eq(setupItems.key, key));
@@ -34,6 +34,8 @@ beforeAll(async () => {
   await paste("anthropic_api_key", "sk-ant-test");
   await paste("docledger_product_facts", "DocLedger keeps every shipping document in one ledger. 99 USD a month. Saaqib Khan, founder.");
   await paste("calendar_link", "https://cal.com/saaqib/15min");
+  // This file is about DocLedger only: keep the Deals floor quiet.
+  await db.update(floors).set({ status: "paused" }).where(eq(floors.slug, "deals"));
 }, 60_000);
 
 afterAll(async () => {
@@ -56,7 +58,7 @@ describe("DocLedger pipeline", () => {
     const fake = fakeAnthropic((params) => {
       const text = JSON.stringify(params.messages[0]?.content ?? "");
       if (text.includes("Exclusion list")) {
-        return { leads: [{ company: "Gulf Crescent Freight", website: "https://gulfcrescent.example", segment: "freight_forwarder", city: "Jebel Ali", sourceUrl: "https://directory.example/a", phone: "", why: "Small forwarder with customs work" }, { company: "Pearl Route Logistics", website: "https://pearlroute.example", segment: "small_3pl", city: "Dubai", sourceUrl: "https://directory.example/b", phone: "", why: "3PL" }], note: "Two decent finds" };
+        return { leads: [{ company: "Gulf Crescent Freight", website: "https://gulfcrescent.example", segment: "freight_forwarder", city: "Jebel Ali", country: "AE", sourceUrl: "https://directory.example/a", phone: "", why: "Small forwarder with customs work" }, { company: "Pearl Route Logistics", website: "https://pearlroute.example", segment: "small_3pl", city: "Dubai", country: "AE", sourceUrl: "https://directory.example/b", phone: "", why: "3PL" }], note: "Two decent finds" };
       }
       if (text.includes("Qualify this company")) {
         const pearl = text.includes("Pearl Route");

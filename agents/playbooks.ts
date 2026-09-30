@@ -7,6 +7,7 @@ import { raiseApproval } from "@/lib/approvals";
 import { shortCode } from "@/lib/affiliate";
 import { clipboardValue } from "@/lib/clipboard";
 import { DOCLEDGER, docledgerKnowledge } from "@/config/docledger";
+import { normaliseCountry, regionFor, skippedCountries } from "@/lib/markets";
 import { DEALS_PLAYBOOKS } from "./deals-playbooks";
 import { REPLY_INTENTS, autoSendAllowed, isHot, notifyHotLead, snoozeLead } from "./docledger-autonomy";
 import { STYLE, input, logEvent, num, str, type Playbook, type PlaybookContext, type TaskRow } from "./playbook-core";
@@ -26,18 +27,19 @@ export function dedupeKeyFor(company: string, website: string | null | undefined
 // The price line and the signature block are the owner's; the product story lives in config/docledger.ts.
 async function facts(db: Db): Promise<string> {
   const own = await clipboardValue(db, "docledger_product_facts");
-  return `${docledgerKnowledge()}\n\nPrice and signature from the owner: ${own ?? "not pasted yet. Do not quote a price. Sign as: The Doc Ledger team."}`;
+  const address = await clipboardValue(db, "business_address");
+  return `${docledgerKnowledge()}\n\nPrice and signature from the owner: ${own ?? "not pasted yet. Do not quote a price. Sign as: The Doc Ledger team."}${address ? `\nPostal address, the last line of the signature: ${address}` : ""}`;
 }
 
-// Scout: real UAE companies, never invented.
+// Scout: real companies anywhere in the world, never invented. One region a day unless Warden gives a focus.
 const findLeads: Playbook = {
   kind: "find_leads",
   webSearchMaxUses: 5,
   maxTokens: 2500,
   system: `You are Scout on the DocLedger Sales floor of The Tower.
 ${docledgerKnowledge()}
-Your job: find real companies in the UAE whose finance team keys shipping bills, fuel receipts and petty cash by hand: freight forwarders and customs brokers first, then food and beverage distributors, trading companies with their own fleets, and small third party logistics firms (3PL).
-Use web search, at most a few queries, and read what the results say. Return up to 12 companies you actually saw named on a page, each with the page you saw it on and one line on why their paperwork fits. Skip anything in the exclusion list. Prefer small and medium firms in Dubai, Jebel Ali, Sharjah and Abu Dhabi, not the global giants.
+Your job: find real companies, anywhere in the world, whose finance team keys shipping bills, fuel receipts and petty cash by hand: freight forwarders and customs brokers first, then food and beverage distributors, trading companies with their own fleets, and small third party logistics firms (3PL). Doc Ledger is software, so any country where business is done in English works. Search the region you are given.
+Use web search, at most a few queries, and read what the results say. Return up to 12 companies you actually saw named on a page, each with the page you saw it on, its country as a two letter code (GB, US, AU, SG, AE and so on), and one line on why their paperwork fits. Skip anything in the exclusion list and any country in the skip list. Prefer small and medium firms, not the global giants.
 ${STYLE}`,
   schema: {
     type: "object",
@@ -49,12 +51,13 @@ ${STYLE}`,
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["company", "website", "segment", "city", "sourceUrl", "phone", "why"],
+          required: ["company", "website", "segment", "city", "country", "sourceUrl", "phone", "why"],
           properties: {
             company: { type: "string" },
             website: { type: "string", description: "root URL or empty" },
-            segment: { type: "string", enum: ["freight_forwarder", "customs_broker", "small_3pl"] },
+            segment: { type: "string", enum: ["freight_forwarder", "customs_broker", "small_3pl", "distributor", "trading_company"] },
             city: { type: "string" },
+            country: { type: "string", description: "two letter country code, for example GB, US, AU, SG, AE" },
             sourceUrl: { type: "string", description: "the page where you saw the company" },
             phone: { type: "string", description: "public phone number or empty" },
             why: { type: "string", description: "one line on the fit" },
@@ -67,28 +70,37 @@ ${STYLE}`,
   async prepare(task, ctx) {
     const recent = await ctx.db.select({ company: leads.company }).from(leads).where(eq(leads.simulated, false)).orderBy(desc(leads.createdAt)).limit(200);
     const exclude = recent.map((r) => r.company).join("; ") || "none yet";
-    const focus = str(input(task).instructions) || "Freight forwarders around Jebel Ali and Dubai first.";
-    return { user: `Focus from Warden: ${focus}\nToday: ${ctx.now.toISOString().slice(0, 10)}\nExclusion list (already known): ${exclude}\n\nFind the leads and return the JSON object.` };
+    const focus = str(input(task).instructions) || `Freight forwarders and customs brokers in ${regionFor(ctx.now)}.`;
+    const skip = await skippedCountries(ctx.db);
+    const skipLine = Object.entries(skip).map(([c, why]) => `${c} (${why})`).join("; ") || "none";
+    return { user: `Focus from Warden: ${focus}\nToday: ${ctx.now.toISOString().slice(0, 10)}\nSkip these countries: ${skipLine}\nExclusion list (already known): ${exclude}\n\nFind the leads and return the JSON object.` };
   },
   async absorb(task, output, ctx) {
     const rows = Array.isArray(output.leads) ? output.leads : [];
     let inserted = 0;
     let dupes = 0;
+    let skipped = 0;
+    const skip = await skippedCountries(ctx.db);
     for (const raw of rows) {
       const r = (raw ?? {}) as Record<string, unknown>;
       const company = str(r.company, 120);
       if (!company) continue;
+      const country = normaliseCountry(str(r.country, 10));
+      if (!country || skip[country]) {
+        skipped += 1;
+        continue;
+      }
       const website = str(r.website, 200) || null;
       const key = dedupeKeyFor(company, website);
       const [ins] = await ctx.db
         .insert(leads)
-        .values({ floorId: ctx.floorId, company, website, segment: str(r.segment, 40) || "freight_forwarder", city: str(r.city, 60) || null, phone: str(r.phone, 40) || null, sourceUrl: str(r.sourceUrl, 300) || null, scoreReason: str(r.why, 300) || null, status: "new", dedupeKey: key, foundByTaskId: task.id, simulated: false, createdAt: ctx.now, updatedAt: ctx.now })
+        .values({ floorId: ctx.floorId, company, website, segment: str(r.segment, 40) || "freight_forwarder", city: str(r.city, 60) || null, country, phone: str(r.phone, 40) || null, sourceUrl: str(r.sourceUrl, 300) || null, scoreReason: str(r.why, 300) || null, status: "new", dedupeKey: key, foundByTaskId: task.id, simulated: false, createdAt: ctx.now, updatedAt: ctx.now })
         .onConflictDoNothing()
         .returning({ id: leads.id });
       if (ins) inserted += 1;
       else dupes += 1;
     }
-    return { summary: `Found ${inserted} new lead${inserted === 1 ? "" : "s"}${dupes ? `, ${dupes} already known` : ""}`, extra: { found: inserted, duplicates: dupes, note: str(output.note, 300) } };
+    return { summary: `Found ${inserted} new lead${inserted === 1 ? "" : "s"}${dupes ? `, ${dupes} already known` : ""}${skipped ? `, ${skipped} in a country we skip` : ""}`, extra: { found: inserted, duplicates: dupes, skippedCountry: skipped, note: str(output.note, 300) } };
   },
 };
 
@@ -183,7 +195,7 @@ ${STYLE}`,
           headline: { type: "string", description: "under 10 words, their paperwork, no product name" },
           intro: { type: "string", description: "one or two sentences continuing from the reader's first name, about their month end" },
           points: { type: "array", items: { type: "string" }, description: "three sentences: what changes for them, in their terms" },
-          sampleDocument: { type: "string", description: "the document they handle most, for example Shipping line bill, Maersk, Jebel Ali" },
+          sampleDocument: { type: "string", description: "the document they handle most, for example Shipping line bill, Maersk, Felixstowe" },
           sampleFields: { type: "array", items: { type: "object", additionalProperties: false, required: ["field", "value"], properties: { field: { type: "string" }, value: { type: "string" } } }, description: "six to eight fields the system would read off that document, with plausible example values marked as examples" },
         },
       },
@@ -200,7 +212,7 @@ ${STYLE}`,
     const feedback = str(input(task).feedback);
     const f = await facts(ctx.db);
     return {
-      user: `${f}\n\nCompany: ${lead.company} (${lead.segment ?? "company"}, ${lead.city ?? "UAE"})\nWebsite: ${lead.website ?? "unknown"}\nWhy they fit: ${lead.scoreReason ?? ""}\nAngle: ${typeof dm.angle === "string" && dm.angle ? dm.angle : "shipping bills and petty cash"}\nResearch:\n${research.length ? research.map((r) => `- ${r}`).join("\n") : "- nothing yet, one web search allowed"}\nDecision maker: ${typeof dm.name === "string" && dm.name ? dm.name : "unknown"}, ${typeof dm.title === "string" && dm.title ? dm.title : "unknown title"}\n${feedback ? `Warden's feedback on the last draft: ${feedback}\n` : ""}\nWrite the email and return the JSON object.`,
+      user: `${f}\n\nCompany: ${lead.company} (${lead.segment ?? "company"}, ${[lead.city, lead.country].filter(Boolean).join(", ")})\nWrite for a reader in ${lead.country}: their spelling, their currency in any example, no Gulf place names unless they are in the Gulf.\nWebsite: ${lead.website ?? "unknown"}\nWhy they fit: ${lead.scoreReason ?? ""}\nAngle: ${typeof dm.angle === "string" && dm.angle ? dm.angle : "shipping bills and petty cash"}\nResearch:\n${research.length ? research.map((r) => `- ${r}`).join("\n") : "- nothing yet, one web search allowed"}\nDecision maker: ${typeof dm.name === "string" && dm.name ? dm.name : "unknown"}, ${typeof dm.title === "string" && dm.title ? dm.title : "unknown title"}\n${feedback ? `Warden's feedback on the last draft: ${feedback}\n` : ""}\nWrite the email and return the JSON object.`,
       webSearchMaxUses: research.length >= 2 ? 0 : 2,
     };
   },

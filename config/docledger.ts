@@ -17,7 +17,9 @@ export const DOCLEDGER = {
     "Your company files things your own way, so you define your own document types. Name the fields you need, describe what the document looks like, and it reads for those instead of ours. Most expense tools give fixed fields and a category dropdown. This one lets a customer define a document type and tell the extraction what to look for, in plain English.",
   builtInTypes: "The three built in document types came from a UAE food and beverage group: general petty cash, fuel, and shipping line bills.",
   idealCustomer:
-    "UAE finance teams that key shipping bills, fuel receipts and petty cash by hand: freight forwarders and customs brokers first, then food and beverage distributors, trading companies with their own fleets, and small third party logistics firms. Two to two hundred staff. Couriers, airlines and shipping lines are not a fit.",
+    "Finance teams anywhere in the world that key shipping bills, fuel receipts and petty cash by hand: freight forwarders and customs brokers first, then food and beverage distributors, trading companies with their own fleets, and small third party logistics firms. Two to two hundred staff. It is software, so the country does not matter; multi currency matters more the more borders they cross. Couriers, airlines and shipping lines are not a fit.",
+  builtToTheirTerms:
+    "Whatever their paperwork looks like, Doc Ledger is shaped to it: their own document types, fields, categories, currencies and rates. If they need something it does not do yet, we build it for them on their terms, usually within days. Say that plainly when they describe a document or a workflow we have not seen.",
   subjectExamples: ["Your petty cash, without the retyping", "Receipts to spreadsheet, minus the spreadsheet", "40 shipping bills a month, keyed by hand?"],
   emailExample: `Hi [Name],
 Most finance teams end the month the same way: an envelope of receipts, and someone retyping them into a spreadsheet. Shipping bills are the worst of it, because every charge line, BL number and container number gets keyed by hand.
@@ -38,7 +40,7 @@ Worth fifteen minutes to show you?
   replyWalkthrough: [
     "How it works: pick the type of document, drop in a photo or PDF, wait a few seconds. The extracted fields appear beside the document itself so the reviewer compares the two without switching windows. Anything the system was unsure about is marked, and the total on a shipping bill is built from the charge lines so it cross checks against the invoice. Save, and it is in the ledger.",
     "How it is organised: each company is a separate workspace, nobody outside it sees anything. Four roles: members record expenses, finance can delete records, export and set exchange rates, admins approve who joins and control the document types, and an owner holds it all. People request access and an admin approves them.",
-    "How it is shaped to them: the three built in types came from a UAE food and beverage group (petty cash, fuel, shipping line bills). A different business has different paperwork, so there is a builder: name a new document type, add the fields you want, write a sentence or two telling the system what the document is and what to look for. Hotel folios with check in dates, contractor invoices with PO numbers, lab supply orders with batch codes. Categories, business units, currencies and rates are all theirs to set. Lead the second contact with this, a competitor cannot answer it quickly.",
+    "How it is shaped to them: the three built in types came from a UAE food and beverage group (petty cash, fuel, shipping line bills). A different business in a different country has different paperwork, so there is a builder: name a new document type, add the fields you want, write a sentence or two telling the system what the document is and what to look for. Hotel folios with check in dates, contractor invoices with PO numbers, lab supply orders with batch codes. Categories, business units, currencies and rates are all theirs to set, and anything missing we build for them on their terms. Lead the second contact with this, a competitor cannot answer it quickly.",
   ],
   closingLine: "Every finance team has someone whose job is partly retyping what is already written on a piece of paper. This gives you that person back.",
   followUpAngles: [
@@ -57,6 +59,7 @@ export function docledgerKnowledge(): string {
     `Who buys it: ${DOCLEDGER.idealCustomer}`,
     `Pains it removes: ${DOCLEDGER.pains.join(" ")}`,
     `The strongest card: ${DOCLEDGER.differentiator}`,
+    `Built on their terms: ${DOCLEDGER.builtToTheirTerms}`,
     DOCLEDGER.builtInTypes,
   ].join("\n");
 }

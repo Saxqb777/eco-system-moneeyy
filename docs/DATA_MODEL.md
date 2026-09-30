@@ -233,7 +233,7 @@ Indexes on (occurred_at) and (floor_id, occurred_at). The roof counters, the pet
 | website | text | |
 | segment | text | freight_forwarder, customs_broker, small_3pl |
 | city | text | |
-| country | text | default AE |
+| country | text | two letter code from Scout (GB, US, AU, SG, AE...); sets the send window and the skip rules |
 | phone | text | |
 | source_url | text | where Scout found it |
 | decision_maker | jsonb | name, title, email, linkedin, confidence, research, angle, snoozeUntil (set on not now: 30 days, out of office: 7 days) |

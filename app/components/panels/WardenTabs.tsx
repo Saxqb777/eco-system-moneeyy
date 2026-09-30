@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { WardenSummary } from "@/lib/detail";
-import { runReport, type TickSteps } from "@/lib/run-summary";
+import { runReport, type RunReport, type TickSteps } from "@/lib/run-summary";
 import { APPROVAL_TYPES, Empty, Key, Pill, Sheet, post, since, usd, usePoll, when } from "./shared";
 
 interface ApprovalRow {
@@ -491,14 +491,13 @@ export function WardenControls({ warden }: { warden: WardenSummary | null }) {
     const res = await post("/api/tick?trigger=manual", {});
     setBusy(false);
     const r = res as { skipped?: string; steps?: TickSteps };
-    if (!res.ok) setNote(res.error ?? "The run failed");
-    else if (r.skipped === "busy") setNote("The Tower is already working. Try again in a minute.");
-    else {
-      const report = runReport(r.steps);
-      setNote(report.lines.join(" "));
-      // the game plays the run: bell, Warden in the lift, lights, the roof banner
-      window.dispatchEvent(new CustomEvent("tower:run", { detail: report }));
-    }
+    let report: RunReport;
+    if (!res.ok) report = { headline: "Run failed", sub: res.error ?? "Try again in a minute", lines: [res.error ?? "The run failed"], capped: false };
+    else if (r.skipped === "busy") report = { headline: "Already working", sub: "Try again in a minute", lines: ["The Tower is already working. Try again in a minute."], capped: false };
+    else report = runReport(r.steps);
+    setNote(report.lines.join(" "));
+    // the game plays the run: bell, Warden in the lift, lights, the banner under the roof
+    window.dispatchEvent(new CustomEvent("tower:run", { detail: report }));
   }
   return (
     <div className="actions" style={{ marginTop: 0 }}>

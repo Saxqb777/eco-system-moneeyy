@@ -9,7 +9,6 @@ const TAU = Math.PI * 2;
 
 export class Ambient {
   private t = 0;
-  private flickerAt = 0;
   private windowsAt = 0;
   private steamAt = 0;
   private steam: { g: Graphics; life: number }[] = [];
@@ -46,13 +45,7 @@ export class Ambient {
       });
       for (const fan of f.fans) fan.blades.rotation += (dtMs / 1000) * 3.2;
     }
-    // screens change content every couple of seconds, one at a time
-    if (this.t > this.flickerAt) {
-      this.flickerAt = this.t + 900 + Math.random() * 1400;
-      const all = this.floors.flatMap((f) => f.monitors);
-      const m = all[Math.floor(Math.random() * all.length)];
-      m?.redraw(Math.floor(Math.random() * 1e9), this.night());
-    }
+    // screens: the scene drives each desk's monitor from its worker (TowerScene.updateScreens)
     // city windows toggle
     if (this.t > this.windowsAt && this.windowCells.length) {
       this.windowsAt = this.t + 700 + Math.random() * 900;
@@ -140,7 +133,7 @@ export class Effects {
   }
 
   // A soft gold flash over a rectangle (the net counter after a task lands).
-  flash(x: number, y: number, w: number, h: number, color = C.brassLight) {
+  flash(x: number, y: number, w: number, h: number, color: number = C.brassLight) {
     const g = new Graphics();
     g.roundRect(x, y, w, h, 4).fill(color);
     g.alpha = 0;

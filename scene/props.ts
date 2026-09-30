@@ -500,3 +500,66 @@ export function openSign(x: number, y: number): Container {
   c.addChild(g, t);
   return c;
 }
+
+// A small office printer on a stand, a green ready light and a sheet in the tray.
+export function printer(x: number, y: number): Graphics {
+  const g = new Graphics();
+  facetBox(g, x - 14, y - 26, 28, 26, 0x4d5461, 0.3);
+  g.rect(x - 10, y - 20, 20, 2).fill(shade(0x4d5461, 0.25));
+  facetBox(g, x - 16, y - 42, 32, 16, 0xd6d9dc, 0.35);
+  g.rect(x - 16, y - 42, 32, 3).fill(0xeef0f1);
+  g.rect(x - 11, y - 33, 22, 3).fill(0x2b2f3a);
+  g.rect(x - 9, y - 46, 18, 4).fill(C.paper);
+  g.circle(x + 11, y - 37, 1.6).fill(0x3bd16f);
+  return g;
+}
+
+export interface WallClock {
+  container: Container;
+  set(hour: number, minute: number, second: number): void;
+}
+
+// A round office clock on the wall, showing Dubai time.
+export function wallClock(x: number, y: number, r = 13): WallClock {
+  const container = new Container();
+  const face = new Graphics();
+  face.circle(x, y, r + 3).fill(C.brassDark);
+  face.circle(x, y, r + 1.5).fill(C.brass);
+  face.circle(x, y, r).fill(C.paper);
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    const len = i % 3 === 0 ? 3 : 1.5;
+    face.rect(x + Math.sin(a) * (r - 3) - 0.75, y - Math.cos(a) * (r - 3) - len / 2, 1.5, len).fill(C.ink);
+  }
+  const hands = new Graphics();
+  container.addChild(face, hands);
+  let last = "";
+  return {
+    container,
+    set(hour, minute, second) {
+      const key = `${hour}:${minute}:${second}`;
+      if (key === last) return;
+      last = key;
+      hands.clear();
+      const hand = (angle: number, len: number, width: number, color: number) => {
+        hands.moveTo(x, y).lineTo(x + Math.sin(angle) * len, y - Math.cos(angle) * len).stroke({ width, color, cap: "round" });
+      };
+      hand(((hour % 12) + minute / 60) / 12 * Math.PI * 2, r * 0.5, 2, C.ink);
+      hand((minute + second / 60) / 60 * Math.PI * 2, r * 0.78, 1.5, C.ink);
+      hand((second / 60) * Math.PI * 2, r * 0.82, 0.8, C.red);
+      hands.circle(x, y, 1.6).fill(C.brassDark);
+    },
+  };
+}
+
+// Brass letters fixed to a wall, with a thin shadow so they stand off it.
+export function brassLetters(text: string, x: number, y: number, size = 20): Container {
+  const c = new Container();
+  const shadow = label(text, { fontSize: size, fill: 0x14161c, spacing: size * 0.18 });
+  const face = label(text, { fontSize: size, fill: C.brassLight, spacing: size * 0.18 });
+  shadow.alpha = 0.45;
+  shadow.position.set(x - face.width / 2 + 2, y + 2);
+  face.position.set(x - face.width / 2, y);
+  c.addChild(shadow, face);
+  return c;
+}

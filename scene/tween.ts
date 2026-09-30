@@ -67,15 +67,31 @@ export function wait(ms: number): Tween {
   return tween(ms, () => {}, ease.linear);
 }
 
+// Holds a sequence until something else happens, or until maxMs have gone by.
+export function until(ready: () => boolean, maxMs = 30000): Tween {
+  let elapsed = 0;
+  return {
+    update(dt) {
+      elapsed += dt;
+      return ready() || elapsed >= maxMs;
+    },
+  };
+}
+
 export class TweenRunner {
   private list: Tween[] = [];
   add(t: Tween) {
     this.list.push(t);
     return t;
   }
+  // A tween may add another one while it runs (a sequence ending in a new walk, a ride ending in the next
+  // ride). Those go into a fresh list during the pass and are kept, instead of being lost to the filter.
   update(dtMs: number) {
     if (!this.list.length) return;
-    this.list = this.list.filter((t) => !t.update(dtMs));
+    const running = this.list;
+    this.list = [];
+    const kept = running.filter((t) => !t.update(dtMs));
+    this.list = kept.concat(this.list);
   }
   get size() {
     return this.list.length;

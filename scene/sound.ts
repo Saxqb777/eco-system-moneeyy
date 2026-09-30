@@ -109,6 +109,12 @@ export class SoundPack {
     this.tone(3200, 160, 0.05, "triangle", 0.05);
   }
 
+  // The Run the Tower now bell: a two tone office chime.
+  bell() {
+    this.tone(659, 380, 0.09, "triangle");
+    this.tone(523, 620, 0.09, "triangle", 0.28);
+  }
+
   fanfare() {
     this.tone(523, 180, 0.08, "triangle");
     this.tone(659, 180, 0.08, "triangle", 0.16);

@@ -12,8 +12,9 @@ export type TickSteps = {
 };
 
 export interface RunReport {
-  // one short line for the banner
+  // one short line for the banner, and a second one under it
   headline: string;
+  sub: string;
   // the rest, one sentence each
   lines: string[];
   // true when nothing could work because of money: the game shows the amber cap light
@@ -46,7 +47,7 @@ function inTime(minutes: number): string {
 }
 
 export function runReport(steps: TickSteps | undefined, now = new Date()): RunReport {
-  if (!steps) return { headline: "Done", lines: [], capped: false };
+  if (!steps) return { headline: "Done", sub: "", lines: [], capped: false };
   const lines: string[] = [];
   const guard = steps.guard;
   const submit = steps.submit;
@@ -94,14 +95,29 @@ export function runReport(steps: TickSteps | undefined, now = new Date()): RunRe
   if (waiting) lines.push(`${waiting} ${waiting === 1 ? "item waits" : "items wait"} for you on the red phone.`);
 
   let headline: string;
-  if (capped) headline = "Daily cap reached";
-  else if (worked) headline = `${worked} ${worked === 1 ? "task" : "tasks"} at work`;
-  else if (guard?.resumedFloors?.length) headline = "Floors back at work";
-  else if (submit?.paused?.length) headline = "Floors paused";
-  else if (waiting) headline = `${waiting} waiting on you`;
-  else headline = "All caught up";
+  let sub: string;
+  const phone = waiting ? `${waiting} ${waiting === 1 ? "item" : "items"} on the red phone` : "";
+  if (capped) {
+    headline = "Daily cap reached";
+    sub = `Back at midnight Dubai, in ${inTime(minutesToDubaiMidnight(now))}`;
+  } else if (worked) {
+    headline = `${worked} ${worked === 1 ? "task" : "tasks"} at work`;
+    sub = finished ? `${finished} finished already${phone ? `, ${phone}` : ""}` : phone || "Results land on the next ticks";
+  } else if (guard?.resumedFloors?.length) {
+    headline = "Floors back at work";
+    sub = `${list(guard.resumedFloors)}${phone ? `, ${phone}` : ""}`;
+  } else if (submit?.paused?.length) {
+    headline = "Floors paused";
+    sub = "Open the floor and tap Resume";
+  } else if (waiting) {
+    headline = `${waiting} waiting on you`;
+    sub = "Open the red phone to approve";
+  } else {
+    headline = "All caught up";
+    sub = "Nothing waiting right now";
+  }
   if (!lines.length) lines.push("Floors checked: nothing waiting.");
-  return { headline, lines, capped };
+  return { headline, sub, lines, capped };
 }
 
 // The whole report as one line, for the note under the button.

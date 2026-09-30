@@ -6,6 +6,12 @@ import { buildMoon, buildShell, buildSkyline, buildStars, buildSun, type Shell, 
 import { CharacterSprite, type Look, type Pose } from "./character";
 import { Ambient, Effects } from "./effects";
 import { buildFloor, type FloorBuild } from "./floors";
+import { OfficeLife } from "./life";
+import { Street } from "./street";
+import { NewsSign } from "./news";
+import { RunBanner } from "./banner";
+import type { MonitorProp } from "./props";
+import type { RunReport } from "@/lib/run-summary";
 import { floorPlate, lockedLabel, RoofHud } from "./hud";
 import { BUILDING, DESK_SLOTS, GROUND_Y, LIFT_DOOR_X, PENTHOUSE, ROOF_Y, WORKSHOP, WORLD, floorY } from "./layout";
 import { C, FLOOR_ACCENT } from "./palette";
@@ -72,7 +78,13 @@ export class TowerScene {
   private lowEffects: boolean;
   private readonly outline = new OutlineFilter({ thickness: 2, color: C.glow, alpha: 0.9 });
   private readonly runner = new TweenRunner();
-  private directorAt = 0;
+  private readonly life: OfficeLife;
+  private readonly street = new Street();
+  private readonly news = new NewsSign();
+  private readonly banner = new RunBanner();
+  private screensAt = 0;
+  private readonly screenLit = new Map<MonitorProp, boolean>();
+  private clockAt = 0;
   private base = { scale: 1, x: 0, y: 0, wide: true, w: WORLD.w, h: WORLD.h };
   private cam = { zoom: 1, cx: WORLD.w / 2, cy: WORLD.h / 2, focused: null as number | null };
   private camTween: Tween | null = null;
@@ -90,6 +102,17 @@ export class TowerScene {
     this.shell = buildShell();
     this.ambient = new Ambient([], this.skyline.glowNear, () => this.night ?? true);
     this.ambient.setCityCells(this.skyline.cells);
+    this.life = new OfficeLife({
+      sprites: this.sprites,
+      agent: (id) => this.agentsById.get(id),
+      floors: () => [...this.floorsBySlug.values()],
+      build: (slug) => this.floorBuilds.get(slug),
+      homeX: (a, slug) => this.homeX(a, slug),
+      restore: (sprite) => this.restoreSprite(sprite),
+      lift: this.lift,
+      charLayer: this.charLayer,
+      runner: this.runner,
+    });
   }
 
   static async create(host: HTMLElement, opts: SceneOptions = {}): Promise<TowerScene> {
@@ -119,13 +142,14 @@ export class TowerScene {
 
   private build() {
     this.world.addChild(
-      this.skyG, this.stars, this.moon, this.sun,
+      this.skyG, this.stars, this.moon, this.sun, this.street.sky,
       this.skyline.far, this.skyline.near,
-      this.shell.back, this.lift.back, this.floorsLayer, this.charLayer, this.deskFrontLayer, this.deskLayer, this.ambient.layer,
-      this.tintLayer, this.lift.container, this.shell.front, this.platesLayer,
-      this.nightOverlay, this.hazeOverlay, this.sandOverlay, this.effects.layer, this.hud.container, this.speaker,
+      this.shell.back, this.street.facade, this.news.container, this.lift.back, this.floorsLayer, this.charLayer, this.deskFrontLayer, this.deskLayer, this.ambient.layer,
+      this.tintLayer, this.lift.container, this.shell.front, this.platesLayer, this.street.layer,
+      this.nightOverlay, this.hazeOverlay, this.sandOverlay, this.effects.layer, this.hud.container, this.banner.container, this.speaker,
     );
     this.app.stage.addChild(this.world);
+    this.charLayer.sortableChildren = true;
     this.hud.onIdeas = () => this.opts.onSelect?.({ type: "ideas" });
     this.nightOverlay.rect(BUILDING.interiorX, ROOF_Y, BUILDING.interiorRight - BUILDING.interiorX, GROUND_Y - ROOF_Y).fill(C.skyNightTop);
     this.nightOverlay.alpha = 0;
@@ -176,6 +200,9 @@ export class TowerScene {
   setLowEffects(on: boolean) {
     this.lowEffects = on;
     this.ambient.layer.visible = !on;
+    this.street.layer.visible = !on;
+    this.street.sky.visible = !on;
+    if (on) this.street.facade.visible = false;
     if (on) {
       this.hazeOverlay.alpha = 0;
       this.sandOverlay.alpha = 0;
@@ -421,6 +448,7 @@ export class TowerScene {
       this.rebuildFloors(state);
     }
     const money = state.simulationMode ? state.money.simulated : state.money.real;
+    this.news.setNews(this.newsLines(state, money.spendTodayUsd));
     this.hud.set({ netUsd: money.netUsd, spendTodayUsd: money.spendTodayUsd, capUsd: state.budget.dailyCapUsd, level: state.budget.level, simulated: state.simulationMode });
 
     const tasksDone = new Map<string, number>();
@@ -461,8 +489,9 @@ export class TowerScene {
         sprite.setBulb((a.waitingOnOwner ?? 0) > 0);
         // finished tasks fly to the roof
         const before = this.prev?.tasksDone.get(a.id);
-        if (before !== undefined && a.stats.tasksDone > before && !this.lowEffects) {
-          this.effects.paperFlight(sprite.position.x, sprite.position.y - sprite.bodyHeight, NET_COUNTER.x, NET_COUNTER.y, () => this.effects.flash(NET_COUNTER.left, NET_COUNTER.top, NET_COUNTER.w, NET_COUNTER.h));
+        if (before !== undefined && a.stats.tasksDone > before) {
+          if (!this.lowEffects) this.effects.paperFlight(sprite.position.x, sprite.position.y - sprite.bodyHeight, NET_COUNTER.x, NET_COUNTER.y, () => this.effects.flash(NET_COUNTER.left, NET_COUNTER.top, NET_COUNTER.w, NET_COUNTER.h));
+          if (!isWarden) this.life.cheer(sprite, performance.now());
         }
       }
     }
@@ -488,6 +517,7 @@ export class TowerScene {
   }
 
   private applyAgent(sprite: CharacterSprite, a: AgentState, floorSlug: string, isWarden: boolean, capHit: boolean) {
+    if (sprite.away) return; // on an errand: office life hands it back when it returns
     if (sprite.level !== a.locationLevel && !this.lift.isBusy) {
       const targetX = isWarden && a.status === "helping" ? this.blockedWorkerX(a.locationLevel) + 52 : this.homeX(a, floorSlug);
       sprite.busyUntil = performance.now() + 30000;
@@ -541,92 +571,57 @@ export class TowerScene {
     else sprite.setBubble(null);
   }
 
-  // Idle variety: never everyone still at once. Picks one idle worker per floor and gives it a gesture.
-  private director(now: number) {
-    if (now < this.directorAt) return;
-    this.directorAt = now + 2500;
-    for (const f of this.floorsBySlug.values()) {
-      const workers = f.agents.filter((a) => a.kind !== "warden");
-      const sprites = workers.map((a) => this.sprites.get(a.id)).filter((s): s is CharacterSprite => !!s);
-      if (!sprites.length) continue;
-      const anyBusy = sprites.some((s) => s.busyUntil > now || s.pose === "sit_type" || s.pose === "raise" || s.pose === "walk");
-      if (anyBusy && Math.random() < 0.75) continue;
-      const idle = sprites.filter((s) => s.pose === "sit_idle" && s.busyUntil <= now);
-      const s = idle[Math.floor(Math.random() * idle.length)];
-      if (!s) continue;
-      const a = this.agentsById.get(s.agentId);
-      if (!a) continue;
-      this.gesture(s, a, f);
-    }
+  // Puts a sprite back to what the state says: its desk, its pose, its task label.
+  private restoreSprite(sprite: CharacterSprite) {
+    const a = this.agentsById.get(sprite.agentId);
+    if (!a) return;
+    const slug = this.floorSlugOf(a);
+    const f = this.floorsBySlug.get(slug);
+    const capHit = !!f && f.status === "paused" && !!f.pausedReason && /cap/i.test(f.pausedReason);
+    this.applyAgent(sprite, a, slug, sprite.isWarden, capHit);
   }
 
-  private gesture(s: CharacterSprite, a: AgentState, f: FloorState): void {
-    const quirk = s.look.quirk ?? "stretch";
-    const now = performance.now();
-    const roll = Math.random();
-    const kind = roll < 0.55 ? quirk : ["stretch", "spin", "sip", "nap"][Math.floor(Math.random() * 4)]!;
-    const back = () => {
-      s.busyUntil = 0;
-      const latest = this.agentsById.get(a.id) ?? a;
-      this.applyPose(s, latest, false, false);
-    };
-    const home = this.homeX(a, f.slug);
-    const y = floorY(a.locationLevel);
-    const build = this.floorBuilds.get(f.slug);
-    if (kind === "cooler" && build?.coolerX) {
-      s.busyUntil = now + 12000;
-      this.runner.add(this.sequence([
-        () => this.walk(s, build.coolerX! - 20, y),
-        () => { s.setPose("drink"); s.setFacing(1); return wait(2600); },
-        () => this.walk(s, home, y),
-      ], back));
-    } else if (kind === "chat") {
-      const other = f.agents.map((x) => this.sprites.get(x.id)).find((o): o is CharacterSprite => !!o && o !== s && o.pose === "sit_idle" && o.busyUntil <= now);
-      if (!other) {
-        this.gesture(s, a, f); // pick again with a different roll
-        return;
-      }
-      const oa = this.agentsById.get(other.agentId);
-      s.busyUntil = now + 12000;
-      other.busyUntil = now + 12000;
-      const ox = other.position.x;
-      this.runner.add(this.sequence([
-        () => this.walk(s, ox - 30, y),
-        () => {
-          s.setPose("chat"); s.setFacing(1); s.setBubble("...", "chat");
-          other.setPose("chat"); other.position.set(ox, y); other.setFacing(-1);
-          return wait(3800);
-        },
-        () => { s.setBubble(null); return this.walk(s, home, y); },
-      ], () => {
-        back();
-        other.busyUntil = 0;
-        if (oa) this.applyPose(other, this.agentsById.get(oa.id) ?? oa, false, false);
+  // What the LED sign in the plaza scrolls: the latest things the floors did, then today's spend.
+  private newsLines(state: TowerState, spendTodayUsd: number): string[] {
+    const lines = state.recentEvents
+      .filter((e) => e.type !== "log" || /back at work|found|drafted|sent|replied|approved/i.test(e.message))
+      .slice(0, 8)
+      .map((e) => e.message);
+    lines.push(`Spend today ${spendTodayUsd.toFixed(2)} of ${state.budget.dailyCapUsd.toFixed(2)} USD`);
+    if (state.pendingApprovals) lines.push(`${state.pendingApprovals} waiting on the red phone`);
+    return lines;
+  }
+
+  // The owner pressed Run the Tower now: a bell, the lights come up floor by floor, the Warden calls
+  // everyone and heads down, and the banner says the Tower is working.
+  runStarted() {
+    if (this.destroyed) return;
+    this.sound.bell();
+    this.banner.showWorking();
+    this.life.runStarted(performance.now());
+    if (this.lowEffects || !this.state) return;
+    const floors = [...this.state.floors].filter((f) => f.status !== "locked").sort((a, b) => a.level - b.level);
+    floors.forEach((f, i) => {
+      this.runner.add(this.sequenceOf([() => wait(120 + i * 150)], () => {
+        const y = floorY(f.level);
+        this.effects.flash(BUILDING.interiorX, y - 106, BUILDING.interiorRight - BUILDING.interiorX, 106, C.interiorLight);
       }));
-    } else if (kind === "nap") {
-      s.busyUntil = now + 9000;
-      s.setPose("asleep");
-      this.runner.add(this.sequence([() => wait(8500)], back));
-    } else if (kind === "spin") {
-      s.busyUntil = now + 1800;
-      s.setPose("spin");
-      this.runner.add(this.sequence([() => wait(1500)], back));
-    } else if (kind === "sip") {
-      s.busyUntil = now + 2200;
-      s.setPose("coffee");
-      this.runner.add(this.sequence([() => wait(2000)], back));
-    } else {
-      s.busyUntil = now + 2800;
-      s.setPose("stretch");
-      this.runner.add(this.sequence([() => wait(2500)], back));
-    }
+    });
   }
 
-  private sequence(steps: Array<() => Tween>, onDone: () => void): Tween {
+  // The run came back: the banner says what happened, in the same words as the panel.
+  runFinished(report: RunReport) {
+    if (this.destroyed) return;
+    this.banner.show(report.headline, report.sub, report.capped ? "cap" : /at work|back at work/.test(report.headline) ? "work" : "info");
+    if (report.capped) this.life.runCapped(performance.now());
+    else if (/at work/.test(report.headline)) this.sound.fanfare();
+  }
+
+  private sequenceOf(steps: Array<() => { update(dt: number): boolean }>, onDone: () => void) {
     let index = 0;
-    let current: Tween | null = null;
+    let current: { update(dt: number): boolean } | null = null;
     return {
-      update: (dt) => {
+      update: (dt: number) => {
         if (!current) {
           const step = steps[index];
           if (!step) { onDone(); return true; }
@@ -642,13 +637,36 @@ export class TowerScene {
     };
   }
 
-  private walk(s: CharacterSprite, x: number, y: number): Tween {
-    const startX = s.position.x;
-    const dist = Math.abs(x - startX);
-    if (dist < 2) return wait(1);
-    s.setPose("walk");
-    s.setFacing(x > startX ? 1 : -1);
-    return tween((dist / 90) * 1000, (t) => s.position.set(startX + (x - startX) * t, y), ease.linear, () => s.setPose("stand"));
+  // Each desk's monitor follows its worker: dark when the floor is paused or the worker is away from
+  // work, lit at the desk, and scrolling while the hands are on the keys.
+  private updateScreens(now: number) {
+    if (now < this.screensAt) return;
+    this.screensAt = now + 240;
+    for (const [id, s] of this.sprites) {
+      const a = this.agentsById.get(id);
+      if (!a || s.isWarden || a.role === "builder") continue;
+      const slug = this.floorSlugOf(a);
+      const f = this.floorsBySlug.get(slug);
+      const m = this.floorBuilds.get(slug)?.monitorAt.get(this.homeX(a, slug));
+      if (!m || !f) continue;
+      if (s.keysActive) {
+        m.redraw(Math.floor(Math.random() * 1e9), true);
+        this.screenLit.set(m, true);
+        continue;
+      }
+      const lit = f.status === "live" && a.status !== "paused" && a.status !== "offline";
+      if (this.screenLit.get(m) !== lit) {
+        m.redraw(id.length * 7919, lit);
+        this.screenLit.set(m, lit);
+      }
+    }
+  }
+
+  private updateClocks(now: number) {
+    if (now < this.clockAt) return;
+    this.clockAt = now + 1000;
+    const d = new Date(Date.now() + 4 * 3600 * 1000);
+    for (const b of this.floorBuilds.values()) for (const c of b.clocks) c.set(d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds());
   }
 
   private tick(dtMs: number) {
@@ -664,11 +682,21 @@ export class TowerScene {
     let typing = 0;
     for (const s of this.sprites.values()) {
       s.update(dt);
-      if (s.pose === "sit_type") typing += 1;
-      if (s.isWarden && (s.pose === "pace" || s.pose === "look_out" || s.pose === "coffee")) this.paceWarden(s, dt, now);
+      if (s.keysActive) typing += 1;
+      if (s.isWarden && !s.away && (s.pose === "pace" || s.pose === "look_out" || s.pose === "coffee")) this.paceWarden(s, dt, now);
     }
     for (const b of this.floorBuilds.values()) for (const e of b.extras) e.update(dt);
-    this.director(now);
+    // visitors and anyone else office life put in the building
+    for (const child of this.charLayer.children) if (child instanceof CharacterSprite && !this.sprites.has(child.agentId)) child.update(dt);
+    this.life.update(now);
+    this.updateScreens(now);
+    this.updateClocks(now);
+    this.news.update(dt);
+    this.banner.update(dt);
+    if (!this.lowEffects) {
+      const hour = dubaiHour(new Date());
+      this.street.update(dt, { day: hour >= 7 && hour < 17.5, night: (this.night ?? false) });
+    }
     this.sound.keys(typing, now);
     if (!this.lowEffects) {
       const mugs: { x: number; y: number }[] = [];

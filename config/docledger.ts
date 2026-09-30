@@ -42,6 +42,15 @@ Worth fifteen minutes to show you?
     "How it is organised: each company is a separate workspace, nobody outside it sees anything. Four roles: members record expenses, finance can delete records, export and set exchange rates, admins approve who joins and control the document types, and an owner holds it all. People request access and an admin approves them.",
     "How it is shaped to them: the three built in types came from a UAE food and beverage group (petty cash, fuel, shipping line bills). A different business in a different country has different paperwork, so there is a builder: name a new document type, add the fields you want, write a sentence or two telling the system what the document is and what to look for. Hotel folios with check in dates, contractor invoices with PO numbers, lab supply orders with batch codes. Categories, business units, currencies and rates are all theirs to set, and anything missing we build for them on their terms. Lead the second contact with this, a competitor cannot answer it quickly.",
   ],
+  // Words for the public pages (docledger.site and the /for previews): written to the reader, no notes for the workers.
+  publicCopy: {
+    ownTypes:
+      "Your company files things your own way, so you define your own document types. Name the fields you need, describe what the document looks like in plain English, and Doc Ledger reads for those instead of ours. Most expense tools give you fixed fields and a category dropdown; this one fits your paperwork.",
+    builtFor:
+      "Finance teams that key shipping bills, fuel receipts and petty cash by hand: freight forwarders and customs brokers, food and beverage distributors, trading companies with their own fleets and third party logistics firms, from two staff to two hundred, in any country and any currency.",
+    onYourTerms:
+      "Your own document types, fields, categories, currencies and exchange rates. If you need something Doc Ledger does not do yet, we build it for you, usually within days.",
+  },
   closingLine: "Every finance team has someone whose job is partly retyping what is already written on a piece of paper. This gives you that person back.",
   followUpAngles: [
     "Fuel receipts: litres, odometer and plate read off the receipt, no typing.",

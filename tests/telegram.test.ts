@@ -37,7 +37,9 @@ describe("Telegram", () => {
     const stranger = await processTelegramUpdate(db, { update_id: 1, message: { message_id: 1, text: "hello", chat: { id: 999 } } }, NOW);
     expect(stranger.handled).toMatch(/before pairing/);
     const wrong = await processTelegramUpdate(db, { update_id: 2, message: { message_id: 2, text: "/pair 000000", chat: { id: OWNER } } }, NOW);
-    expect(wrong.handled).toMatch(/before pairing/);
+    expect(wrong.handled).toMatch(/without a valid code/);
+    expect(lastText()).toMatch(/six character code/);
+    expect(lastText()).toContain(String(OWNER));
     const ok = await processTelegramUpdate(db, { update_id: 3, message: { message_id: 3, text: `/pair ${pairingCode()}`, chat: { id: OWNER } } }, NOW);
     expect(ok.handled).toBe("paired");
     expect(lastText()).toMatch(/Paired/);

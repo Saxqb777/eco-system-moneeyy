@@ -2,7 +2,7 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { agentRuns, agents, budgetLedger, floors, taskEvents, tasks } from "@/db/schema";
-import { getSpendSummary } from "@/lib/budget";
+import { floorShare, getSpendSummary } from "@/lib/budget";
 import { asNumber, getSettings } from "@/lib/settings";
 import { callModel, getClient, type ModelCall } from "./client";
 import { submitBatch, type BatchItem, type CollectedResult } from "./batches";
@@ -18,7 +18,7 @@ const EXPRESS_STUCK_MS = 12 * 60 * 1000;
 // The direct lane: short writing tasks (a deal post, a channel post, a first email, a reply) run straight away
 // on every tick, full price but done in seconds, so nothing the owner or a lead waits on sits an hour in a
 // batch. Research with web tools (Scouts, Analyst, share spots) stays on batches at half price.
-export const DIRECT_KINDS = new Set(["write_post", "write_engagement", "draft_outreach", "follow_up"]);
+export const DIRECT_KINDS = new Set(["write_post", "write_engagement", "draft_outreach", "follow_up", "marketing_pack", "success_email"]);
 export const DIRECT_PER_TICK = 4;
 // Task ids a direct or express run marks in tasks.batch_id: no batch row stands behind them.
 const DIRECT_MARKS = ["express", "direct"];
@@ -89,7 +89,7 @@ export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ sta
       if (!out.held.includes(floor.slug)) out.held.push(floor.slug);
       continue;
     }
-    if ((floorSpend[floor.id] ?? 0) + EST_TASK_USD > cap * 0.4) {
+    if ((floorSpend[floor.id] ?? 0) + EST_TASK_USD > cap * floorShare(settingsMap, floor.slug)) {
       if (!out.held.includes(floor.slug)) out.held.push(floor.slug);
       continue;
     }

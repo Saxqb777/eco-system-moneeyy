@@ -29,7 +29,8 @@ export function levelTop(level: number): number {
 
 export const ROOF_Y = floorY(LEVEL_COUNT); // 160
 
-export const LEVEL_SLUGS = ["lobby", "service", "content", "deals", "docledger", "penthouse"] as const;
+// Level 3 was the Deals Engine until 2026-09-30; DocLedger Growth moved in (D065).
+export const LEVEL_SLUGS = ["lobby", "service", "content", "growth", "docledger", "penthouse"] as const;
 export type LevelSlug = (typeof LEVEL_SLUGS)[number];
 
 export function levelOf(slug: string): number {
@@ -37,9 +38,10 @@ export function levelOf(slug: string): number {
   return i < 0 ? 0 : i;
 }
 
-// Desk slots per floor: x of the chair. Workers sit behind their desk, facing out.
+// Desk slots per floor: x of the chair. Workers sit behind their desk, facing out: the desk front is drawn over them.
 export const DESK_SLOTS: Record<string, number[]> = {
   docledger: [480, 610, 740, 870],
+  growth: [490, 605, 720, 835, 950, 1065],
   deals: [520, 720, 920],
   content: [500, 660, 820, 980],
   service: [500, 660, 820, 980],

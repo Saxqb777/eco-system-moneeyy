@@ -123,7 +123,8 @@ async function advanceDocLedger(db: Db, now: Date, created: Record<string, numbe
       const [later] = await db.select({ id: outreach.id }).from(outreach).where(and(eq(outreach.leadId, o.leadId), sql`${outreach.step} > ${o.step}`)).limit(1);
       if (later) continue;
       const [lead] = await db.select().from(leads).where(eq(leads.id, o.leadId)).limit(1);
-      if (!lead || lead.status === "lost" || lead.status === "client") continue;
+      // Customers in their free month hear from Success, not from sales follow ups.
+      if (!lead || lead.status === "lost" || lead.status === "client" || lead.status === "trial") continue;
       const until = snoozedUntil(lead);
       if (until && until.getTime() > now.getTime()) continue;
       if (await hasOpenTaskFor(db, "follow_up", "outreachId", o.id)) continue;
@@ -204,6 +205,13 @@ async function checkUnlocks(db: Db, now: Date): Promise<string[]> {
 export async function advancePipelines(db: Db, now = new Date()): Promise<AdvanceSummary> {
   const created: Record<string, number> = {};
   await advanceDocLedger(db, now, created);
+  try {
+    const { advanceGrowth } = await import("@/agents/growth");
+    await advanceGrowth(db, now, created);
+  } catch (err) {
+    created.growth_error = 1;
+    console.error("growth floor failed", err instanceof Error ? err.message : err);
+  }
   try {
     const { advanceDeals } = await import("@/agents/deals");
     await advanceDeals(db, now, created);

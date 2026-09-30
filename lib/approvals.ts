@@ -105,6 +105,17 @@ async function executeApproval(db: Db, a: typeof approvals.$inferSelect, now: Da
       return { floor: slug, status: "live" };
     }
     case "decision": {
+      // A growth idea the Head of Growth brought: it becomes an experiment the team follows (D065).
+      if (content.growthIdea && typeof content.growthIdea === "object") {
+        const { onIdeaApproved } = await import("@/agents/growth");
+        return onIdeaApproved(db, a, now);
+      }
+      // A Builder ticket Product proposed: it joins tonight's backlog.
+      if (typeof content.ticketId === "string") {
+        const { onTicketDecided } = await import("@/agents/growth");
+        await onTicketDecided(db, content.ticketId, true, now);
+        return { ticketId: content.ticketId, status: "backlog" };
+      }
       // A floor rule: Warden asked to auto approve a floor's public posts (Deals Engine after 14 days).
       if (typeof content.autoApproveFloor === "string") {
         await db.update(floors).set({ autoApprove: true, autoApproveSince: now, updatedAt: now }).where(eq(floors.slug, content.autoApproveFloor));
@@ -161,6 +172,9 @@ export async function applyApprovalDecision(db: Db, approvalId: string, status: 
   } else if (status === "approved") {
     executionResult = await executeApproval(db, { ...a, feedback }, now);
     executedAt = executionResult.deferred ? null : now;
+  } else if (a.type === "decision" && typeof (a.content as Record<string, unknown> | null)?.ticketId === "string") {
+    const { onTicketDecided } = await import("@/agents/growth");
+    await onTicketDecided(db, String((a.content as Record<string, unknown>).ticketId), false, now);
   } else if (a.taskId) {
     // Rejected: the owning task goes back to the worker with the feedback attached.
     const [t] = await db.select().from(tasks).where(eq(tasks.id, a.taskId)).limit(1);

@@ -86,6 +86,9 @@ beforeAll(async () => {
   setAnthropicFactory(() => fakeAnthropic(answers as never));
   await setSetting(db, "simulation_mode", false);
   await setSetting(db, "pipeline_day_docledger", "2026-10-11");
+  // The Deals Engine is archived since D064; its code stays tested with the floor switched back on here.
+  await db.update(floors).set({ status: "live" }).where(eq(floors.slug, "deals"));
+  await db.update(floors).set({ status: "paused" }).where(eq(floors.slug, "growth"));
   await paste("anthropic_api_key", "sk-ant-test");
   await paste("affiliate_amazon_ae", "thetower-21");
   await paste("telegram_bot_token", "123:token");

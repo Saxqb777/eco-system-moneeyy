@@ -9,11 +9,12 @@ import { FloorBody } from "./FloorPanel";
 import { MailboxTab } from "./MailboxTab";
 import { Panel, usePoll, type Tab } from "./shared";
 import { ApprovalsTab, BriefTab, BudgetTab, IdeasTab, SetupTab, WardenControls } from "./WardenTabs";
+import { CompanyTab } from "./CompanyTab";
 
-export type WardenTab = "office" | "approvals" | "mailbox" | "setup" | "brief" | "budget" | "ideas";
+export type WardenTab = "office" | "company" | "approvals" | "mailbox" | "setup" | "brief" | "budget" | "ideas";
 export type PanelSel = { type: "agent"; id: string } | { type: "floor"; slug: string } | { type: "warden"; tab: WardenTab };
 
-const WARDEN_TABS: WardenTab[] = ["office", "approvals", "mailbox", "setup", "brief", "budget", "ideas"];
+const WARDEN_TABS: WardenTab[] = ["office", "company", "approvals", "mailbox", "setup", "brief", "budget", "ideas"];
 
 export function parsePanelParam(raw: string | null, state: TowerState): PanelSel | null {
   if (!raw) return null;
@@ -76,6 +77,7 @@ function WardenPanel({ open, tab, state, scene, onClose, onNavigate }: { open: b
   const hot = mail.data?.counts.hot;
   const tabs: Tab[] = [
     { id: "office", label: "Office", icon: "desk" },
+    { id: "company", label: "Company", icon: "company" },
     { id: "approvals", label: "Approvals", icon: "phone", badge: pendingCount || undefined },
     { id: "mailbox", label: "Mailbox", icon: "tray", badge: hot || undefined },
     { id: "setup", label: "Setup", icon: "clipboard", badge: missing || undefined },
@@ -83,7 +85,7 @@ function WardenPanel({ open, tab, state, scene, onClose, onNavigate }: { open: b
     { id: "budget", label: "Budget", icon: "coins" },
     { id: "ideas", label: "Ideas", icon: "mail" },
   ];
-  const kicker = tab === "approvals" ? "The red phone" : tab === "mailbox" ? "The mail room" : tab === "setup" ? "The clipboard" : tab === "ideas" ? "The mail slot" : tab === "brief" ? "Morning brief" : tab === "budget" ? "Spend cap and level" : "Penthouse";
+  const kicker = tab === "company" ? "DocLedger HQ" : tab === "approvals" ? "The red phone" : tab === "mailbox" ? "The mail room" : tab === "setup" ? "The clipboard" : tab === "ideas" ? "The mail slot" : tab === "brief" ? "Morning brief" : tab === "budget" ? "Spend cap and level" : "Penthouse";
   return (
     <Panel open={open} kicker={kicker} title={warden?.name ?? "Warden"} accent={penthouse?.accent} tabs={tabs} tab={tab} onTab={(id) => onNavigate({ type: "warden", tab: id as WardenTab })} onClose={onClose}>
       {tab === "office" && warden ? (
@@ -92,6 +94,7 @@ function WardenPanel({ open, tab, state, scene, onClose, onNavigate }: { open: b
           <CharacterBody agentId={warden.id} scene={scene} onFloor={(slug) => onNavigate({ type: "floor", slug })} />
         </>
       ) : null}
+      {tab === "company" ? <CompanyTab onApprovals={() => onNavigate({ type: "warden", tab: "approvals" })} /> : null}
       {tab === "approvals" ? <ApprovalsTab onChanged={summary.reload} /> : null}
       {tab === "mailbox" ? <MailboxTab onApprovals={() => onNavigate({ type: "warden", tab: "approvals" })} /> : null}
       {tab === "setup" ? <SetupTab /> : null}

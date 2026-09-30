@@ -1,7 +1,8 @@
 // Seed definitions for the building: floors, agents, setup items and default settings.
 // Levels from the bottom: 0 Lobby, 1 Ground, 2 Floor 1, 3 Floor 2, 4 Floor 3, 5 Penthouse.
 
-export type FloorStatus = "locked" | "live" | "paused";
+// archived: a closed business, kept in the database but not shown anywhere (the Deals Engine since 2026-09-30).
+export type FloorStatus = "locked" | "live" | "paused" | "archived";
 
 export interface FloorDef {
   slug: string;
@@ -53,6 +54,24 @@ export const FLOORS: FloorDef[] = [
     monthlyGuideUsd: 9,
     isBusiness: true,
   },
+  // DocLedger's second floor (D065): the people who grow the company around the sales team.
+  {
+    slug: "growth",
+    name: "DocLedger Growth",
+    level: 3,
+    accent: "#3A86C8",
+    goalMetric: "paying customers",
+    weeklyTarget: 1,
+    targetUnit: "customers",
+    status: "live",
+    unlockRule: null,
+    unlockCondition: null,
+    niche: "growth, partners, product, marketing, customer success, finance",
+    nextNiches: [],
+    monthlyGuideUsd: 9,
+    isBusiness: true,
+  },
+  // Closed by the owner on 2026-09-30 (D064, D065): archived, its code and data kept.
   {
     slug: "deals",
     name: "Deals Engine",
@@ -61,7 +80,7 @@ export const FLOORS: FloorDef[] = [
     goalMetric: "channel subscribers",
     weeklyTarget: 75,
     targetUnit: "subscribers",
-    status: "live",
+    status: "archived",
     unlockRule: null,
     unlockCondition: null,
     niche: "UAE online deals",
@@ -137,6 +156,13 @@ export const AGENTS: AgentDef[] = [
   { slug: "docledger_writer", floorSlug: "docledger", name: "Writer", role: "writer", kind: "worker", modelKey: "worker", playbookKey: "docledger.writer", sprite: { hair: 3, glasses: false, mug: true, slouch: false, coat: false, tone: 3, mugColor: "#F3E9D2", quirk: "cooler" } },
   { slug: "docledger_chaser", floorSlug: "docledger", name: "Chaser", role: "chaser", kind: "worker", modelKey: "worker", playbookKey: "docledger.chaser", sprite: { hair: 4, glasses: true, mug: true, slouch: true, coat: false, tone: 1, mugColor: "#C94F7C", quirk: "nap" } },
   { slug: "docledger_builder", floorSlug: "docledger", name: "Builder", role: "builder", kind: "builder", modelKey: "builder", playbookKey: "docledger.builder", sprite: { hair: 5, glasses: true, mug: false, slouch: false, coat: false, tone: 2, mugColor: "#5DA9E9", quirk: "chat" } },
+  // DocLedger Growth floor (D065)
+  { slug: "growth_lead", floorSlug: "growth", name: "Growth", role: "head of growth", kind: "worker", modelKey: "worker", playbookKey: "docledger.growth", sprite: { hair: 6, glasses: false, mug: true, slouch: false, coat: false, tone: 2, mugColor: "#3A86C8", quirk: "window" } },
+  { slug: "growth_partners", floorSlug: "growth", name: "Partners", role: "partnerships", kind: "worker", modelKey: "worker", playbookKey: "docledger.partners", sprite: { hair: 1, glasses: true, mug: false, slouch: false, coat: false, tone: 0, mugColor: "#D4A537", quirk: "chat" } },
+  { slug: "growth_product", floorSlug: "growth", name: "Product", role: "product manager", kind: "worker", modelKey: "worker", playbookKey: "docledger.product", sprite: { hair: 3, glasses: true, mug: true, slouch: false, coat: false, tone: 1, mugColor: "#5DA9E9", quirk: "spin" } },
+  { slug: "growth_marketer", floorSlug: "growth", name: "Marketer", role: "marketer", kind: "worker", modelKey: "worker", playbookKey: "docledger.marketer", sprite: { hair: 4, glasses: false, mug: true, slouch: false, coat: false, tone: 3, mugColor: "#C94F7C", quirk: "cooler" } },
+  { slug: "growth_success", floorSlug: "growth", name: "Success", role: "customer success", kind: "worker", modelKey: "worker", playbookKey: "docledger.success", sprite: { hair: 2, glasses: false, mug: false, slouch: false, coat: false, tone: 2, mugColor: "#5FA55A", quirk: "stretch" } },
+  { slug: "growth_finance", floorSlug: "growth", name: "Finance", role: "finance", kind: "worker", modelKey: "worker", playbookKey: "docledger.finance", sprite: { hair: 0, glasses: true, mug: true, slouch: true, coat: false, tone: 1, mugColor: "#2B2F3A", quirk: "nap" } },
   { slug: "deals_scout", floorSlug: "deals", name: "Scout", role: "scout", kind: "worker", modelKey: "worker", playbookKey: "deals.scout", sprite: { hair: 2, glasses: false, mug: false, slouch: false, coat: false, tone: 3, mugColor: "#F08A24", quirk: "cooler" } },
   { slug: "deals_editor", floorSlug: "deals", name: "Editor", role: "editor", kind: "worker", modelKey: "worker", playbookKey: "deals.editor", sprite: { hair: 0, glasses: true, mug: true, slouch: false, coat: false, tone: 0, mugColor: "#5FA55A", quirk: "spin" } },
   { slug: "deals_publisher", floorSlug: "deals", name: "Publisher", role: "publisher", kind: "worker", modelKey: "worker", playbookKey: "deals.publisher", sprite: { hair: 3, glasses: false, mug: true, slouch: true, coat: false, tone: 2, mugColor: "#E0B04A", quirk: "stretch" } },
@@ -181,7 +207,10 @@ export const DEFAULT_SETTINGS: Record<string, unknown> = {
   warden_interval_hours: 4,
   brief_hour_local: 8,
   sound_enabled: false,
-  allocation_guide_usd: { warden: 6, deals: 9, docledger: 9, builder: 12, web_search: 9, buffer: 5 },
+  allocation_guide_usd: { warden: 6, growth: 9, docledger: 9, builder: 12, web_search: 9, buffer: 5 },
+  // Share of the daily cap one business floor may use before it waits for tomorrow (D065). DocLedger's two
+  // floors together get 80 percent; any other floor 40 percent.
+  floor_share: { docledger: 0.55, growth: 0.25 },
   model_overrides: {},
   launch_date: null,
   sim_cursor: null,
@@ -190,6 +219,7 @@ export const DEFAULT_SETTINGS: Record<string, unknown> = {
 // Which setup keys must be present for a floor to leave the greyed state.
 export const FLOOR_REQUIREMENTS: Record<string, string[]> = {
   docledger: ["calendar_link", "docledger_product_facts", "resend_api_key", "resend_from"],
+  growth: [],
   deals: ["affiliate_amazon_ae", "deals_channel"],
   content: [],
   service: ["consulting_site_url"],

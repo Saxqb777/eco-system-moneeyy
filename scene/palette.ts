@@ -46,6 +46,7 @@ export const C = {
 export const FLOOR_ACCENT: Record<string, number> = {
   penthouse: 0xd4a537,
   docledger: 0x2a9d8f,
+  growth: 0x3a86c8,
   deals: 0xf08a24,
   content: 0x5fa55a,
   service: 0xc94f7c,

@@ -2,7 +2,7 @@
 import { Container, Graphics } from "pixi.js";
 import { BUILDING, DESK_SLOTS, LEVEL_H, PENTHOUSE, SLAB, WORKSHOP, floorY } from "./layout";
 import { C, FLOOR_ACCENT, mix, shade } from "./palette";
-import { plane, twoTone } from "./draw";
+import { label, plane, twoTone } from "./draw";
 import * as P from "./props";
 import { CharacterSprite } from "./character";
 
@@ -12,6 +12,11 @@ export interface FloorInfo {
   level: number;
   status: string;
   unlockRule: string | null;
+}
+
+// The Growth floor's whiteboard: the company's numbers, written up live.
+export interface Whiteboard {
+  set(lines: string[]): void;
 }
 
 export interface FloorBuild {
@@ -24,6 +29,8 @@ export interface FloorBuild {
   coolerX: number | null;
   extras: CharacterSprite[]; // decorative people such as the receptionist
   tint: Graphics; // amber tint for a paused floor
+  front: Container; // desk fronts, drawn over the seated workers so they sit behind their desks
+  board: Whiteboard | null;
 }
 
 const IX = BUILDING.interiorX;
@@ -49,7 +56,7 @@ export function buildFloor(info: FloorInfo, night: boolean): FloorBuild {
   const locked = info.status === "locked";
   const accent = FLOOR_ACCENT[info.slug] ?? C.stone;
   const g = new Graphics();
-  const build: FloorBuild = { container: c, deskSlots: DESK_SLOTS[info.slug] ?? [], monitors: [], plants: [], fans: [], lamps: new Map(), coolerX: null, extras: [], tint: new Graphics() };
+  const build: FloorBuild = { container: c, deskSlots: DESK_SLOTS[info.slug] ?? [], monitors: [], plants: [], fans: [], lamps: new Map(), coolerX: null, extras: [], tint: new Graphics(), front: new Container(), board: null };
 
   const wallBase = locked ? mix(C.charcoalDark, accent, 0.08) : mix(C.charcoal, accent, night ? 0.32 : 0.42);
   twoTone(g, IX, top, IW, h, wallBase, 0.62, locked ? 0.08 : 0.14);
@@ -86,17 +93,19 @@ export function buildFloor(info: FloorInfo, night: boolean): FloorBuild {
     c.addChild(lights);
   }
 
+  // The chair, the monitor and the lamp stand behind the worker; the desk and the keyboard go in front, so a
+  // seated worker shows from the chest up with the hands on the keys. The monitor sits to the side, clear of the face.
   const addDesks = (desks: number[], deskW: number) => {
     for (const sx of desks) c.addChild(P.chair(sx, y - 2));
     for (const sx of desks) {
-      c.addChild(P.desk(sx, y - 1, deskW));
-      const m = P.monitorProp(sx + 8, y - 42, on);
+      const m = P.monitorProp(sx + 25, y - 40, on);
       c.addChild(m.container);
       build.monitors.push(m);
-      c.addChild(P.keyboard(sx - 6, y - 35));
-      const lamp = P.deskLamp(sx + deskW / 2 - 8, y - 36);
+      const lamp = P.deskLamp(sx - deskW / 2 + 12, y - 36);
       c.addChild(lamp.container);
       build.lamps.set(sx, lamp);
+      build.front.addChild(P.desk(sx, y - 1, deskW));
+      build.front.addChild(P.keyboard(sx, y - 37));
     }
   };
 
@@ -123,6 +132,16 @@ export function buildFloor(info: FloorInfo, night: boolean): FloorBuild {
     c.addChild(P.toolBench(WORKSHOP.benchX, y - 1));
     c.addChild(P.cabinet(IR - 26, y - 1, 50));
     addDesks(slots, 86);
+  } else if (info.slug === "growth") {
+    addPlant(IX + 26, 1);
+    c.addChild(P.wallArt(660, top + 30, 34, 26));
+    c.addChild(P.window(870, top + 18, 110, 50, night ? 1 : 0));
+    const v = new Graphics();
+    cityView(v, 870, top + 18, 110, night, 11);
+    c.addChild(v);
+    addDesks(slots, 84);
+    // the team's whiteboard on its stand at the end of the room, clear of the desks
+    build.board = whiteboard(c, IR - 116, top + 12, y);
   } else if (info.slug === "deals") {
     addPlant(IX + 26, 0.9);
     c.addChild(P.wallArt(620, top + 34, 34, 24));
@@ -188,4 +207,43 @@ export function buildFloor(info: FloorInfo, night: boolean): FloorBuild {
   build.tint.rect(IX, top, IW, h).fill({ color: 0xf08a24, alpha: 1 });
   build.tint.alpha = 0;
   return build;
+}
+
+// A whiteboard on a stand at the end of the Growth floor, with the company's numbers in marker.
+function whiteboard(c: Container, x: number, top: number, floor: number): Whiteboard {
+  const w = 106;
+  const h = 84;
+  const g = new Graphics();
+  // legs and a marker tray
+  g.rect(x + 12, top + h, 4, floor - top - h).fill(0x6f737a);
+  g.rect(x + w - 16, top + h, 4, floor - top - h).fill(0x6f737a);
+  g.rect(x + 6, floor - 3, 16, 3).fill(0x5f636a);
+  g.rect(x + w - 22, floor - 3, 16, 3).fill(0x5f636a);
+  g.rect(x - 3, top - 3, w + 6, h + 6).fill(0x8c8f96);
+  g.rect(x, top, w, h).fill(0xf4f6f2);
+  g.rect(x, top + h - 3, w, 3).fill(0xdfe3dd);
+  g.rect(x + 8, top + h + 3, w - 16, 3).fill(0x8c8f96);
+  g.rect(x + 14, top + h + 1, 9, 3).fill(0x3a86c8);
+  g.rect(x + 26, top + h + 1, 9, 3).fill(0xc94f7c);
+  c.addChild(g);
+  const text = new Container();
+  text.position.set(x + 7, top + 16);
+  c.addChild(text);
+  const title = label("THIS WEEK", { fontSize: 10, fill: 0x2a9d8f, weight: "700", spacing: 1 });
+  title.position.set(x + 7, top + 3);
+  c.addChild(title);
+  let last = "";
+  return {
+    set(lines: string[]) {
+      const key = lines.join("|");
+      if (key === last) return;
+      last = key;
+      text.removeChildren();
+      lines.slice(0, 6).forEach((line, i) => {
+        const t = label(line, { fontSize: 10, fill: i % 2 ? 0x3a86c8 : 0x2b2f3a, family: "panel", weight: "600" });
+        t.position.set(0, i * 11);
+        text.addChild(t);
+      });
+    },
+  };
 }

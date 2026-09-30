@@ -56,6 +56,8 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 - The webhook registers itself on the next heartbeat (no step for you). From then on: the morning brief at 08:00 Dubai, approvals with Approve and Reject buttons, Warden's replies to your ideas.
 - Commands: /status, /brief, /pause <floor>, /resume <floor>, /cap, /run, /reply <company>: <their text> (forward a reply by hand), /send <company>: <your text> (write to a lead yourself, it goes out at once and replaces the drafted answer). Any other text is an idea.
 - Approval messages show the email or the post itself, so you can decide from the phone.
+- DocLedger customers (D065): /trial <company> when a company starts its free month (Success takes over), /won <company> <USD a month> when it pays (revenue and monthly revenue update), /lost <company> to close one.
+- Partner offer: the Partners worker promises "a share of the monthly fee, agreed on a call" with no number. When you decide the share, tell Claude and it goes into config/docledger.ts (PARTNER_OFFER).
 - Works in simulation too, so you can try the bot before pasting the Anthropic key. Simulated approvals never ring the phone, only real ones.
 
 ### 5. DocLedger repo and token
@@ -79,6 +81,12 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 - resend.com, add and verify your sending domain, then API Keys, Create. Paste under "Resend API key". Paste the from address (on that domain) under "Sending address".
 - Approved outreach emails are sent by the next heartbeat. Nothing goes out without your Approve.
 - Replies, two ways: (a) Resend Receiving: add the MX record for a subdomain, create a webhook for email.received pointing at https://the-tower-saxqb777s-projects.vercel.app/api/email/inbound, paste the signing secret under "Resend webhook secret". (b) Forward by hand on Telegram: /reply Gulf Crescent Freight: their text. Chaser picks it up either way.
+
+### 7b. Company website on docledger.site (D067)
+- Nothing for you to do. The Tower's deployment serves the DocLedger home page on https://docledger.site (and www redirects there). Only the home page and the per company previews live on that domain; the game stays on the Tower address.
+- DNS at Spaceship: an A record for @ and a CNAME for www pointing at Vercel, added next to the six email records, which stay as they are.
+- The page words come from config/docledger.ts until the Marketer's first pack arrives, then from his web page words. The booking button uses your calendar link.
+- Once the domain answers, preview links in emails move from the vercel.app address to docledger.site (settings.docledger_site_url).
 
 ### 8. DocLedger price and signature block
 - The product story, the email rules and the reply walkthrough are in the repo (config/docledger.ts) from your brief of 30 September. Writer and Chaser quote them.

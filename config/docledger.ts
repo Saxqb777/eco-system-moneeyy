@@ -53,6 +53,11 @@ Worth fifteen minutes to show you?
 } as const;
 
 // One block for system prompts.
+// What Partners offers a firm that refers clients. No number here on purpose: the founder sets the share on the call.
+// Change this line when he decides the terms.
+export const PARTNER_OFFER =
+  "Doc Ledger rewards partners who refer clients with a share of the monthly fee for every client they bring, and their clients get the first month free. The exact share is agreed with the founder on a short call.";
+
 export function docledgerKnowledge(): string {
   return [
     `Product: ${DOCLEDGER.paragraph}`,

@@ -15,6 +15,8 @@ const shots = [
   { name: "panel-brief", width: 1600, height: 900, panel: "warden:brief" },
   { name: "game-phone", width: 430, height: 900 },
   { name: "panel-phone", width: 430, height: 900, panel: "warden:approvals", clip: true },
+  { name: "panel-company", width: 1600, height: 900, panel: "warden:company" },
+  { name: "panel-company-phone", width: 430, height: 900, panel: "warden:company", clip: true },
   { name: "panel-mailbox", width: 1600, height: 900, panel: "warden:mailbox" },
   { name: "panel-mailbox-thread", width: 1600, height: 900, panel: "warden:mailbox", click: ".thread-row.hot" },
   { name: "panel-mailbox-phone", width: 430, height: 900, panel: "warden:mailbox", click: ".thread-row.hot" },

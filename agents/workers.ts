@@ -4,12 +4,35 @@ import type { Db } from "@/db/client";
 import { agentRuns, agents, budgetLedger, floors, taskEvents, tasks } from "@/db/schema";
 import { getSpendSummary } from "@/lib/budget";
 import { asNumber, getSettings } from "@/lib/settings";
-import { getClient, type ModelCall } from "./client";
+import { callModel, getClient, type ModelCall } from "./client";
 import { submitBatch, type BatchItem, type CollectedResult } from "./batches";
 import { playbookFor } from "./playbooks";
 
 const EST_TASK_USD = 0.03;
 const MAX_PER_BATCH = 20;
+// Express mode: while settings.express_until is in the future, a tick runs up to this many tasks directly
+// (full price, results in minutes) instead of a batch (half price, results in about an hour). Used for a
+// verification run; everything else stays on batches.
+export const EXPRESS_PER_TICK = 5;
+const EXPRESS_STUCK_MS = 12 * 60 * 1000;
+
+export function expressActive(settingsMap: Record<string, unknown>, now: Date): boolean {
+  const v = settingsMap.express_until;
+  return typeof v === "string" && Date.parse(v) > now.getTime();
+}
+
+// A tick that died mid express run leaves tasks running with no batch to collect: put them back in the queue.
+export async function requeueStuckExpress(db: Db, now: Date): Promise<number> {
+  const stuck = await db.select().from(tasks).where(and(eq(tasks.status, "running"), eq(tasks.batchId, "express"), eq(tasks.simulated, false)));
+  let n = 0;
+  for (const t of stuck) {
+    if (!t.startedAt || now.getTime() - t.startedAt.getTime() < EXPRESS_STUCK_MS) continue;
+    await db.update(tasks).set({ status: t.attempts < 2 ? "queued" : "failed", blockedReason: t.attempts < 2 ? null : "Express run timed out twice", batchId: null, updatedAt: now }).where(eq(tasks.id, t.id));
+    if (t.agentId) await db.update(agents).set({ status: "idle", currentTaskId: null, updatedAt: now }).where(and(eq(agents.id, t.agentId), eq(agents.currentTaskId, t.id)));
+    n += 1;
+  }
+  return n;
+}
 
 async function logEvent(db: Db, e: { taskId?: string | null; agentId?: string | null; floorId?: string | null; type: string; message: string; data?: unknown; at: Date }) {
   await db.insert(taskEvents).values({ taskId: e.taskId ?? null, agentId: e.agentId ?? null, floorId: e.floorId ?? null, type: e.type, message: e.message, data: e.data ?? null, createdAt: e.at });
@@ -35,11 +58,14 @@ export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ sta
     .orderBy(asc(tasks.priority), asc(tasks.createdAt))
     .limit(60);
 
+  const express = expressActive(settingsMap, now);
+  if (express) await requeueStuckExpress(db, now);
+  const limit = express ? EXPRESS_PER_TICK : MAX_PER_BATCH;
   const items: BatchItem[] = [];
   let budgetLeft = cap - spend.todayUsd;
   const floorSpend = { ...spend.todayByFloor };
   for (const t of queued) {
-    if (items.length >= MAX_PER_BATCH) break;
+    if (items.length >= limit) break;
     const floor = t.floorId ? floorById.get(t.floorId) : undefined;
     const agent = t.agentId ? agentById.get(t.agentId) : undefined;
     if (!floor || !agent) {
@@ -88,15 +114,31 @@ export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ sta
   }
   if (!items.length) return { ...out, status: out.held.length ? "held" : "idle", reason: out.held.length ? `floors near their share of the cap: ${out.held.join(", ")}` : "nothing queued" };
 
-  const submitted = await submitBatch(db, items, now);
+  const submitted = express ? { batchId: "express" } : await submitBatch(db, items, now);
   for (const item of items) {
     const taskId = item.customId.slice("task_".length);
     const t = queued.find((x) => x.id === taskId)!;
     await db.update(tasks).set({ status: "running", startedAt: now, batchId: submitted?.batchId ?? null, batchCustomId: item.customId, attempts: t.attempts + 1, updatedAt: now }).where(eq(tasks.id, taskId));
     await db.update(agents).set({ status: "working", currentTaskId: taskId, updatedAt: now }).where(eq(agents.id, t.agentId!));
-    await logEvent(db, { taskId, agentId: t.agentId, floorId: t.floorId, type: "started", message: `${agentById.get(t.agentId!)?.name ?? "Worker"} started: ${t.title}`, at: now });
+    await logEvent(db, { taskId, agentId: t.agentId, floorId: t.floorId, type: "started", message: `${agentById.get(t.agentId!)?.name ?? "Worker"} started: ${t.title}${express ? " (express)" : ""}`, at: now });
   }
   out.submitted = items.length;
+  if (express) {
+    // Run them side by side and absorb each result straight away, exactly as a batch result would be.
+    await Promise.all(
+      items.map(async (item) => {
+        let r: CollectedResult;
+        try {
+          const res = await callModel(db, { ...item.call, customId: item.customId }, now);
+          r = { customId: item.customId, ok: res.stopReason !== "max_tokens" || res.json !== null, text: res.text, json: res.json, costUsd: res.costUsd, runId: res.runId, error: res.stopReason === "max_tokens" && res.json === null ? "the answer was cut off (max tokens)" : null };
+        } catch (err) {
+          r = { customId: item.customId, ok: false, text: "", json: null, costUsd: 0, runId: null, error: err instanceof Error ? err.message : String(err) };
+        }
+        await handleTaskBatchResult(db, r, new Date());
+      }),
+    );
+    out.status = "express";
+  }
   return out;
 }
 

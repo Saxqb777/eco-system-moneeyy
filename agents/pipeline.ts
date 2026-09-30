@@ -30,11 +30,11 @@ async function queueTask(db: Db, floorId: string, agentId: string, kind: string,
   await logEvent(db, { taskId: row?.id, agentId, floorId, type: "created", message: `${title} queued`, at: now });
 }
 
-async function hasOpenTaskFor(db: Db, kind: string, field: string, value: string): Promise<boolean> {
+async function hasOpenTaskFor(db: Db, kind: string, field: string, value: string, statuses = ["queued", "running", "review"]): Promise<boolean> {
   const [r] = await db
     .select({ n: sql<string>`count(*)` })
     .from(tasks)
-    .where(and(eq(tasks.kind, kind), eq(tasks.simulated, false), inArray(tasks.status, ["queued", "running", "review"]), sql`${tasks.input} ->> ${field} = ${value}`));
+    .where(and(eq(tasks.kind, kind), eq(tasks.simulated, false), inArray(tasks.status, statuses), sql`${tasks.input} ->> ${field} = ${value}`));
   return Number(r?.n ?? 0) > 0;
 }
 
@@ -65,6 +65,14 @@ async function advanceDocLedger(db: Db, now: Date, created: Record<string, numbe
     for (const lead of fresh) {
       if (await hasOpenTaskFor(db, "qualify_lead", "leadId", lead.id)) continue;
       await queueTask(db, floor.id, analyst.id, "qualify_lead", `Qualify ${lead.company}`, { leadId: lead.id }, 5, now);
+      created.qualify_lead = (created.qualify_lead ?? 0) + 1;
+    }
+    // A good fit with no email found gets one second look, with the website and contact page this time.
+    const noContact = await db.select().from(leads).where(and(eq(leads.simulated, false), eq(leads.status, "no_contact"), sql`coalesce(${leads.decisionMaker} ->> 'retried', '') <> 'true'`)).orderBy(desc(leads.score)).limit(3);
+    for (const lead of noContact) {
+      // The first look may still sit in review; only a look that is still running blocks the second one.
+      if (await hasOpenTaskFor(db, "qualify_lead", "leadId", lead.id, ["queued", "running"])) continue;
+      await queueTask(db, floor.id, analyst.id, "qualify_lead", `Find an email at ${lead.company}`, { leadId: lead.id, retry: true }, 5, now);
       created.qualify_lead = (created.qualify_lead ?? 0) + 1;
     }
   }

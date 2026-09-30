@@ -55,7 +55,7 @@ export async function runWarden(db: Db, opts: { mode: "sync" | "batch"; trigger:
     system: WARDEN_SYSTEM,
     messages: [{ role: "user", content: `Snapshot for this run:\n${JSON.stringify(snapshot)}\n\nDecide and return the JSON object.` }],
     schema: WARDEN_SCHEMA,
-    maxTokens: 3000,
+    maxTokens: 8000, // 3000 cut the answer off once Warden also steered growth and sales (2026-09-30)
     customId: `warden_${runId}`,
   };
 

@@ -27,11 +27,17 @@ export const BATCH_MULTIPLIER = 0.5;
 // Server side web search: 10 USD per 1,000 searches.
 export const WEB_SEARCH_USD = 0.01;
 
-export const EFFORT: Record<AgentModelKey, "low" | "medium" | "high"> = {
+export type Effort = "low" | "medium" | "high";
+
+export const EFFORT: Record<AgentModelKey, Effort> = {
   warden: "medium",
   worker: "low",
   builder: "medium",
 };
+
+// Research playbooks (Scouts, Analyst, share spots) think a little more: at low effort they often answered
+// without a single web search (2026-09-30 clean run). Writing stays at the worker default.
+export const RESEARCH_EFFORT: Effort = "medium";
 
 // Prompt caching per agent kind. Warden's scheduled runs are 4 hours apart, so the
 // 5 minute cache expires between them and the write would only cost more (decision D008, question 6).

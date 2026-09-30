@@ -124,6 +124,7 @@ export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ sta
       maxTokens: playbook.maxTokens,
       webSearchMaxUses: prepared.webSearchMaxUses ?? playbook.webSearchMaxUses,
       webFetchMaxUses: prepared.webFetchMaxUses ?? playbook.webFetchMaxUses,
+      effort: playbook.effort,
     };
     items.push({ customId: `task_${t.id}`, call });
     if (goesDirect) direct.add(`task_${t.id}`);

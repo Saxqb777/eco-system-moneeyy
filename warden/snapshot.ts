@@ -38,6 +38,7 @@ export interface Snapshot {
   toReview: Array<{ taskId: string; agent: string; kind: string; title: string; output: string }>;
   pendingApprovals: Array<{ type: string; summary: string }>;
   clipboardMissing: string[];
+  clipboardPresent: string[];
   newIdeas: Array<{ ideaId: string; text: string }>;
   lastRuns: string[];
 }
@@ -159,6 +160,8 @@ export async function buildSnapshot(db: Db, now = new Date()): Promise<Snapshot>
     toReview: reviewRows.map((t) => ({ taskId: t.id, agent: (t.agentId && agentById.get(t.agentId)?.slug) || "unassigned", kind: t.kind, title: t.title, output: clip(JSON.stringify(t.output ?? {}), 600) })),
     pendingApprovals: pending.map((a) => ({ type: a.type, summary: clip(a.summary, 120) })),
     clipboardMissing: setupRows.filter((r) => r.status !== "present").map((r) => r.label),
+    // Already pasted: never ask for these again (Warden once asked for an Amazon tag that was there).
+    clipboardPresent: setupRows.filter((r) => r.status === "present").map((r) => r.label),
     newIdeas: newIdeas.map((i) => ({ ideaId: i.id, text: clip(i.text, 240) })),
     lastRuns: runs.map((r) => clip(r.summary ?? "", 160)).filter(Boolean),
   };

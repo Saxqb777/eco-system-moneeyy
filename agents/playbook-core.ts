@@ -1,6 +1,7 @@
 // Shared shapes and helpers for every worker playbook. Kept apart so floors can import it without cycles.
 import type { Db } from "@/db/client";
 import { taskEvents, tasks } from "@/db/schema";
+import type { Effort } from "@/config/models";
 
 export type TaskRow = typeof tasks.$inferSelect;
 
@@ -30,6 +31,8 @@ export interface Playbook {
   maxTokens: number;
   webSearchMaxUses: number;
   webFetchMaxUses?: number;
+  // Research playbooks set RESEARCH_EFFORT; the rest use the worker default.
+  effort?: Effort;
   prepare(task: TaskRow, ctx: PlaybookContext): Promise<Prepared | { skip: string }>;
   absorb(task: TaskRow, output: Record<string, unknown>, ctx: PlaybookContext): Promise<Absorbed>;
 }

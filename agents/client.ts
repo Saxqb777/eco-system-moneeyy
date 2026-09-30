@@ -3,7 +3,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Message, MessageCreateParamsNonStreaming, MessageParam } from "@anthropic-ai/sdk/resources/messages/messages";
 import { eq } from "drizzle-orm";
-import { CACHE_SYSTEM_PROMPT, EFFORT, resolveModel, type AgentModelKey } from "@/config/models";
+import { CACHE_SYSTEM_PROMPT, EFFORT, resolveModel, type AgentModelKey, type Effort } from "@/config/models";
 import type { Db } from "@/db/client";
 import { agentRuns, budgetLedger, setupItems } from "@/db/schema";
 import { decryptSecret } from "@/lib/crypto";
@@ -22,6 +22,8 @@ export interface ModelCall {
   webSearchMaxUses?: number;
   webFetchMaxUses?: number;
   customId?: string;
+  // Overrides the agent kind's default effort (research playbooks use RESEARCH_EFFORT).
+  effort?: Effort;
 }
 
 export interface ModelResult {
@@ -93,7 +95,7 @@ export function buildParams(call: ModelCall, model: string): MessageCreateParams
     max_tokens: call.maxTokens ?? 2048,
     system: [{ type: "text", text: call.system, ...(cache ? { cache_control: { type: "ephemeral" } } : {}) }],
     messages: call.messages,
-    output_config: { effort: EFFORT[call.agentKey], ...(call.schema ? { format: { type: "json_schema", schema: call.schema } } : {}) },
+    output_config: { effort: call.effort ?? EFFORT[call.agentKey], ...(call.schema ? { format: { type: "json_schema", schema: call.schema } } : {}) },
   };
   const tools: NonNullable<MessageCreateParamsNonStreaming["tools"]> = [];
   if (call.webSearchMaxUses && call.webSearchMaxUses > 0) tools.push({ type: "web_search_20260318", name: "web_search", max_uses: call.webSearchMaxUses });

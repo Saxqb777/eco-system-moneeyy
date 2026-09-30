@@ -14,6 +14,7 @@ import { channelChatId, enqueueMessage } from "@/lib/telegram";
 import { dubaiDayStartUtc, dubaiParts } from "@/lib/time";
 import { STYLE, input, logEvent, str, type Playbook } from "./playbook-core";
 import { plainDashes } from "@/lib/text";
+import { RESEARCH_EFFORT } from "@/config/models";
 
 export type EngagementType = "teaser" | "recap" | "poll" | "quiz" | "share_ask" | "milestone";
 
@@ -256,8 +257,8 @@ ${STYLE}`,
     } else {
       if (!text) return { summary: "Empty draft, nothing posted" };
       if (type === "recap") text = `${text}\n${base()}/deals`;
-      if (type === "share_ask" && link) text = `${text}\n${link}`;
-      if (type === "milestone" && link) text = `${text}\n${link}`;
+      // The channel link goes on once: the writer sometimes puts it in the text already.
+      if ((type === "share_ask" || type === "milestone") && link && !text.includes(link)) text = `${text}\n${link}`;
     }
     if (type === "teaser") {
       const [first] = await ctx.db.select({ at: posts.scheduledAt }).from(posts).where(and(eq(posts.simulated, false), eq(posts.kind, "deal"), inArray(posts.status, ["draft", "approved"]), gte(posts.scheduledAt, ctx.now))).orderBy(posts.scheduledAt).limit(1);
@@ -320,6 +321,7 @@ export async function planShareSpots(db: Db, now: Date, floor: typeof floors.$in
 
 export const findShareSpots: Playbook = {
   kind: "find_share_spots",
+  effort: RESEARCH_EFFORT,
   webSearchMaxUses: 6,
   webFetchMaxUses: 4,
   maxTokens: 5000,
@@ -359,7 +361,7 @@ ${STYLE}`,
     const known = (Array.isArray(s.share_spots) ? (s.share_spots as ShareSpot[]) : []).map((x) => x.url);
     const channel = channelChatId(await clipboardValue(ctx.db, "deals_channel"));
     const members = channelHealthFrom(s, dubaiParts(ctx.now).dayKey).members;
-    return { user: `${focus ? `Focus from Warden: ${focus}\n` : ""}Our channel: ${channel ? `https://t.me/${channel.replace(/^@/, "")}` : "not set"}\nMembers now: ${members ?? "unknown"}\nDeals page: ${base()}/deals\nAlready known (skip): ${known.slice(0, 40).join(" ") || "nothing yet"}\n\nFind places to share the channel and return the JSON object.` };
+    return { user: `${focus ? `Focus from Warden: ${focus}\n` : ""}Our channel: ${channel ? `https://t.me/${channel.replace(/^@/, "")}` : "not set"}\nMembers now: ${members ?? "unknown"}\nDeals page: ${base()}/deals\nAlready known (skip): ${known.slice(0, 40).join(" ") || "nothing yet"}\n\nSearch the web before you answer. An answer without a search is not accepted. Start with searches such as: UAE deals Telegram channel, r/dubai self promotion rules, tgstat UAE shopping channels, UAE deals Facebook group. Read each place's own rules page. Find places to share the channel and return the JSON object.` };
   },
   async absorb(_task, output, ctx) {
     const rows = Array.isArray(output.spots) ? output.spots : [];

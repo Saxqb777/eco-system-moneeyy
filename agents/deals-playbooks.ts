@@ -9,6 +9,7 @@ import { clipboardValue } from "@/lib/clipboard";
 import { findShareSpots, writeEngagement } from "./deals-engagement";
 import { STYLE, input, logEvent, num, str, type Playbook } from "./playbook-core";
 import { plainDashes } from "@/lib/text";
+import { RESEARCH_EFFORT } from "@/config/models";
 
 const STORE_LABEL: Record<string, string> = { amazon_ae: "Amazon.ae", noon: "Noon", sharaf_dg: "Sharaf DG", carrefour: "Carrefour", talabat: "Talabat" };
 const STORE_HOSTS: Record<string, string> = { amazon_ae: "amazon.ae", noon: "noon.com", sharaf_dg: "sharafdg.com", carrefour: "carrefouruae.com", talabat: "talabat.com" };
@@ -54,6 +55,7 @@ export function parseSourceDate(s: string): Date | null {
 
 const findDeals: Playbook = {
   kind: "find_deals",
+  effort: RESEARCH_EFFORT,
   webSearchMaxUses: 6,
   webFetchMaxUses: 8,
   maxTokens: 6000,
@@ -96,7 +98,7 @@ ${STYLE}`,
   async prepare(task, ctx) {
     const recent = await ctx.db.select({ title: deals.title }).from(deals).where(eq(deals.simulated, false)).orderBy(desc(deals.createdAt)).limit(120);
     const focus = str(input(task).instructions) || "Search for today's Amazon.ae deals first, then Noon.";
-    return { user: `Focus from Warden: ${focus}\nToday: ${ctx.now.toISOString().slice(0, 10)}\nKnown already (skip): ${recent.map((r) => r.title).join("; ") || "nothing yet"}\n\nFind today's deals and return the JSON object.` };
+    return { user: `Focus from Warden: ${focus}\nToday: ${ctx.now.toISOString().slice(0, 10)}\nKnown already (skip): ${recent.map((r) => r.title).join("; ") || "nothing yet"}\n\nUse several searches (for example: Amazon.ae deals today, noon deals UAE today, UAE deals of the day roundup) and open the roundup and store pages they return before you decide. One search is not enough. Find today's deals and return the JSON object.` };
   },
   async absorb(task, output, ctx) {
     const rows = Array.isArray(output.deals) ? output.deals : [];

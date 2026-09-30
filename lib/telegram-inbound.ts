@@ -84,8 +84,12 @@ export async function processTelegramUpdate(db: Db, u: TelegramUpdate, now = new
       await sendNow(cfg.token, chatId, "Paired. This chat now gets the morning brief, approvals and Warden's replies.\n\n" + HELP);
       return { handled: "paired" };
     }
+    if (/^\/pair/i.test(text)) {
+      await sendNow(cfg.token, chatId, `Almost. The pair line needs the six character code from the game: open Warden, Setup tab, "Your Telegram chat id", and send the whole line shown there, like /pair a1b2c3.\nOr paste this number into that box instead: ${chatId}`);
+      return { handled: "pair without a valid code" };
+    }
     if (text.startsWith("/start")) {
-      await sendNow(cfg.token, chatId, "Hello. To pair this chat with The Tower, open the game, Warden, Setup tab, and send the /pair line shown there.");
+      await sendNow(cfg.token, chatId, `Hello. To pair this chat with The Tower: open the game, Warden, Setup tab, "Your Telegram chat id", and send the /pair line shown there. Or paste this number into that box: ${chatId}`);
       return { handled: "start before pairing" };
     }
     return { handled: "message before pairing, ignored" };

@@ -1,6 +1,6 @@
-import { and, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, like, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
-import { budgetLedger, floors, revenue } from "@/db/schema";
+import { budgetLedger, floors, revenue, taskEvents } from "@/db/schema";
 import { dubaiDayStartUtc } from "@/lib/time";
 import { asNumber, getSettings } from "@/lib/settings";
 
@@ -52,7 +52,11 @@ export interface GuardResult {
   capHit: boolean;
   throttledFloors: string[];
   pausedFloors: string[];
+  resumedFloors: string[];
 }
+
+// The reason a cap pause carries: the guard lifts only pauses with this reason, never one the owner made.
+export const CAP_PAUSE_PREFIX = "Daily cap of";
 
 // The share of the daily cap one business floor may use alone (D065): settings.floor_share per slug, 40 percent otherwise.
 export function floorShare(settingsMap: Record<string, unknown>, slug: string): number {
@@ -80,17 +84,27 @@ export async function guardSpend(db: Db, now = new Date()): Promise<GuardResult>
   }
 
   const capHit = summary.todayUsd >= capUsd;
+  const resumed: string[] = [];
   if (capHit) {
     for (const f of liveFloors) {
       if (!f.isBusiness) continue;
       paused.push(f.slug);
       await db
         .update(floors)
-        .set({ status: "paused", pausedReason: `Daily cap of ${capUsd.toFixed(2)} USD reached`, updatedAt: now })
+        .set({ status: "paused", pausedReason: `${CAP_PAUSE_PREFIX} ${capUsd.toFixed(2)} USD reached`, updatedAt: now })
         .where(eq(floors.id, f.id));
     }
+  } else {
+    // A cap pause lifts itself once spend is under the cap again: a new Dubai day or a raised cap.
+    // A floor the owner paused keeps its own reason and stays paused.
+    const capPaused = await db.select().from(floors).where(and(eq(floors.status, "paused"), like(floors.pausedReason, `${CAP_PAUSE_PREFIX}%`)));
+    for (const f of capPaused) {
+      resumed.push(f.slug);
+      await db.update(floors).set({ status: "live", pausedReason: null, updatedAt: now }).where(eq(floors.id, f.id));
+      await db.insert(taskEvents).values({ floorId: f.id, type: "log", message: `${f.name} is back at work: spend is under the daily cap`, createdAt: now });
+    }
   }
-  return { capUsd, todayUsd: summary.todayUsd, capHit, throttledFloors: throttled, pausedFloors: paused };
+  return { capUsd, todayUsd: summary.todayUsd, capHit, throttledFloors: throttled, pausedFloors: paused, resumedFloors: resumed };
 }
 
 // Budget level review, every 7 days from launch (question 16). Verified revenue only, real rows only.

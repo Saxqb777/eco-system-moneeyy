@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { WardenSummary } from "@/lib/detail";
+import { runReport, type TickSteps } from "@/lib/run-summary";
 import { APPROVAL_TYPES, Empty, Key, Pill, Sheet, post, since, usd, usePoll, when } from "./shared";
 
 interface ApprovalRow {
@@ -477,37 +478,6 @@ function CeilingRaise({ current, onChanged }: { current: number; onChanged?: () 
   );
 }
 
-type TickSteps = {
-  collect?: { collected?: number };
-  advance?: { created?: Record<string, number>; executed?: number };
-  submit?: { submitted?: number; direct?: number };
-  deliver?: { sent?: number };
-  warden?: { status?: string; reason?: string; summary?: string };
-};
-
-// What the whole run did, in one line: the floors always move, even when Warden rests.
-export function runSummary(steps: TickSteps | undefined): string {
-  if (!steps) return "Done";
-  const parts: string[] = [];
-  const created = Object.values(steps.advance?.created ?? {}).reduce((a, b) => a + b, 0);
-  if (steps.collect?.collected) parts.push(`${steps.collect.collected} results came back`);
-  if (created) parts.push(`${created} new tasks`);
-  const worked = steps.submit?.submitted ?? 0;
-  const done = steps.submit?.direct ?? 0;
-  if (worked) parts.push(done ? `${worked} tasks worked, ${done} finished already` : `${worked} tasks sent to work`);
-  if (steps.advance?.executed) parts.push(`${steps.advance.executed} approved items carried out`);
-  if (steps.deliver?.sent) parts.push(`${steps.deliver.sent} messages sent to your phone`);
-  const floors = parts.length ? `Floors: ${parts.join(", ")}.` : "Floors checked: nothing waiting.";
-  const w = steps.warden;
-  let warden = "";
-  if (w?.status === "applied") warden = ` Warden: ${w.summary ?? "decisions applied"}`;
-  else if (w?.status === "simulated") warden = " Warden: simulation is on, paste the Anthropic key and switch it off for a real run.";
-  else if (w?.status === "skipped" && /already happened this hour/.test(w.reason ?? "")) warden = " Warden already thought in the last hour, so he rests until then.";
-  else if (w?.status === "failed") warden = ` Warden failed: ${w.reason ?? "unknown"}`;
-  else if (w?.status) warden = ` Warden: ${w.status}${w.reason ? `, ${w.reason}` : ""}`;
-  return floors + warden;
-}
-
 // Run the Tower now: the whole heartbeat on demand, plus an instant Warden run (one an hour).
 export function WardenControls({ warden }: { warden: WardenSummary | null }) {
   const [busy, setBusy] = useState(false);
@@ -517,12 +487,18 @@ export function WardenControls({ warden }: { warden: WardenSummary | null }) {
     if (busy) return;
     setBusy(true);
     setNote("The Tower is working the floors");
+    window.dispatchEvent(new CustomEvent("tower:run-start"));
     const res = await post("/api/tick?trigger=manual", {});
     setBusy(false);
     const r = res as { skipped?: string; steps?: TickSteps };
     if (!res.ok) setNote(res.error ?? "The run failed");
     else if (r.skipped === "busy") setNote("The Tower is already working. Try again in a minute.");
-    else setNote(runSummary(r.steps));
+    else {
+      const report = runReport(r.steps);
+      setNote(report.lines.join(" "));
+      // the game plays the run: bell, Warden in the lift, lights, the roof banner
+      window.dispatchEvent(new CustomEvent("tower:run", { detail: report }));
+    }
   }
   return (
     <div className="actions" style={{ marginTop: 0 }}>

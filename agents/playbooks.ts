@@ -254,7 +254,7 @@ ${STYLE}`,
     const points = Array.isArray(previewRaw.points) ? previewRaw.points.filter((x): x is string => typeof x === "string" && x.trim().length > 0).slice(0, 4) : [];
     const sampleFields = Array.isArray(previewRaw.sampleFields) ? previewRaw.sampleFields.filter((f): f is { field: string; value: string } => !!f && typeof f === "object" && typeof (f as { field?: unknown }).field === "string" && typeof (f as { value?: unknown }).value === "string").slice(0, 8) : [];
     const preview = str(previewRaw.headline, 120) && points.length >= 2 ? { headline: plainDashes(str(previewRaw.headline, 120)), intro: plainDashes(str(previewRaw.intro, 400)), points: points.map(plainDashes), sampleDocument: str(previewRaw.sampleDocument, 120) || "Shipping line bill", sampleFields } : null;
-    // docledger.site once it is live (D067), the Tower's address until then.
+    // The demo set up for them once it is live (D070), the Tower's own preview page until then.
     const previewCode = preview ? (lead.previewCode ?? shortCode()) : null;
     const previewUrl = previewCode ? await previewLink(ctx.db, previewCode) : null;
     let body = plainDashes(str(output.body, 4000));

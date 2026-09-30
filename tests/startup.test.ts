@@ -15,7 +15,7 @@ import { encryptSecret } from "@/lib/crypto";
 import { getSettings, setSetting } from "@/lib/settings";
 import { setTelegramApi } from "@/lib/telegram";
 import { processTelegramUpdate } from "@/lib/telegram-inbound";
-import { previewLink, siteLine, siteRoute } from "@/lib/site";
+import { previewLink, siteLine } from "@/lib/site";
 import { publicPreview } from "@/lib/public-preview";
 import { fakeAnthropic, fakeTelegram, testSecretsKey } from "./helpers/fakes";
 import { makeTestDb } from "./helpers/pglite";
@@ -222,13 +222,7 @@ describe("The DocLedger Growth floor", () => {
     expect(formatBrief(brief)).toContain("Stand up, the last 24 hours:");
   });
 
-  it("serves docledger.site as the company's own page, with previews, and never the Tower", async () => {
-    expect(siteRoute("docledger.site", "/")).toEqual({ action: "rewrite", to: "/docledger" });
-    expect(siteRoute("docledger.site", "/for/abc123")).toEqual({ action: "next" });
-    expect(siteRoute("docledger.site", "/api/state")).toEqual({ action: "redirect", to: "https://docledger.site/" });
-    expect(siteRoute("DocLedger.site:443", "/login")).toEqual({ action: "redirect", to: "https://docledger.site/" });
-    expect(siteRoute("www.docledger.site", "/for/abc123")).toEqual({ action: "redirect", to: "https://docledger.site/for/abc123" });
-    expect(siteRoute("the-tower-saxqb777s-projects.vercel.app", "/")).toEqual({ action: "tower" });
+  it("links emails to the demo once it is live, never to docledger.site", async () => {
     // Email links open the Tower's preview until the demo is switched on, then the demo set up for them (D070).
     expect(await previewLink(db, "abc123")).toMatch(/vercel\.app\/for\/abc123$/);
     await setSetting(db, "docledger_demo_url", "https://demo.docledger.site/");

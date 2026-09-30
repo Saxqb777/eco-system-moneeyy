@@ -22,6 +22,8 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 | 9 | Affiliate IDs: Amazon.ae tag, Noon, others | Deals Engine earning (posts run without them, links stay plain) | Done for Amazon | Amazon.ae tag themarketde0c-21 saved 2026-09-30 (right account). Noon and others optional |
 | 10 | Telegram deals channel handle, bot added as admin | Publisher posting to the channel | Done | t.me/Themarketdeals works since pull request 7. Bot @Thedealsmarketbot added as channel admin by Saaqib 2026-09-30 (it was missing before). Not verifiable from here: the first approved post proves Post Messages works |
 | 11 | Consulting site URL | Ground floor (locked until unlock rule is met) | Later | missing |
+| 12 | X account keys (optional) | Deal posts also go to X for reach | When you want it | missing: developer.x.com app with Read and write, paste API Key, API Key Secret, Access Token, Access Token Secret separated by spaces in the box "X account for deal posts" |
+| 13 | Facebook Page id and token (optional) | Deal posts also go to your Facebook Page | When you want it | missing: a Page for the deals, a Meta app with pages_manage_posts, a Page token that does not expire; paste the Page ID and the token separated by a space |
 
 ## Steps per item
 

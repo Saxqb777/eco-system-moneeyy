@@ -168,7 +168,10 @@ export async function editMessage(token: string, chatId: string, messageId: numb
   }
 }
 
-// Registers the webhook once per token and URL. Telegram then posts updates with the secret header.
+// my_chat_member tells us when the owner adds the bot to a channel or group (bot rights, share chats).
+const WEBHOOK_UPDATES = ["message", "callback_query", "my_chat_member"];
+
+// Registers the webhook once per token, URL and update list. Telegram then posts updates with the secret header.
 export async function ensureWebhook(db: Db): Promise<{ status: string; reason?: string }> {
   const cfg = await getTelegramConfig(db);
   if (!cfg) return { status: "skipped", reason: "no bot token" };
@@ -177,14 +180,15 @@ export async function ensureWebhook(db: Db): Promise<{ status: string; reason?: 
   const base = (process.env.APP_URL ?? "https://the-tower-saxqb777s-projects.vercel.app").replace(/\/$/, "");
   const url = `${base}/api/telegram`;
   const s = await getSettings(db);
-  const current = s.telegram_webhook as { url?: string; token?: string } | null;
+  const current = s.telegram_webhook as { url?: string; token?: string; updates?: string } | null;
   const tokenHint = cfg.token.slice(-6);
+  const updates = WEBHOOK_UPDATES.join(",");
   let status = "ok";
-  if (current?.url !== url || current?.token !== tokenHint) {
+  if (current?.url !== url || current?.token !== tokenHint || current?.updates !== updates) {
     try {
-      const res = await api(cfg.token, "setWebhook", { url, secret_token: secret, allowed_updates: ["message", "callback_query"], drop_pending_updates: false });
+      const res = await api(cfg.token, "setWebhook", { url, secret_token: secret, allowed_updates: WEBHOOK_UPDATES, drop_pending_updates: false });
       if (!res.ok) return { status: "failed", reason: res.description ?? "setWebhook failed" };
-      await setSetting(db, "telegram_webhook", { url, token: tokenHint, at: new Date().toISOString() });
+      await setSetting(db, "telegram_webhook", { url, token: tokenHint, updates, at: new Date().toISOString() });
       status = "registered";
     } catch (err) {
       return { status: "failed", reason: err instanceof Error ? err.message : String(err) };

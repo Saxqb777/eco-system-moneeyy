@@ -243,6 +243,13 @@ textarea.field { resize: vertical; }
 .deal .key { text-decoration: none; display: inline-block; }
 .deal-meta { font-size: 11px; color: var(--muted); margin-top: 6px; }
 .deals-empty, .deals-foot { color: var(--stone); font-size: 13px; margin-top: 20px; }
+.deal h2 a { color: inherit; text-decoration: none; }
+.deal h2 a:hover { text-decoration: underline; }
+.deals-back { color: var(--brass); font-size: 13px; text-decoration: none; display: inline-block; margin-bottom: 8px; }
+.deal-single { margin-top: 20px; }
+.deals-join { margin-top: 20px; padding: 14px; border: 1px dashed var(--brass); color: var(--paper); }
+.deals-join h2 { font-family: "Barlow Condensed", sans-serif; text-transform: uppercase; letter-spacing: 0.04em; color: var(--brass); margin: 0 0 4px; font-size: 22px; }
+.deals-join p { margin: 0 0 10px; font-size: 14px; opacity: 0.85; }
 
 /* Client preview: a one page brief made for one company, same paper and brass. */
 .preview { max-width: 720px; margin: 0 auto; padding: 28px 16px 64px; font-family: "IBM Plex Sans", sans-serif; color: var(--paper); }

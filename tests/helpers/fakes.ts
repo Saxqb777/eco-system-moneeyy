@@ -1,6 +1,7 @@
 import type { Message, MessageCreateParamsNonStreaming } from "@anthropic-ai/sdk/resources/messages/messages";
 import type { AnthropicLike } from "@/agents/client";
 import type { TelegramApi } from "@/lib/telegram";
+import type { SocialRequest, SocialTransport } from "@/lib/social";
 
 let batchSeq = 0;
 
@@ -51,16 +52,36 @@ export function fakeAnthropic(answer: (params: MessageCreateParamsNonStreaming) 
   };
 }
 
-// A fake Telegram transport that records every call.
-export function fakeTelegram(): { api: TelegramApi; calls: Array<{ method: string; body: Record<string, unknown> }> } {
+// A fake Telegram transport that records every call. `state` lets a test change what the bot sees.
+export function fakeTelegram(): {
+  api: TelegramApi;
+  calls: Array<{ method: string; body: Record<string, unknown> }>;
+  state: { members: number; botStatus: string; canPost: boolean };
+} {
   const calls: Array<{ method: string; body: Record<string, unknown> }> = [];
+  const state = { members: 1234, botStatus: "administrator", canPost: true };
   let n = 100;
   const api: TelegramApi = async (_token, method, body) => {
     calls.push({ method, body });
-    if (method === "getChatMemberCount") return { ok: true, result: 1234 };
+    if (method === "getChatMemberCount") return { ok: true, result: state.members };
+    if (method === "getMe") return { ok: true, result: { id: 999, is_bot: true, username: "towerbot" } };
+    if (method === "getChatMember") return { ok: true, result: { status: state.botStatus, can_post_messages: state.canPost } };
     return { ok: true, result: { message_id: ++n } };
   };
-  return { api, calls };
+  return { api, calls, state };
+}
+
+// A fake X and Facebook transport that records every request.
+export function fakeSocial(): { transport: SocialTransport; requests: SocialRequest[] } {
+  const requests: SocialRequest[] = [];
+  let n = 500;
+  const transport: SocialTransport = async (r) => {
+    requests.push(r);
+    n += 1;
+    if (r.url.includes("api.x.com")) return { status: 201, json: { data: { id: `x${n}`, text: "" } } };
+    return { status: 200, json: { id: `fb_${n}` } };
+  };
+  return { transport, requests };
 }
 
 export function testSecretsKey(): string {

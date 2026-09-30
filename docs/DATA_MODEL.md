@@ -86,7 +86,7 @@ Postgres on Neon, managed with Drizzle. Conventions:
 | id | uuid | |
 | floor_id | uuid | |
 | agent_id | uuid | assigned worker |
-| kind | text | playbook step, for example find_leads, qualify_lead, draft_outreach, follow_up, find_deals, write_post, publish_post, build_ticket |
+| kind | text | playbook step, for example find_leads, qualify_lead, draft_outreach, follow_up, find_deals, write_post, write_engagement, find_share_spots, publish_post, build_ticket |
 | title | text | the 3 word label shown in the paper bubble |
 | description | text | |
 | status | text | queued, assigned, running, in_batch, review, done, rejected, blocked, cancelled |
@@ -313,7 +313,7 @@ Indexes on (occurred_at) and (floor_id, occurred_at). The roof counters, the pet
 |--------|------|-------|
 | id | uuid | |
 | floor_id | uuid | |
-| kind | text | deal, content |
+| kind | text | deal, teaser, recap, poll, quiz, share_ask, milestone (content later) |
 | deal_ids | uuid[] | |
 | body | text | |
 | channel | text | telegram_channel, site |
@@ -322,8 +322,9 @@ Indexes on (occurred_at) and (floor_id, occurred_at). The roof counters, the pet
 | scheduled_at | timestamptz | |
 | posted_at | timestamptz | |
 | telegram_message_id | bigint | |
-| short_code | text, unique | for /go/<code> |
+| short_code | text, unique | for /go/<code> and /deals/<code> |
 | clicks | int | cached count |
+| extra | jsonb | poll or quiz data (question, options, correct answer), crosspost results per destination, slot key (migration 0003) |
 | simulated | boolean | |
 
 ### clicks
@@ -387,7 +388,7 @@ Indexes on (occurred_at) and (floor_id, occurred_at). The roof counters, the pet
 | id | uuid | |
 | channel | text | telegram |
 | chat_id | text | |
-| kind | text | brief, approval, reply, alert, post |
+| kind | text | brief, approval, reply, alert, post, bot_chat, share_kit |
 | body | text | |
 | inline_keyboard | jsonb | |
 | related_type | text | approval, idea, post |

@@ -2,7 +2,8 @@
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { FLOOR_REQUIREMENTS } from "@/config/tower";
 import type { Db } from "@/db/client";
-import { agents, approvals, budgetLedger, floors, ideas, posts, setupItems, tasks, wardenRuns } from "@/db/schema";
+import { agents, approvals, budgetLedger, clicks, deals, floors, ideas, posts, setupItems, tasks, wardenRuns } from "@/db/schema";
+import { botChats, channelHealthFrom } from "@/lib/channel";
 import { weeklyActual } from "@/lib/detail";
 import { asNumber, getSettings } from "@/lib/settings";
 import { dubaiDayStartUtc, dubaiParts, dubaiWeekStartUtc } from "@/lib/time";
@@ -27,6 +28,7 @@ export interface Snapshot {
     autoApprove: boolean;
     postedTotal?: number;
     firstPostDay?: string | null;
+    channel?: { members: number | null; growthDay: number | null; growthWeek: number | null; botCanPost: boolean | null; engagementPostsThisWeek: number; clicksThisWeek: number; topCategories: string[]; shareChats: number; shareSpotsKnown: number };
     crew: Array<{ slug: string; name: string; role: string; status: string; task: string | null }>;
     queued: number;
     blocked: Array<{ taskId: string; agent: string; title: string; reason: string }>;
@@ -73,6 +75,18 @@ export async function buildSnapshot(db: Db, now = new Date()): Promise<Snapshot>
   const pending = await db.select({ type: approvals.type, summary: approvals.summary }).from(approvals).where(and(eq(approvals.status, "pending"), eq(approvals.simulated, false))).limit(6);
   const newIdeas = await db.select({ id: ideas.id, text: ideas.text }).from(ideas).where(eq(ideas.status, "new")).orderBy(ideas.createdAt).limit(6);
   const [postStats] = await db.select({ n: sql<string>`count(*)`, first: sql<string | null>`min(${posts.postedAt})` }).from(posts).where(and(eq(posts.simulated, false), eq(posts.status, "posted")));
+  const [engagementStats] = await db.select({ n: sql<string>`count(*)` }).from(posts).where(and(eq(posts.simulated, false), eq(posts.status, "posted"), sql`${posts.kind} <> 'deal'`, gte(posts.postedAt, weekStart)));
+  const [clickStats] = await db.select({ n: sql<string>`count(*)` }).from(clicks).where(gte(clicks.ts, weekStart));
+  const catRows = await db
+    .select({ category: deals.category, n: sql<string>`count(*)` })
+    .from(clicks)
+    .innerJoin(deals, eq(deals.id, clicks.dealId))
+    .where(gte(clicks.ts, new Date(now.getTime() - 14 * 24 * 3600 * 1000)))
+    .groupBy(deals.category)
+    .orderBy(desc(sql`count(*)`))
+    .limit(3);
+  const channelHealth = channelHealthFrom(settingsMap, p.dayKey);
+  const shareSpots = Array.isArray(settingsMap.share_spots) ? settingsMap.share_spots.length : 0;
   const runs = await db.select({ summary: wardenRuns.summary }).from(wardenRuns).where(and(eq(wardenRuns.simulated, false), eq(wardenRuns.status, "applied"))).orderBy(desc(wardenRuns.startedAt)).limit(3);
 
   const spentByFloor: Record<string, number> = {};
@@ -113,7 +127,23 @@ export async function buildSnapshot(db: Db, now = new Date()): Promise<Snapshot>
         missingSetup: (FLOOR_REQUIREMENTS[f.slug] ?? []).filter((k) => !present.has(k)),
         throttled: !!f.throttledUntil && f.throttledUntil.getTime() > now.getTime(),
         autoApprove: f.autoApprove,
-        ...(f.slug === "deals" ? { postedTotal: Number(postStats?.n ?? 0), firstPostDay: postStats?.first ? String(postStats.first).slice(0, 10) : null } : {}),
+        ...(f.slug === "deals"
+          ? {
+              postedTotal: Number(postStats?.n ?? 0),
+              firstPostDay: postStats?.first ? String(postStats.first).slice(0, 10) : null,
+              channel: {
+                members: channelHealth.members,
+                growthDay: channelHealth.growthDay,
+                growthWeek: channelHealth.growthWeek,
+                botCanPost: channelHealth.botCanPost,
+                engagementPostsThisWeek: Number(engagementStats?.n ?? 0),
+                clicksThisWeek: Number(clickStats?.n ?? 0),
+                topCategories: catRows.map((r) => r.category ?? "general"),
+                shareChats: botChats(settingsMap).filter((c) => c.addedByOwner && c.canPost).length,
+                shareSpotsKnown: shareSpots,
+              },
+            }
+          : {}),
         crew: agentRows
           .filter((a) => a.floorId === f.id && a.kind !== "warden")
           .map((a) => ({ slug: a.slug, name: a.name, role: a.role, status: a.status, task: a.currentTaskId ? (titleById.get(a.currentTaskId) ?? null) : null })),

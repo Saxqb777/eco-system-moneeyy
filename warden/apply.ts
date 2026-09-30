@@ -73,7 +73,7 @@ export async function applyWardenDecisions(db: Db, runId: string, d: WardenDecis
     } else {
       await db.update(tasks).set({ status: "rejected", reviewScore: r.score, reviewReason: r.reason, finishedAt: t.finishedAt ?? now, updatedAt: now }).where(eq(tasks.id, t.id));
       // Rework only goes back to a floor that is still open; a closed floor's work just ends here.
-      const open = t.floorId ? floorById.get(t.floorId)?.status === "live" : false;
+      const open = !t.floorId || floorById.get(t.floorId)?.status === "live";
       if (open) {
         await db.insert(tasks).values({ floorId: t.floorId, agentId: t.agentId, kind: t.kind, title: t.title, status: "queued", priority: 3, input: { ...((t.input ?? {}) as Record<string, unknown>), feedback: r.reason }, feedback: r.reason, parentTaskId: t.id, simulated: false, createdAt: now, updatedAt: now });
       }

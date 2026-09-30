@@ -1,6 +1,5 @@
-// docledger.site (D067): the company's own website. On that domain only the DocLedger page and the per company
-// previews exist; the Tower stays on its own address. Preview links in emails use the site once it is live
-// (settings.docledger_site_url), the Tower address until then.
+// docledger.site (D067): the company's own website. Until the domain moves to the DocLedger app (D070) the
+// Tower answers for it with the company page and the per company previews; the Tower keeps its own address.
 import type { Db } from "@/db/client";
 import { getSettings } from "@/lib/settings";
 
@@ -20,12 +19,18 @@ export function siteRoute(host: string | null, pathname: string): SiteRoute {
   return { action: "redirect", to: `https://${SITE_HOST}/` };
 }
 
-// The address DocLedger's emails link to: the company site when it is live, the Tower otherwise.
-export async function docledgerBase(db: Db): Promise<string> {
-  const s = await getSettings(db);
-  const v = s.docledger_site_url;
-  if (typeof v === "string" && /^https:\/\/[^\s]+$/.test(v)) return v.replace(/\/$/, "");
+// Where an email's link goes (D070): the public demo, set up for that company, once
+// settings.docledger_demo_url is set; until then the Tower's own preview page. Never docledger.site, which
+// belongs to the DocLedger app.
+export function towerBase(): string {
   return (process.env.APP_URL ?? TOWER_URL).replace(/\/$/, "");
+}
+
+export async function previewLink(db: Db, code: string): Promise<string> {
+  const s = await getSettings(db);
+  const demo = s.docledger_demo_url;
+  if (typeof demo === "string" && /^https:\/\/[^\s]+$/.test(demo)) return `${demo.replace(/\/$/, "")}/?for=${code}`;
+  return `${towerBase()}/for/${code}`;
 }
 
 // The company website line the workers may quote, only once the site is live.

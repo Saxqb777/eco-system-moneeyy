@@ -15,7 +15,8 @@ import { encryptSecret } from "@/lib/crypto";
 import { getSettings, setSetting } from "@/lib/settings";
 import { setTelegramApi } from "@/lib/telegram";
 import { processTelegramUpdate } from "@/lib/telegram-inbound";
-import { docledgerBase, siteLine, siteRoute } from "@/lib/site";
+import { previewLink, siteLine, siteRoute } from "@/lib/site";
+import { publicPreview } from "@/lib/public-preview";
 import { fakeAnthropic, fakeTelegram, testSecretsKey } from "./helpers/fakes";
 import { makeTestDb } from "./helpers/pglite";
 
@@ -228,13 +229,25 @@ describe("The DocLedger Growth floor", () => {
     expect(siteRoute("DocLedger.site:443", "/login")).toEqual({ action: "redirect", to: "https://docledger.site/" });
     expect(siteRoute("www.docledger.site", "/for/abc123")).toEqual({ action: "redirect", to: "https://docledger.site/for/abc123" });
     expect(siteRoute("the-tower-saxqb777s-projects.vercel.app", "/")).toEqual({ action: "tower" });
-    // Preview links move to the site only once it is switched on.
-    expect(await docledgerBase(db)).toMatch(/vercel\.app$/);
+    // Email links open the Tower's preview until the demo is switched on, then the demo set up for them (D070).
+    expect(await previewLink(db, "abc123")).toMatch(/vercel\.app\/for\/abc123$/);
+    await setSetting(db, "docledger_demo_url", "https://demo.docledger.site/");
+    expect(await previewLink(db, "abc123")).toBe("https://demo.docledger.site/?for=abc123");
+    await setSetting(db, "docledger_demo_url", null);
     expect(await siteLine(db)).toBe("");
     await setSetting(db, "docledger_site_url", "https://docledger.site/");
-    expect(await docledgerBase(db)).toBe("https://docledger.site");
     expect(await siteLine(db)).toBe("\nCompany website: https://docledger.site");
+    expect(await previewLink(db, "abc123")).toMatch(/vercel\.app\/for\/abc123$/);
     await setSetting(db, "docledger_site_url", null);
+    // The demo learns only the company, country and sample document for a real lead with a preview.
+    const [lead] = await db.insert(leads).values({ company: "Preview Freight LLC", dedupeKey: "preview-freight-llc", country: "AE", status: "qualified", preview: { headline: "h", intro: "i", points: ["a", "b"], sampleDocument: "Shipping line bill", sampleFields: [{ field: "BL number", value: "X1 (example)" }] }, previewCode: "pfx123", decisionMaker: { name: "Secret Person", email: "secret@example.com" }, simulated: false }).returning();
+    const pp = await publicPreview(db, "pfx123");
+    expect(pp).toEqual({ company: "Preview Freight LLC", country: "AE", sampleDocument: "Shipping line bill", sampleFields: [{ field: "BL number", value: "X1 (example)" }] });
+    expect(JSON.stringify(pp)).not.toMatch(/secret/i);
+    expect(await publicPreview(db, "nope99")).toBeNull();
+    expect(await publicPreview(db, "../x")).toBeNull();
+    await db.update(leads).set({ simulated: true }).where(eq(leads.id, lead!.id));
+    expect(await publicPreview(db, "pfx123")).toBeNull();
     // The public pages speak to the reader: no notes meant for the workers, no dashes (rule 7).
     for (const text of Object.values(DOCLEDGER.publicCopy)) {
       expect(text).not.toMatch(/Say that|when they describe|a customer|Couriers, airlines/);

@@ -14,7 +14,7 @@ import { experimentLines } from "./experiments";
 import { REPLY_INTENTS, autoSendAllowed, isHot, notifyHotLead, snoozeLead } from "./docledger-autonomy";
 import { STYLE, input, logEvent, num, str, type Playbook, type PlaybookContext, type TaskRow } from "./playbook-core";
 import { plainDashes } from "@/lib/text";
-import { docledgerBase, siteLine } from "@/lib/site";
+import { previewLink, siteLine } from "@/lib/site";
 import { RESEARCH_EFFORT } from "@/config/models";
 export type { Absorbed, Playbook, PlaybookContext, Prepared } from "./playbook-core";
 
@@ -39,7 +39,7 @@ async function facts(db: Db): Promise<string> {
 // The preview link goes where the Writer put {preview}. When the Writer already introduced it ("I made a
 // page for you:"), only the link goes in, so the email never says it twice.
 export function insertPreview(body: string, company: string, url: string): string {
-  const line = `A two minute preview made for ${company}: ${url}`;
+  const line = `I set up a demo company for ${company}, no signup needed: ${url}`;
   const at = body.indexOf("{preview}");
   if (at < 0) return `${body.trimEnd()}\n\n${line}`;
   const lastLine = body.slice(0, at).trimEnd().split("\n").pop() ?? "";
@@ -129,14 +129,14 @@ const qualifyLead: Playbook = {
   maxTokens: 2500,
   system: `You are Analyst on the DocLedger Sales floor of The Tower.
 ${docledgerKnowledge()}
-For one company: judge how well Doc Ledger fits (1 to 10), find the person who would buy it (finance manager, accounts manager, operations manager, managing director or owner), and do a little research so Writer can open with something true about them: what they move or sell, their fleet or routes, how many branches, anything recent. Two or three facts, each one sentence, each one seen on a page. Then pick the angle: which pain is theirs most (shipping bills, fuel receipts, petty cash, foreign currency, duplicates, their own document types).
+For one company: judge how well Doc Ledger fits (1 to 10), find the person who would buy it (finance manager, accounts manager, operations manager, managing director or owner), and do a little research so Writer can open with something true about them: what they move or sell, their fleet or routes, how many branches, anything recent. Two or three facts, each one sentence, each one seen on a page. Then pick the angle: which pain is theirs most (shipping bills, fuel receipts, petty cash, foreign currency, duplicates, their own document types). Last, think like their salesperson and write the approach: which true fact to open with, which of their documents to show in the demo company made for them, and why it matters to them now. The owner reads it before he approves the email.
 Find the email: open the company website with the fetch tool (search for it first if you do not have it), then its contact, about or team page. A named person's work email is best; a general company address on the site such as info@, accounts@, finance@, sales@ or operations@ is fine when no named one is public. Copy it exactly as written on the page. If there is none, leave it empty and say so, never guess one. Return the website you used.
 A score of 6 or more means qualified. Finance teams handling freight invoices and fleets score high. Couriers, airlines and shipping lines score low.
 ${STYLE}`,
   schema: {
     type: "object",
     additionalProperties: false,
-    required: ["score", "reason", "qualified", "decisionMaker", "research", "angle", "website", "notes"],
+    required: ["score", "reason", "qualified", "decisionMaker", "research", "angle", "approach", "website", "notes"],
     properties: {
       website: { type: "string", description: "the company website you used, root URL, or empty" },
       score: { type: "integer" },
@@ -150,6 +150,7 @@ ${STYLE}`,
       },
       research: { type: "array", items: { type: "string" }, description: "two or three true facts about the company, one sentence each" },
       angle: { type: "string", description: "the pain that fits them most, in a few words" },
+      approach: { type: "string", description: "two sentences: the fact to open with, the document to show in their demo, and why now" },
       notes: { type: "string" },
     },
   },
@@ -168,7 +169,7 @@ ${STYLE}`,
     const email = str(dmRaw.email, 120).toLowerCase();
     const research = Array.isArray(output.research) ? output.research.filter((r): r is string => typeof r === "string" && r.trim().length > 0).map((r) => r.trim().slice(0, 240)).slice(0, 4) : [];
     const retried = input(task).retry === true;
-    const dm = { name: str(dmRaw.name, 80), title: str(dmRaw.title, 80), email: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? email : "", linkedin: str(dmRaw.linkedin, 200), confidence: Math.min(1, Math.max(0, num(dmRaw.confidence, 0))), research, angle: str(output.angle, 80), ...(retried ? { retried: true } : {}) };
+    const dm = { name: str(dmRaw.name, 80), title: str(dmRaw.title, 80), email: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? email : "", linkedin: str(dmRaw.linkedin, 200), confidence: Math.min(1, Math.max(0, num(dmRaw.confidence, 0))), research, angle: str(output.angle, 80), approach: plainDashes(str(output.approach, 400)), ...(retried ? { retried: true } : {}) };
     const score = Math.min(10, Math.max(1, Math.round(num(output.score, 1))));
     const qualified = output.qualified === true && score >= 6;
     const status = !qualified ? "disqualified" : dm.email ? "qualified" : "no_contact";
@@ -200,7 +201,9 @@ ${DOCLEDGER.emailExample}
 
 Use the Analyst's research for the opening detail. If the research is thin, one web search to find one true detail about the company is allowed; if you find nothing, open with their paperwork, not with a guess.
 
-Alongside the email, write the one page preview the link points to: a headline in their terms, an intro that continues from their first name, three sentences on what changes for them, and one sample document of the kind they handle most with six to eight fields the system would read off it (example values, clearly examples, never real amounts you did not see). Put the line {preview} on its own in the email where the link goes: after the differentiator paragraph, before the ask.
+Use the Analyst's approach when there is one: open where it says, show the document it picked.
+
+The link opens a demo company named after them in the real Doc Ledger, with one of their kinds of document already read. Alongside the email, describe that document and a short page about it: a headline in their terms, an intro that continues from their first name, three sentences on what changes for them, and the sample document they handle most with six to eight fields the system would read off it (example values, clearly examples, never real amounts you did not see). Put the line {preview} on its own in the email right after the sentence that introduces the demo, before the ask.
 ${STYLE}`,
   schema: {
     type: "object",
@@ -208,7 +211,7 @@ ${STYLE}`,
     required: ["subject", "body", "personalisation", "preview"],
     properties: {
       subject: { type: "string" },
-      body: { type: "string", description: "the email, with the line {preview} on its own where the preview link goes, after the differentiator paragraph and before the ask" },
+      body: { type: "string", description: "the email, 60 to 100 words, with the line {preview} on its own right after the sentence that introduces the demo company, before the ask" },
       personalisation: { type: "string", description: "the specific detail you used and where it came from" },
       preview: {
         type: "object",
@@ -236,7 +239,7 @@ ${STYLE}`,
     const feedback = str(input(task).feedback);
     const f = await facts(ctx.db);
     return {
-      user: `${f}\n\n${await experimentLines(ctx.db, ctx.now, "writer")}Company: ${lead.company} (${lead.segment ?? "company"}, ${[lead.city, lead.country].filter(Boolean).join(", ")})\nWrite for a reader in ${lead.country}: their spelling, their currency in any example, no Gulf place names unless they are in the Gulf.\nWebsite: ${lead.website ?? "unknown"}\nWhy they fit: ${lead.scoreReason ?? ""}\nAngle: ${typeof dm.angle === "string" && dm.angle ? dm.angle : "shipping bills and petty cash"}\nResearch:\n${research.length ? research.map((r) => `- ${r}`).join("\n") : "- nothing yet, one web search allowed"}\nDecision maker: ${typeof dm.name === "string" && dm.name ? dm.name : "unknown"}, ${typeof dm.title === "string" && dm.title ? dm.title : "unknown title"}\n${feedback ? `Warden's feedback on the last draft: ${feedback}\n` : ""}\nWrite the email and return the JSON object.`,
+      user: `${f}\n\n${await experimentLines(ctx.db, ctx.now, "writer")}Company: ${lead.company} (${lead.segment ?? "company"}, ${[lead.city, lead.country].filter(Boolean).join(", ")})\nWrite for a reader in ${lead.country}: their spelling, their currency in any example, no Gulf place names unless they are in the Gulf.\nWebsite: ${lead.website ?? "unknown"}\nWhy they fit: ${lead.scoreReason ?? ""}\nAngle: ${typeof dm.angle === "string" && dm.angle ? dm.angle : "shipping bills and petty cash"}\n${typeof dm.approach === "string" && dm.approach ? `Analyst's approach: ${dm.approach}\n` : ""}Research:\n${research.length ? research.map((r) => `- ${r}`).join("\n") : "- nothing yet, one web search allowed"}\nDecision maker: ${typeof dm.name === "string" && dm.name ? dm.name : "unknown"}, ${typeof dm.title === "string" && dm.title ? dm.title : "unknown title"}\n${feedback ? `Warden's feedback on the last draft: ${feedback}\n` : ""}\nWrite the email and return the JSON object.`,
       webSearchMaxUses: research.length >= 2 ? 0 : 2,
     };
   },
@@ -252,9 +255,8 @@ ${STYLE}`,
     const sampleFields = Array.isArray(previewRaw.sampleFields) ? previewRaw.sampleFields.filter((f): f is { field: string; value: string } => !!f && typeof f === "object" && typeof (f as { field?: unknown }).field === "string" && typeof (f as { value?: unknown }).value === "string").slice(0, 8) : [];
     const preview = str(previewRaw.headline, 120) && points.length >= 2 ? { headline: plainDashes(str(previewRaw.headline, 120)), intro: plainDashes(str(previewRaw.intro, 400)), points: points.map(plainDashes), sampleDocument: str(previewRaw.sampleDocument, 120) || "Shipping line bill", sampleFields } : null;
     // docledger.site once it is live (D067), the Tower's address until then.
-    const base = await docledgerBase(ctx.db);
     const previewCode = preview ? (lead.previewCode ?? shortCode()) : null;
-    const previewUrl = previewCode ? `${base}/for/${previewCode}` : null;
+    const previewUrl = previewCode ? await previewLink(ctx.db, previewCode) : null;
     let body = plainDashes(str(output.body, 4000));
     if (previewUrl) body = insertPreview(body, lead.company, previewUrl);
     else body = body.replace(/\n?\{preview\}\n?/g, "\n");
@@ -267,7 +269,7 @@ ${STYLE}`,
       summary: `Send first outreach email to ${dm.name || "the decision maker"} at ${lead.company}`,
       content: { to: dm.email, toName: dm.name, company: lead.company, subject, body, outreachId: row?.id ?? null, previewUrl },
       previewUrl,
-      riskNote: "Cold email to a business address. One plain opt out line included. The preview link opens a page made for them.",
+      riskNote: `Cold email to a business address. One plain opt out line included. The link opens a demo company named after them.${typeof dm.approach === "string" && dm.approach ? ` Approach: ${dm.approach}` : ""}`,
       taskId: task.id,
       agentId: ctx.agentId,
       floorId: ctx.floorId,

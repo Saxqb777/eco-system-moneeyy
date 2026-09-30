@@ -45,7 +45,8 @@ export async function POST(req: Request) {
     .set({ status: "present", valueEncrypted: encryptSecret(value), hint, providedAt: new Date() })
     .where(eq(setupItems.key, item.key));
   // The brief asks for Warden to speak within 5 minutes of the key landing: an instant run after this response.
-  if (item.key === "anthropic_api_key") {
+  // The Telegram token gets the same treatment so the webhook registers at once and /pair works straight away.
+  if (item.key === "anthropic_api_key" || item.key === "telegram_bot_token" || item.key === "deals_channel") {
     after(async () => {
       await runTick("setup").catch(() => null);
     });

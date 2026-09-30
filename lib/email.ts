@@ -4,6 +4,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { approvals, leads, outreach, taskEvents } from "@/db/schema";
 import { clipboardValue } from "@/lib/clipboard";
+import { inBusinessHours } from "@/lib/markets";
 import { enqueueMessage } from "@/lib/telegram";
 
 export type EmailTransport = (key: string, path: string, method: "GET" | "POST", body?: Record<string, unknown>) => Promise<{ ok: boolean; status: number; json: Record<string, unknown> | null }>;
@@ -38,6 +39,9 @@ export async function sendOutreach(db: Db, a: typeof approvals.$inferSelect, now
   if (row.status === "sent") return { ok: true };
   const to = String(content.to ?? "").trim();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return { ok: false, error: "no email address for the contact" };
+  // Worldwide: an email lands in the reader's working hours, never at night or on their weekend.
+  const [lead] = row.leadId ? await db.select({ country: leads.country }).from(leads).where(eq(leads.id, row.leadId)).limit(1) : [];
+  if (lead?.country && !inBusinessHours(lead.country, now)) return { ok: false, error: `waiting for business hours in ${lead.country}` };
   const sent = await sendEmail(db, { to, subject: row.subject ?? String(content.subject ?? ""), text: row.bodyText ?? String(content.body ?? "") });
   if (!sent.ok) return sent;
   await db.update(outreach).set({ status: "sent", resendId: sent.id ?? null, sentAt: now, updatedAt: now }).where(eq(outreach.id, row.id));

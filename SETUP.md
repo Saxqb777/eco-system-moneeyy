@@ -24,6 +24,7 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 | 11 | Consulting site URL | Ground floor (locked until unlock rule is met) | Later | missing |
 | 12 | X account keys (optional) | Deal posts also go to X for reach | When you want it | missing: developer.x.com app with Read and write, paste API Key, API Key Secret, Access Token, Access Token Secret separated by spaces in the box "X account for deal posts" |
 | 13 | Facebook Page id and token (optional) | Deal posts also go to your Facebook Page | When you want it | missing: a Page for the deals, a Meta app with pages_manage_posts, a Page token that does not expire; paste the Page ID and the token separated by a space |
+| 14 | Business postal address (optional) | DocLedger emails to US companies (US law wants an address under the signature) | When you want US leads | missing: paste the address to print under your signature in the box "Business postal address". Until then the Scout skips the US |
 
 ## Steps per item
 

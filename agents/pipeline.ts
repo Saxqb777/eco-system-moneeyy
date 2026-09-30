@@ -7,6 +7,7 @@ import { raiseApproval } from "@/lib/approvals";
 import { getSpendSummary } from "@/lib/budget";
 import { asNumber, getSettings, setSetting } from "@/lib/settings";
 import { dubaiParts } from "@/lib/time";
+import { clearSnooze, maybeRaiseAutoSend, snoozedUntil } from "./docledger-autonomy";
 import { openTasksOfKind } from "./playbooks";
 
 export interface AdvanceSummary {
@@ -79,12 +80,28 @@ async function advanceDocLedger(db: Db, now: Date, created: Record<string, numbe
     }
   }
 
+  // Trust point: after ten approvals in a row the Tower asks once to send routine emails on their own.
+  await maybeRaiseAutoSend(db, floor, now);
+
   if (chaser) {
     const replied = await db.select().from(outreach).where(and(eq(outreach.simulated, false), eq(outreach.status, "replied"))).orderBy(asc(outreach.replyAt)).limit(5);
     for (const o of replied) {
       if (await hasOpenTaskFor(db, "follow_up", "outreachId", o.id)) continue;
       await db.update(outreach).set({ status: "handling", updatedAt: now }).where(eq(outreach.id, o.id));
       await queueTask(db, floor.id, chaser.id, "follow_up", "Chase warm reply", { outreachId: o.id, mode: "reply" }, 2, now);
+      created.follow_up = (created.follow_up ?? 0) + 1;
+    }
+    // Leads that said not now, or were away, get a check in when their pause ends.
+    const waking = await db
+      .select()
+      .from(leads)
+      .where(and(eq(leads.simulated, false), sql`${leads.status} not in ('lost', 'client')`, sql`(${leads.decisionMaker} ->> 'snoozeUntil') is not null`, sql`(${leads.decisionMaker} ->> 'snoozeUntil')::timestamptz <= ${now}`))
+      .limit(3);
+    for (const lead of waking) {
+      const [last] = await db.select().from(outreach).where(and(eq(outreach.leadId, lead.id), eq(outreach.simulated, false))).orderBy(desc(outreach.step)).limit(1);
+      await clearSnooze(db, lead, now);
+      if (!last || (await hasOpenTaskFor(db, "follow_up", "outreachId", last.id))) continue;
+      await queueTask(db, floor.id, chaser.id, "follow_up", `Check back in with ${lead.company}`, { outreachId: last.id, mode: "check_in" }, 3, now);
       created.follow_up = (created.follow_up ?? 0) + 1;
     }
     const stale = await db
@@ -97,6 +114,10 @@ async function advanceDocLedger(db: Db, now: Date, created: Record<string, numbe
       if (!o.leadId) continue;
       const [later] = await db.select({ id: outreach.id }).from(outreach).where(and(eq(outreach.leadId, o.leadId), sql`${outreach.step} > ${o.step}`)).limit(1);
       if (later) continue;
+      const [lead] = await db.select().from(leads).where(eq(leads.id, o.leadId)).limit(1);
+      if (!lead || lead.status === "lost" || lead.status === "client") continue;
+      const until = snoozedUntil(lead);
+      if (until && until.getTime() > now.getTime()) continue;
       if (await hasOpenTaskFor(db, "follow_up", "outreachId", o.id)) continue;
       await queueTask(db, floor.id, chaser.id, "follow_up", "Send follow up", { outreachId: o.id, mode: "follow_up" }, 4, now);
       created.follow_up = (created.follow_up ?? 0) + 1;
@@ -110,7 +131,8 @@ async function executeApproved(db: Db, now: Date): Promise<{ executed: number; d
     .select()
     .from(approvals)
     .where(and(eq(approvals.status, "approved"), eq(approvals.simulated, false), isNull(approvals.executedAt), inArray(approvals.type, ["outreach_email", "public_post"])))
-    .orderBy(asc(approvals.decidedAt))
+    // A deferred item gets its updatedAt bumped, so it moves to the back: one item that cannot run never blocks the rest.
+    .orderBy(asc(approvals.updatedAt))
     .limit(10);
   let executed = 0;
   const deferred: string[] = [];

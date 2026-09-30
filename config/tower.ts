@@ -48,8 +48,8 @@ export const FLOORS: FloorDef[] = [
     status: "live",
     unlockRule: null,
     unlockCondition: null,
-    niche: "freight forwarders",
-    nextNiches: ["customs brokers", "small 3PLs", "trading companies with import volume"],
+    niche: "freight forwarders worldwide",
+    nextNiches: ["customs brokers", "small 3PLs", "food and beverage distributors", "trading companies with import volume"],
     monthlyGuideUsd: 9,
     isBusiness: true,
   },
@@ -167,6 +167,7 @@ export const SETUP_ITEMS: SetupItemDef[] = [
   { key: "affiliate_other", label: "Other affiliate ids", howTo: "Sharaf DG, Carrefour, Talabat: paste ids or link templates if you have them. Optional.", kind: "text", requiredFor: [], sort: 12 },
   { key: "deals_channel", label: "Telegram deals channel handle", howTo: "Create a public channel, add your bot as admin with Post messages, paste the handle like @uaedailydeals.", kind: "text", requiredFor: ["deals"], sort: 13 },
   { key: "consulting_site_url", label: "Consulting site URL", howTo: "Only needed when the Ground floor unlocks.", kind: "url", requiredFor: ["service"], sort: 14 },
+  { key: "business_address", label: "Business postal address (optional)", howTo: "DocLedger emails worldwide. US law asks for a postal address under the signature of a business email, so the Scout skips US companies until one is here. Paste the address to print under your signature, for example your company address.", kind: "text", requiredFor: [], sort: 18 },
   { key: "x_credentials", label: "X account for deal posts (optional)", howTo: "Growth: every approved deal also goes to your X account. developer.x.com, create a project and an app with Read and write, then Keys and tokens. Paste four values separated by spaces, in this order: API Key, API Key Secret, Access Token, Access Token Secret.", kind: "secret", requiredFor: [], sort: 16 },
   { key: "facebook_page", label: "Facebook Page for deal posts (optional)", howTo: "Growth: every approved deal also goes to your Facebook Page. Create a Page for the deals, a Meta app with pages_manage_posts, and a Page access token that does not expire. Paste the Page ID and the token separated by a space.", kind: "secret", requiredFor: [], sort: 17 },
 ];

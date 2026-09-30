@@ -156,8 +156,13 @@ export async function applyWardenDecisions(db: Db, runId: string, d: WardenDecis
       const m = a.content.match(/(\d+(?:\.\d+)?)\s*USD/i);
       if (m) content.proposedCapUsd = Number(m[1]);
     }
-    if (a.type === "decision" && /auto approve/i.test(a.summary + a.content)) {
+    if (a.type === "decision" && /auto (approve|send)/i.test(a.summary + a.content)) {
       const slug = [...floorBySlug.keys()].find((k) => a.content.toLowerCase().includes(k) || a.summary.toLowerCase().includes(k)) ?? "deals";
+      // DocLedger earns auto send through ten approvals in a row; the Tower raises that item itself, never Warden.
+      if (slug === "docledger") {
+        out.skipped.push("auto send for DocLedger is raised by the Tower at the trust point");
+        continue;
+      }
       content.autoApproveFloor = slug;
     }
     if (a.type === "floor_unlock") {

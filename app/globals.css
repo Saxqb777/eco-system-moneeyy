@@ -267,3 +267,31 @@ textarea.field { resize: vertical; }
 .preview-foot { text-align: center; margin-top: 24px; }
 .preview-close { font-style: italic; font-size: 15px; margin: 0 0 14px; opacity: 0.9; }
 .preview .key { text-decoration: none; display: inline-block; font-size: 15px; padding: 8px 16px; }
+
+/* The mail room */
+.mail-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.thread-row { display: block; width: 100%; text-align: left; font: inherit; cursor: pointer; background: var(--paper); color: var(--ink); padding: 9px 11px; margin-bottom: 8px; border: 1px solid var(--paper-shade); border-left: 6px solid var(--muted); box-shadow: 2px 3px 0 rgba(0, 0, 0, 0.35); }
+.thread-row:hover { transform: translateY(-1px); }
+.thread-row .muted { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.thread-row .cc { margin-left: 6px; font-size: 10px; letter-spacing: 0.08em; color: var(--wood-dark); border: 1px solid var(--paper-shade); padding: 0 4px; }
+.thread-last { font-size: 12px; margin-top: 4px; color: var(--ink); opacity: 0.85; }
+.thread-row.hot, .thread-head.hot { border-left-color: var(--bad); }
+.thread-row.waiting, .thread-head.waiting { border-left-color: var(--warn); }
+.thread-row.replied, .thread-row.demo, .thread-head.replied, .thread-head.demo { border-left-color: var(--ok); }
+.thread-row.sent, .thread-head.sent { border-left-color: var(--brass); }
+.thread-head { border-left: 6px solid var(--muted); margin-bottom: 8px; }
+.pill-s.hot { color: var(--bad); }
+.pill-s.waiting { color: var(--warn); }
+.pill-s.replied, .pill-s.demo { color: var(--ok); }
+.pill-s.sent, .pill-s.drafting, .pill-s.closed { color: var(--muted); }
+.letter { background: #fffaf0; color: var(--ink); padding: 8px 11px; margin: 0 0 8px; border: 1px solid var(--paper-shade); box-shadow: 2px 3px 0 rgba(0, 0, 0, 0.3); }
+.letter.us { margin-left: 18px; border-top: 3px solid var(--brass); }
+.letter.them { margin-right: 18px; border-top: 3px solid var(--ok); background: var(--paper); }
+.letter-head { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.letter-from { font-family: "Barlow Condensed", sans-serif; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--wood-dark); }
+.letter-subject { font-weight: 600; font-size: 13px; margin-top: 3px; }
+.letter pre { white-space: pre-wrap; font: 12px/1.45 "IBM Plex Sans", sans-serif; margin: 6px 0; max-height: 260px; overflow: auto; }
+.how { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); border-top: 1px dashed var(--paper-shade); padding-top: 5px; }
+.how.auto, .how.approved { color: var(--ok); }
+.how.waiting { color: var(--warn); }
+.how.rejected { color: var(--bad); }

@@ -112,8 +112,17 @@ export function Empty({ children }: { children: ReactNode }) {
 // Hand drawn icons in the palette. Never emoji.
 const ICON_STYLE = { width: 15, height: 15, display: "inline-block", verticalAlign: "-2px" } as const;
 
-export function Icon({ name }: { name: "desk" | "phone" | "clipboard" | "brief" | "coins" | "mail" | "floor" }) {
+export function Icon({ name }: { name: "desk" | "phone" | "clipboard" | "brief" | "coins" | "mail" | "floor" | "tray" }) {
   switch (name) {
+    case "tray":
+      return (
+        <svg viewBox="0 0 16 16" style={ICON_STYLE} aria-hidden="true">
+          <rect x="4" y="2" width="9" height="6" fill="#f3e9d2" stroke="#8c5a2b" strokeWidth="1" transform="rotate(-6 8 5)" />
+          <rect x="3" y="4" width="9" height="6" fill="#fffaf0" stroke="#8c5a2b" strokeWidth="1" />
+          <path d="M3 4l4.5 3.5L12 4" fill="none" stroke="#8c5a2b" strokeWidth="1" />
+          <path d="M1.5 9h4l1 2h3l1-2h4v5h-13z" fill="#c9963b" stroke="#8a6424" strokeWidth="1" />
+        </svg>
+      );
     case "phone":
       return (
         <svg viewBox="0 0 16 16" style={ICON_STYLE} aria-hidden="true">

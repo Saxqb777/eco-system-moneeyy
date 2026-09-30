@@ -6,13 +6,14 @@ import type { TowerState } from "@/lib/state";
 import type { TowerScene } from "@/scene/TowerScene";
 import { CharacterBody } from "./CharacterPanel";
 import { FloorBody } from "./FloorPanel";
+import { MailboxTab } from "./MailboxTab";
 import { Panel, usePoll, type Tab } from "./shared";
 import { ApprovalsTab, BriefTab, BudgetTab, IdeasTab, SetupTab, WardenControls } from "./WardenTabs";
 
-export type WardenTab = "office" | "approvals" | "setup" | "brief" | "budget" | "ideas";
+export type WardenTab = "office" | "approvals" | "mailbox" | "setup" | "brief" | "budget" | "ideas";
 export type PanelSel = { type: "agent"; id: string } | { type: "floor"; slug: string } | { type: "warden"; tab: WardenTab };
 
-const WARDEN_TABS: WardenTab[] = ["office", "approvals", "setup", "brief", "budget", "ideas"];
+const WARDEN_TABS: WardenTab[] = ["office", "approvals", "mailbox", "setup", "brief", "budget", "ideas"];
 
 export function parsePanelParam(raw: string | null, state: TowerState): PanelSel | null {
   if (!raw) return null;
@@ -71,15 +72,18 @@ function WardenPanel({ open, tab, state, scene, onClose, onNavigate }: { open: b
   const [pendingCount, setPendingCount] = useState(state.pendingApprovals);
   useEffect(() => setPendingCount(summary.data?.warden.pendingApprovals ?? state.pendingApprovals), [summary.data, state.pendingApprovals]);
   const missing = summary.data?.warden.missingSetup.length;
+  const mail = usePoll<{ counts: { hot: number; waiting: number } }>(open ? "/api/mailbox?filter=hot" : null, 30000);
+  const hot = mail.data?.counts.hot;
   const tabs: Tab[] = [
     { id: "office", label: "Office", icon: "desk" },
     { id: "approvals", label: "Approvals", icon: "phone", badge: pendingCount || undefined },
+    { id: "mailbox", label: "Mailbox", icon: "tray", badge: hot || undefined },
     { id: "setup", label: "Setup", icon: "clipboard", badge: missing || undefined },
     { id: "brief", label: "Brief", icon: "brief" },
     { id: "budget", label: "Budget", icon: "coins" },
     { id: "ideas", label: "Ideas", icon: "mail" },
   ];
-  const kicker = tab === "approvals" ? "The red phone" : tab === "setup" ? "The clipboard" : tab === "ideas" ? "The mail slot" : tab === "brief" ? "Morning brief" : tab === "budget" ? "Spend cap and level" : "Penthouse";
+  const kicker = tab === "approvals" ? "The red phone" : tab === "mailbox" ? "The mail room" : tab === "setup" ? "The clipboard" : tab === "ideas" ? "The mail slot" : tab === "brief" ? "Morning brief" : tab === "budget" ? "Spend cap and level" : "Penthouse";
   return (
     <Panel open={open} kicker={kicker} title={warden?.name ?? "Warden"} accent={penthouse?.accent} tabs={tabs} tab={tab} onTab={(id) => onNavigate({ type: "warden", tab: id as WardenTab })} onClose={onClose}>
       {tab === "office" && warden ? (
@@ -89,6 +93,7 @@ function WardenPanel({ open, tab, state, scene, onClose, onNavigate }: { open: b
         </>
       ) : null}
       {tab === "approvals" ? <ApprovalsTab onChanged={summary.reload} /> : null}
+      {tab === "mailbox" ? <MailboxTab onApprovals={() => onNavigate({ type: "warden", tab: "approvals" })} /> : null}
       {tab === "setup" ? <SetupTab /> : null}
       {tab === "brief" ? <BriefTab warden={summary.data?.warden ?? null} /> : null}
       {tab === "budget" ? <BudgetTab warden={summary.data?.warden ?? null} onChanged={summary.reload} /> : null}

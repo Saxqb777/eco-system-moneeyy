@@ -15,7 +15,10 @@ const shots = [
   { name: "panel-brief", width: 1600, height: 900, panel: "warden:brief" },
   { name: "game-phone", width: 430, height: 900 },
   { name: "panel-phone", width: 430, height: 900, panel: "warden:approvals", clip: true },
-];
+  { name: "panel-mailbox", width: 1600, height: 900, panel: "warden:mailbox" },
+  { name: "panel-mailbox-thread", width: 1600, height: 900, panel: "warden:mailbox", click: ".thread-row.hot" },
+  { name: "panel-mailbox-phone", width: 430, height: 900, panel: "warden:mailbox", click: ".thread-row.hot" },
+].filter((s) => !process.env.SHOTS || process.env.SHOTS.split(",").some((p) => s.name.startsWith(p)));
 const ctx = await browser.newContext({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1, ignoreHTTPSErrors: true });
 const login = await ctx.newPage();
 await login.goto(`${base}/login`, { waitUntil: "domcontentloaded" });
@@ -31,6 +34,10 @@ for (const s of shots) {
   await page.goto(`${base}/${s.panel ? `?panel=${s.panel}` : ""}`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("canvas", { timeout: 60000 });
   await page.waitForTimeout(s.panel ? 7000 : 6000);
+  if (s.click) {
+    await page.click(s.click);
+    await page.waitForTimeout(2500);
+  }
   await page.screenshot({ path: path.join(here, `${s.name}.png`), fullPage: s.name === "game-phone" });
   console.log("shot", s.name);
   await page.close();

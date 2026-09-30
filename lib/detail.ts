@@ -6,6 +6,7 @@ import { agentRuns, agents, approvals, budgetLedger, floors, leads, posts, reven
 import { buildBrief, type Brief } from "@/lib/brief";
 import { asBool, asNumber, getSettings } from "@/lib/settings";
 import { describeTaskOutput, validateAgentName } from "@/lib/tasks";
+import { visibleSetupRows } from "@/lib/clipboard";
 import { dubaiDayStartUtc, dubaiWeekStartUtc } from "@/lib/time";
 
 export interface AgentDetail {
@@ -322,7 +323,7 @@ export async function getWardenSummary(db: Db, now = new Date()): Promise<Warden
   const byFloor = new Map(todayRows.map((r) => [r.floorId ?? "", Number(r.total)]));
   const runs = await db.select().from(wardenRuns).where(eq(wardenRuns.simulated, simulated)).orderBy(desc(wardenRuns.startedAt)).limit(6);
   const [pending] = await db.select({ n: sql<string>`count(*)` }).from(approvals).where(and(eq(approvals.status, "pending"), eq(approvals.simulated, simulated)));
-  const setupRows = await db.select().from(setupItems).orderBy(setupItems.sort);
+  const setupRows = await visibleSetupRows(db);
   const guide = (settingsMap.allocation_guide_usd ?? {}) as Record<string, number>;
   return {
     brief,

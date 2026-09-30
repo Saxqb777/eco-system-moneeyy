@@ -1,9 +1,10 @@
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { FLOOR_REQUIREMENTS } from "@/config/tower";
 import type { Db } from "@/db/client";
-import { agents, approvals, floors, setupItems, taskEvents, tasks, ticks } from "@/db/schema";
+import { agents, approvals, floors, taskEvents, tasks, ticks } from "@/db/schema";
 import { getSpendSummary } from "@/lib/budget";
 import { asBool, asNumber, getSettings } from "@/lib/settings";
+import { visibleSetupRows } from "@/lib/clipboard";
 import { dubaiParts, isNightInDubai } from "@/lib/time";
 
 export interface TowerState {
@@ -62,7 +63,7 @@ export async function getTowerState(db: Db, now = new Date()): Promise<TowerStat
     // Archived floors (a closed business) are not part of the building any more.
     db.select().from(floors).where(ne(floors.status, "archived")).orderBy(desc(floors.level)),
     db.select().from(agents),
-    db.select().from(setupItems).orderBy(setupItems.sort),
+    visibleSetupRows(db),
     getSpendSummary(db, false, now),
     getSpendSummary(db, true, now),
     db.select().from(taskEvents).orderBy(desc(taskEvents.id)).limit(40),

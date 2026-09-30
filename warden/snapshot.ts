@@ -2,12 +2,13 @@
 import { and, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import { FLOOR_REQUIREMENTS } from "@/config/tower";
 import type { Db } from "@/db/client";
-import { agents, approvals, budgetLedger, clicks, deals, floors, ideas, posts, setupItems, tasks, wardenRuns } from "@/db/schema";
+import { agents, approvals, budgetLedger, clicks, deals, floors, ideas, posts, tasks, wardenRuns } from "@/db/schema";
 import { salesFunnel, type SalesFunnel } from "@/agents/docledger-autonomy";
 import { botChats, channelHealthFrom } from "@/lib/channel";
 import { weeklyActual } from "@/lib/detail";
 import { asNumber, getSettings } from "@/lib/settings";
 import { dubaiDayStartUtc, dubaiParts, dubaiWeekStartUtc } from "@/lib/time";
+import { visibleSetupRows } from "@/lib/clipboard";
 import { companyPulse, type CompanyPulse } from "@/agents/growth";
 
 export interface Snapshot {
@@ -75,7 +76,7 @@ export async function buildSnapshot(db: Db, now = new Date()): Promise<Snapshot>
   const currentIds = agentRows.map((a) => a.currentTaskId).filter((x): x is string => !!x);
   const currentTasks = currentIds.length ? await db.select({ id: tasks.id, title: tasks.title }).from(tasks).where(inArray(tasks.id, currentIds)) : [];
   const titleById = new Map(currentTasks.map((t) => [t.id, t.title]));
-  const setupRows = await db.select().from(setupItems);
+  const setupRows = await visibleSetupRows(db);
   const present = new Set(setupRows.filter((s) => s.status === "present").map((s) => s.key));
   const pending = await db.select({ type: approvals.type, summary: approvals.summary }).from(approvals).where(and(eq(approvals.status, "pending"), eq(approvals.simulated, false))).limit(6);
   const newIdeas = await db.select({ id: ideas.id, text: ideas.text }).from(ideas).where(eq(ideas.status, "new")).orderBy(ideas.createdAt).limit(6);

@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { setupItems } from "@/db/schema";
+import { visibleSetupRows } from "@/lib/clipboard";
 import { encryptSecret, secretHint } from "@/lib/crypto";
 import { bad, json, readJson } from "@/lib/http";
 import { mockEnabled, mockSetup } from "@/lib/mock-state";
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 // The clipboard. Values are never returned, only status and a hint.
 export async function GET() {
   if (mockEnabled()) return json({ ok: true, items: mockSetup(), pairingCode: "a1b2c3" });
-  const rows = await getDb().select().from(setupItems).orderBy(setupItems.sort);
+  const rows = await visibleSetupRows(getDb());
   return json({
     ok: true,
     pairingCode: pairingCode(),

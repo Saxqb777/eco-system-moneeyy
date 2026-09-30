@@ -80,7 +80,9 @@ describe("simulation mode on a real schema", () => {
     expect(state.floors).toHaveLength(6);
     expect(state.floors[0]?.slug).toBe("penthouse");
     expect(state.money.real.netUsd).toBe(0);
-    expect(state.setup).toHaveLength(SETUP_ITEMS.length);
+    // A closed floor's clipboard items (Deals: 6) are hidden from the game while it is archived.
+    expect(state.setup).toHaveLength(SETUP_ITEMS.length - 6);
+    expect(state.setup.some((s) => s.key === "deals_channel")).toBe(false);
     // The Deals Engine is archived (D064): not part of the building any more. The Growth floor needs nothing pasted.
     expect(state.floors.find((f) => f.slug === "deals")).toBeUndefined();
     expect(state.floors.find((f) => f.slug === "growth")?.missingSetup).toEqual([]);

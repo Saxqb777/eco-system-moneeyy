@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { SETUP_ITEMS } from "@/config/tower";
 import { agents, approvals, budgetLedger, floors, taskEvents, tasks } from "@/db/schema";
 import type { Db } from "@/db/client";
 import { getSpendSummary } from "@/lib/budget";
@@ -79,7 +80,7 @@ describe("simulation mode on a real schema", () => {
     expect(state.floors).toHaveLength(6);
     expect(state.floors[0]?.slug).toBe("penthouse");
     expect(state.money.real.netUsd).toBe(0);
-    expect(state.setup).toHaveLength(14);
+    expect(state.setup).toHaveLength(SETUP_ITEMS.length);
     expect(state.floors.find((f) => f.slug === "deals")?.missingSetup).toEqual(["affiliate_amazon_ae", "deals_channel"]);
   });
 

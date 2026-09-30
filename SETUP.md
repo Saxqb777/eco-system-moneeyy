@@ -1,6 +1,7 @@
 # SETUP: everything Saaqib needs to provide
 
 This file mirrors the Warden clipboard (the setup_items table). Status is updated as items arrive.
+Since Phase 3 you can paste every item straight into the game: click Warden, open the Setup tab, paste, Save. Secrets are encrypted and never shown again.
 Rule: never paste a secret into the repo. Secrets go into the Warden clipboard once Phase 3 is live. Until then, the Vercel environment variables route is used (see the notes per item).
 
 ## Status board
@@ -8,17 +9,18 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 | # | Item | Needed for | Needed by | Status |
 |---|------|------------|-----------|--------|
 | 1 | Answers to docs/QUESTIONS.md | Everything | Phase 1 start | done 2026-09-29 |
-| 2 | Nothing: the heartbeat authenticates with a GitHub OIDC token, no secrets needed | Hourly heartbeat | Done | done 2026-09-29, but GitHub has not fired the schedule yet (three hourly slots missed), see 2c |
+| 2 | Nothing: the heartbeat authenticates with a GitHub OIDC token, no secrets needed | Hourly heartbeat | Done | done 2026-09-29, first scheduled run landed 22:55 UTC the same day |
 | 2b | Two clicks: GitHub default branch to main, Vercel production branch to main | Pull request flow | Done | done 2026-09-29 by Saaqib |
-| 2c | Backup heartbeat: a free cron-job.org job that calls /api/tick every hour with the CRON_SECRET from Vercel, or a one line edit to the tick workflow on main | Hourly heartbeat until GitHub's scheduler wakes up | Now (about 3 minutes) | missing |
-| 3 | Anthropic API key | Leaving simulation mode, every real agent run | Phase 4 | missing |
-| 4 | Telegram bot token and your chat id | Warden messages, approvals over Telegram, morning brief | Phase 4 | missing |
-| 5 | DocLedger GitHub repo URL and a GitHub token for it | Builder | Phase 5 | missing (repo likely Saxqb777/docledger, confirm) |
-| 6 | Calendar booking link | Chaser demo booking | Phase 5 | missing |
-| 7 | Resend API key and verified sending domain | Sending approved outreach emails | Phase 5 | missing |
-| 8 | DocLedger product facts: one paragraph pitch, pricing, your signature block | Writer and Chaser | Phase 5 | missing |
-| 9 | Affiliate IDs: Amazon.ae tag, Noon, others | Deals Engine going live | Phase 6 | missing |
-| 10 | Telegram deals channel handle, bot added as admin | Publisher | Phase 6 | missing |
+| 2c | Backup heartbeat: not needed any more, the schedule fires since the Phase 2 merge touched the workflow file on main (first run 2026-09-29 22:55 UTC) | Hourly heartbeat | Done | done 2026-09-29 |
+| 3 | Anthropic API key | Leaving simulation mode, every real agent run | Now (Phase 4 is built) | missing |
+| 4 | Telegram bot token, then pair your chat with /pair | Warden messages, approvals over Telegram, morning brief | Now (Phase 4 is built) | missing |
+| 5 | DocLedger GitHub repo URL and a GitHub token for it | Builder (nightly at 02:00 Dubai, built in Phase 5) | Now | missing (repo likely Saxqb777/docledger, confirm) |
+| 6 | Calendar booking link | Chaser demo booking | Now | missing |
+| 7 | Resend API key and sending address | Sending approved outreach emails | Now | missing |
+| 8 | DocLedger product facts: one paragraph pitch, pricing, your signature block | Writer and Chaser | Now | missing |
+| 8b | Resend webhook secret for replies (optional) | Chaser reads replies itself | Optional | missing: without it, forward replies with /reply on Telegram |
+| 9 | Affiliate IDs: Amazon.ae tag, Noon, others | Deals Engine earning (posts run without them, links stay plain) | Now | missing |
+| 10 | Telegram deals channel handle, bot added as admin | Publisher posting to the channel | Now | missing |
 | 11 | Consulting site URL | Ground floor (locked until unlock rule is met) | Later | missing |
 
 ## Steps per item
@@ -55,42 +57,36 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 - Paste it into the Warden clipboard (Phase 3 and later). Simulation mode turns off only after this key is present and you toggle it.
 
 ### 4. Telegram bot token and chat id
-- In Telegram, open BotFather, send /newbot, pick a name (for example Warden) and a username ending in bot. Copy the token.
-- Send /setprivacy to BotFather, pick your bot, choose Disable, so the bot can read messages in the deals channel later.
-- Start a chat with your new bot and send it any message.
-- Your chat id: open https://api.telegram.org/bot<TOKEN>/getUpdates in a browser and read message.chat.id. Or paste the token into the clipboard first and Warden will detect your chat id from your first message.
-- Paste token and chat id into the Warden clipboard.
+- Telegram, BotFather, /newbot, copy the token. Paste it in the game: Warden, Setup tab, Telegram bot token, Save.
+- Pair your chat: open your new bot in Telegram and send the /pair line shown under "Your Telegram chat id" in the Setup tab (a six character code). Nobody else can pair, the code lives only in the passcode protected game.
+- The webhook registers itself on the next heartbeat (no step for you). From then on: the morning brief at 08:00 Dubai, approvals with Approve and Reject buttons, Warden's replies to your ideas.
+- Commands: /status, /brief, /pause <floor>, /resume <floor>, /cap, /run. Any other text is an idea.
+- Works in simulation too, so you can try the bot before pasting the Anthropic key. Simulated approvals never ring the phone, only real ones.
 
 ### 5. DocLedger repo and token
-- Confirm the repo URL (I found https://github.com/Saxqb777/docledger).
-- Create a fine grained personal access token: GitHub Settings, Developer settings, Personal access tokens, Fine grained, Generate new token. Repository access: only the DocLedger repo. Permissions: Contents read and write, Pull requests read and write, Metadata read. Expiry: 1 year.
-- Paste the token into the Warden clipboard. Builder uses it only to push branches and open pull requests. It never merges.
-- Tell me how the repo runs its tests (for example pnpm test) if there is no obvious script.
+- Paste the repo URL (https://github.com/Saxqb777/docledger) under "DocLedger GitHub repo URL".
+- GitHub, Settings, Developer settings, Fine grained tokens, Generate: only that repository, permissions Contents read and write, Pull requests read and write. Paste it under "GitHub token for the DocLedger repo".
+- Builder runs every night at 02:00 Dubai from .github/workflows/builder.yml: top backlog ticket, clone, edit with bash and file tools, run the repo's tests, push branch builder/<ticket>, open a pull request, put a pull_request item on the red phone. Caps 25 tool calls, 0.40 USD, 20 minutes. It never merges. Tickets come from Warden and from your ideas.
 
 ### 6. Calendar booking link
-- Any public booking link works: Cal.com, Calendly, Google Calendar appointment page.
-- Paste the link into the clipboard.
+- Cal.com, Calendly or a Google appointment page. Paste under "Calendar booking link". Chaser puts it in replies to warm leads.
 
 ### 7. Resend
-- resend.com, sign up, Domains, Add domain (the domain you want emails to come from, for example your consulting domain).
-- Add the DNS records Resend shows (SPF, DKIM, and the return path record) at your DNS provider. Wait until Resend shows Verified.
-- API Keys, Create API key, permission Sending access, domain: the one you verified.
-- Paste the API key and the sending address (for example saaqib@yourdomain.com) into the clipboard.
-- Optional for reply handling: Resend inbound email. Add the MX record Resend gives you for a subdomain like reply.yourdomain.com. Chaser then reads replies automatically. Without it you forward replies to Warden by hand.
+- resend.com, add and verify your sending domain, then API Keys, Create. Paste under "Resend API key". Paste the from address (on that domain) under "Sending address".
+- Approved outreach emails are sent by the next heartbeat. Nothing goes out without your Approve.
+- Replies, two ways: (a) Resend Receiving: add the MX record for a subdomain, create a webhook for email.received pointing at https://the-tower-saxqb777s-projects.vercel.app/api/email/inbound, paste the signing secret under "Resend webhook secret". (b) Forward by hand on Telegram: /reply Gulf Crescent Freight: their text. Chaser picks it up either way.
 
 ### 8. DocLedger product facts
-- One paragraph on what DocLedger does for a freight forwarder, the price, and a two line signature (name, title, phone, site).
-- Paste into the clipboard as plain text. Writer uses it in every email.
+- One paragraph on what DocLedger does for a freight forwarder, the price, and your signature block (name, title, phone). Writer and Chaser quote it, so keep it true.
 
 ### 9. Affiliate IDs
-- Amazon.ae: affiliate-program.amazon.ae, create an Associates account, copy your tracking tag (looks like name-21).
-- Noon and the others usually run through networks (for example ArabClicks or Involve Asia). Tell me which networks you already have and paste the tracking ids or link templates.
-- Deals without an affiliate id still post with a plain link. They earn nothing but grow the channel.
+- Amazon.ae: affiliate-program.amazon.ae, Associates account, copy the tracking tag (looks like name-21). Paste under "Amazon.ae Associates tag". Every Amazon.ae link gets ?tag= added.
+- Noon and the others usually run through a network (ArabClicks, Involve Asia). Paste a link template with {url} where the product link goes, for example https://network.example/click?u={url}. Without one the post carries the plain store link and earns nothing, but the channel still grows.
 
 ### 10. Telegram deals channel
-- Create a public channel in Telegram, pick a handle (for example @uaedailydeals).
-- Channel settings, Administrators, add your bot with Post messages permission.
-- Paste the handle into the clipboard.
+- Create a public channel in Telegram (for example @uaedailydeals). Add your bot (the same one as item 4) as an admin with "Post messages". Paste the handle under "Telegram deals channel handle".
+- Scout scans the store deal pages every morning at 09:00 Dubai, Editor writes up to 10 posts, each one lands on the red phone. Approved posts go out one an hour from 10:00 to 22:00 Dubai. After 14 days Warden may ask you once to auto approve this floor.
+- Every post links through https://the-tower-saxqb777s-projects.vercel.app/go/<code>, so clicks are counted. The public page https://the-tower-saxqb777s-projects.vercel.app/deals lists what was posted. Subscriber count is read from Telegram once a day for the floor's goal.
 
 ### 11. Consulting site URL
 - Only needed when Ground floor unlocks (first DocLedger demo booked and budget level 2 or higher).

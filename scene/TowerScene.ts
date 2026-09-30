@@ -1,5 +1,5 @@
 // Orchestrates the building: sky, shell, floors, characters, lift, counters, effects, camera and sound.
-import { Application, Container, FillGradient, Graphics } from "pixi.js";
+import { Application, Container, FillGradient, Graphics, Rectangle } from "pixi.js";
 import { OutlineFilter } from "pixi-filters";
 import type { TowerState } from "@/lib/state";
 import { buildMoon, buildShell, buildSkyline, buildStars, buildSun, type Shell, type Skyline } from "./building";
@@ -15,7 +15,7 @@ import { dubaiHour, hazeAt, sandstormAt, skyAt } from "./sky";
 import { SoundPack } from "./sound";
 import { ease, tween, TweenRunner, wait, type Tween } from "./tween";
 
-export type Selection = { type: "agent"; id: string; slug: string } | { type: "floor"; slug: string } | { type: "warden" };
+export type Selection = { type: "agent"; id: string; slug: string } | { type: "floor"; slug: string } | { type: "warden" } | { type: "ideas" };
 
 export interface SceneOptions {
   onSelect?: (sel: Selection) => void;
@@ -76,6 +76,9 @@ export class TowerScene {
   private camTween: Tween | null = null;
   private pan = { active: false, startX: 0, startWorldX: 0 };
   private lowBanner: Container | null = null;
+  private inset = 0; // screen pixels a panel takes on the right, the building slides over to stay in view
+  private insetGen = 0;
+  private selectedId: string | null = null;
 
   private constructor(app: Application, host: HTMLElement, opts: SceneOptions) {
     this.app = app;
@@ -121,6 +124,7 @@ export class TowerScene {
       this.nightOverlay, this.hazeOverlay, this.sandOverlay, this.effects.layer, this.hud.container, this.speaker,
     );
     this.app.stage.addChild(this.world);
+    this.hud.onIdeas = () => this.opts.onSelect?.({ type: "ideas" });
     this.nightOverlay.rect(BUILDING.interiorX, ROOF_Y, BUILDING.interiorRight - BUILDING.interiorX, GROUND_Y - ROOF_Y).fill(C.skyNightTop);
     this.nightOverlay.alpha = 0;
     this.nightOverlay.eventMode = "none";
@@ -210,14 +214,61 @@ export class TowerScene {
   private applyCamera() {
     const s = this.base.scale * this.cam.zoom;
     this.world.scale.set(s);
+    const inset = this.base.wide ? this.inset : 0;
     if (this.cam.zoom === 1) {
-      this.world.position.set(this.base.x, this.base.y);
+      this.world.position.set(this.base.x - inset / 2, this.base.y);
     } else {
-      const cx = this.base.w / 2;
+      const cx = (this.base.w - inset) / 2;
       const cy = this.base.h / 2;
       this.world.position.set(cx - this.cam.cx * s, cy - this.cam.cy * s);
     }
     this.applyParallax();
+  }
+
+  // A panel opened or closed on the right: ease the building over so it stays in view.
+  setInset(px: number) {
+    const from = this.inset;
+    const gen = ++this.insetGen; // a newer call takes over, the older tween goes quiet
+    this.runner.add(tween(420, (t) => {
+      if (gen !== this.insetGen) return;
+      this.inset = from + (px - from) * t;
+      this.applyCamera();
+    }, ease.inOut));
+  }
+
+  // Keeps the outline and name tag on the character whose panel is open.
+  highlightAgent(id: string | null) {
+    const prev = this.selectedId ? this.sprites.get(this.selectedId) : undefined;
+    this.selectedId = id;
+    if (prev) {
+      prev.filters = [];
+      prev.showTag(false);
+    }
+    const next = id ? this.sprites.get(id) : undefined;
+    if (next) {
+      next.filters = [this.outline];
+      next.showTag(true);
+    }
+  }
+
+  // A standing portrait of one character, rendered off screen for the panel.
+  async portrait(agentId: string): Promise<string | null> {
+    const a = this.agentsById.get(agentId);
+    if (!a || this.destroyed) return null;
+    const isWarden = a.kind === "warden";
+    const frame = new Container();
+    const rig = new CharacterSprite(a.id, a.name, (a.sprite as Look) ?? { hair: 0, glasses: false, mug: false, slouch: false, coat: isWarden, tone: 0 }, isWarden);
+    rig.setPose("stand");
+    rig.showTag(false);
+    rig.position.set(40, 94);
+    frame.addChild(rig);
+    try {
+      return await this.app.renderer.extract.base64({ target: frame, frame: new Rectangle(0, 0, 80, 100), resolution: 3 });
+    } catch {
+      return null;
+    } finally {
+      frame.destroy({ children: true });
+    }
   }
 
   private applyParallax() {
@@ -388,8 +439,9 @@ export class TowerScene {
             this.opts.onHover?.(isWarden ? { type: "warden" } : { type: "agent", id: a.id, slug: a.slug });
           });
           sprite.on("pointerout", () => {
-            sp.filters = [];
-            sp.showTag(false);
+            const keep = this.selectedId === a.id;
+            sp.filters = keep ? [this.outline] : [];
+            sp.showTag(keep);
             this.opts.onHover?.(null);
           });
           sprite.on("pointertap", () => this.opts.onSelect?.(isWarden ? { type: "warden" } : { type: "agent", id: a.id, slug: a.slug }));

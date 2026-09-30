@@ -1,15 +1,41 @@
-# nudge
 name: builder
 
-# Builder's nightly ticket on the DocLedger repo. Disabled until Phase 5.
-# When enabled: schedule "0 22 * * *" (02:00 Dubai), one ticket, hard caps 25 tool calls, 0.40 USD, 20 minutes.
+# Builder's nightly ticket on the DocLedger repo at 02:00 Dubai (22:00 UTC).
+# One ticket a night, hard caps 25 tool calls, 0.40 USD, 20 minutes. Opens a pull request, never merges.
+# Authenticates to the Tower with a GitHub OIDC token, the same way the heartbeat does.
 on:
+  schedule:
+    - cron: "0 22 * * *"
   workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TOWER_URL: https://the-tower-saxqb777s-projects.vercel.app
 
 jobs:
   builder:
-    if: ${{ false }}
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
-      - run: echo "Builder arrives in Phase 5"
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Mint an OIDC token for this run
+        id: oidc
+        run: |
+          token=$(curl -sS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=the-tower" | python3 -c 'import sys,json; print(json.load(sys.stdin)["value"])')
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+      - name: Work the top ticket
+        env:
+          TOWER_TOKEN: ${{ steps.oidc.outputs.token }}
+          TOWER_URL: ${{ secrets.TOWER_URL || env.TOWER_URL }}
+        run: pnpm exec tsx scripts/builder.ts

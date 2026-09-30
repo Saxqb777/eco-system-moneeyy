@@ -39,6 +39,9 @@ import {
 } from "./names";
 import { SIM_PLAYBOOKS } from "./playbooks";
 import { between, pick, rngFor } from "./rng";
+import { describeTaskOutput } from "@/lib/tasks";
+import { applyApprovalDecision } from "@/lib/approvals";
+export { applyApprovalDecision };
 
 const SLICE_MINUTES = 5;
 const PENTHOUSE_LEVEL = 5;
@@ -265,7 +268,7 @@ async function finishTask(db: Db, world: World, agent: AgentRow, task: TaskRow, 
   const score = rejected ? between(rand, 3, 5) : between(rand, 6, 10);
   const reason = rejected ? pick(rand, REJECT_REASONS) : "Meets the playbook, accepted";
 
-  await logEvent(db, { taskId: task.id, agentId: agent.id, floorId: floor.id, type: "output", message: summarizeOutput(task.kind, output, rejected), data: output, at: t });
+  await logEvent(db, { taskId: task.id, agentId: agent.id, floorId: floor.id, type: "output", message: describeTaskOutput(task.kind, output, rejected), data: output, at: t });
   await logEvent(db, { taskId: task.id, agentId: world.warden.id, floorId: floor.id, type: "review", message: `Warden scored ${score}/10: ${reason}`, data: { score, reason }, at: t });
 
   if (rejected) {
@@ -297,30 +300,6 @@ async function finishTask(db: Db, world: World, agent: AgentRow, task: TaskRow, 
   agent.reviewScoreSum = (Number(agent.reviewScoreSum) + score).toFixed(2);
   agent.reviewCount = agent.reviewCount + 1;
   summary.tasksFinished += 1;
-}
-
-function summarizeOutput(kind: string, output: Record<string, unknown>, rejected: boolean): string {
-  if (rejected) return "Draft output ready for review";
-  switch (kind) {
-    case "find_leads":
-      return `Found ${output.found ?? 0} new leads`;
-    case "qualify_lead":
-      return output.company ? `Scored ${output.company}: ${output.score}/10` : "No new lead to qualify";
-    case "draft_outreach":
-      return output.company ? `Outreach drafted for ${output.company}, waiting for approval` : "No qualified lead waiting";
-    case "follow_up":
-      return String(output.result ?? "Follow up logged");
-    case "build_ticket":
-      return output.title ? `Pull request opened: ${output.title}` : "No ticket in the backlog";
-    case "find_deals":
-      return `Found ${output.found ?? 0} deals`;
-    case "write_post":
-      return output.title ? `Post drafted: ${output.title}` : "No deal waiting for a post";
-    case "publish_post":
-      return output.posted ? `Posted to the channel, ${output.clicks} clicks so far` : "Nothing approved to publish yet";
-    default:
-      return "Task finished";
-  }
 }
 
 async function produceOutput(db: Db, agent: AgentRow, task: TaskRow, floor: FloorRow, t: Date, rand: () => number, summary: SimSummary): Promise<Record<string, unknown>> {
@@ -502,28 +481,6 @@ async function autoDecideApprovals(db: Db, now: Date, summary: SimSummary) {
     await applyApprovalDecision(db, a.id, approve ? "approved" : "rejected", approve ? null : "Not this one, too pushy", "auto", now);
     summary.approvalsAutoDecided += 1;
   }
-}
-
-// Shared with the API route: records the decision and, in simulation, moves the linked row along.
-export async function applyApprovalDecision(db: Db, approvalId: string, status: "approved" | "rejected", feedback: string | null, via: string, now = new Date()) {
-  const [a] = await db.select().from(approvals).where(eq(approvals.id, approvalId)).limit(1);
-  if (!a || a.status !== "pending") return null;
-  await db.update(approvals).set({ status, feedback, decidedAt: now, decidedVia: via, executedAt: a.simulated ? now : null, executionResult: a.simulated ? { simulated: true } : null, updatedAt: now }).where(eq(approvals.id, a.id));
-  if (a.simulated) {
-    if (a.type === "outreach_email") {
-      await db.update(outreach).set({ status: status === "approved" ? "sent" : "rejected", sentAt: status === "approved" ? now : null, updatedAt: now }).where(eq(outreach.approvalId, a.id));
-      const [o] = await db.select().from(outreach).where(eq(outreach.approvalId, a.id)).limit(1);
-      if (o?.leadId) await db.update(leads).set({ status: status === "approved" ? "contacted" : "qualified", updatedAt: now }).where(eq(leads.id, o.leadId));
-    } else if (a.type === "public_post") {
-      await db.update(posts).set({ status: status === "approved" ? "approved" : "rejected", updatedAt: now }).where(eq(posts.approvalId, a.id));
-    } else if (a.type === "pull_request") {
-      await db.update(tickets).set({ status: status === "approved" ? "approved" : "rejected", updatedAt: now }).where(eq(tickets.approvalId, a.id));
-    }
-  }
-  if (a.taskId) {
-    await logEvent(db, { taskId: a.taskId, agentId: a.agentId, floorId: a.floorId, type: status === "approved" ? "log" : "rejected", message: status === "approved" ? `Approved by owner (${via})` : `Rejected by owner: ${feedback ?? "no feedback"}`, at: now });
-  }
-  return { id: a.id, status };
 }
 
 // Removes every simulated row. Only called from the settings API on explicit request.

@@ -4,7 +4,7 @@ import { siteRoute } from "@/lib/site";
 
 // Owner passcode gate. Public: the login page, health, the tick (bearer secret or OIDC), the heartbeat (gap limited),
 // the Telegram webhook (secret header), the public deals pages, click links, the sitemap and robots.txt.
-const PUBLIC = [/^\/login$/, /^\/api\/auth\/login$/, /^\/api\/health$/, /^\/api\/tick$/, /^\/api\/heartbeat$/, /^\/api\/telegram$/, /^\/api\/email\/inbound$/, /^\/api\/builder$/, /^\/api\/deals(\/.*)?$/, /^\/deals(\/.*)?$/, /^\/go\/.+$/, /^\/for\/.+$/, /^\/docledger$/, /^\/sitemap\.xml$/, /^\/robots\.txt$/];
+const PUBLIC = [/^\/login$/, /^\/api\/auth\/login$/, /^\/api\/health$/, /^\/api\/tick$/, /^\/api\/heartbeat$/, /^\/api\/telegram$/, /^\/api\/email\/inbound$/, /^\/api\/builder$/, /^\/api\/deals(\/.*)?$/, /^\/api\/public\/preview\/[a-z0-9]{4,12}$/, /^\/deals(\/.*)?$/, /^\/go\/.+$/, /^\/for\/.+$/, /^\/docledger$/, /^\/sitemap\.xml$/, /^\/robots\.txt$/];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

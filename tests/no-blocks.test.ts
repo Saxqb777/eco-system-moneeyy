@@ -152,8 +152,8 @@ describe("The owner sees what he approves", () => {
   it("puts the preview link in once, whether or not the Writer introduced it", () => {
     const url = "https://x.example/for/abc123";
     expect(insertPreview("Hi,\nI made a page for you:\n{preview}\nThanks", "LBX", url)).toBe(`Hi,\nI made a page for you:\n${url}\nThanks`);
-    expect(insertPreview("Hi,\n{preview}\nThanks", "LBX", url)).toBe(`Hi,\nA two minute preview made for LBX: ${url}\nThanks`);
-    expect(insertPreview("Hi", "LBX", url)).toBe(`Hi\n\nA two minute preview made for LBX: ${url}`);
+    expect(insertPreview("Hi,\n{preview}\nThanks", "LBX", url)).toBe(`Hi,\nI set up a demo company for LBX, no signup needed: ${url}\nThanks`);
+    expect(insertPreview("Hi", "LBX", url)).toBe(`Hi\n\nI set up a demo company for LBX, no signup needed: ${url}`);
   });
 
   it("cleans dashes out of agent text without touching words, links or greetings", () => {

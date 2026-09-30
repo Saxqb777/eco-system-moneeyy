@@ -106,7 +106,7 @@ describe("DocLedger pipeline", () => {
     const drafts = await db.select().from(outreach).where(eq(outreach.simulated, false));
     expect(drafts).toHaveLength(2);
     expect(drafts[0]!.approvalId).toBeTruthy();
-    expect(drafts[0]!.bodyText).toMatch(/A two minute preview made for .*: https?:\/\/\S+\/for\/[a-z0-9]{6}/);
+    expect(drafts[0]!.bodyText).toMatch(/I set up a demo company for .*: https?:\/\/\S+\/for\/[a-z0-9]{6}/);
     expect(drafts[0]!.bodyText).not.toContain("{preview}");
     const withPreview = await db.select().from(leads).where(eq(leads.simulated, false));
     expect(withPreview.every((l) => l.previewCode && (l.preview as { points: string[] }).points.length === 3)).toBe(true);

@@ -20,21 +20,30 @@ export const DOCLEDGER = {
     "Finance teams anywhere in the world that key shipping bills, fuel receipts and petty cash by hand: freight forwarders and customs brokers first, then food and beverage distributors, trading companies with their own fleets, and small third party logistics firms. Two to two hundred staff. It is software, so the country does not matter; multi currency matters more the more borders they cross. Couriers, airlines and shipping lines are not a fit.",
   builtToTheirTerms:
     "Whatever their paperwork looks like, Doc Ledger is shaped to it: their own document types, fields, categories, currencies and rates. If they need something it does not do yet, we build it for them on their terms, usually within days. Say that plainly when they describe a document or a workflow we have not seen.",
-  subjectExamples: ["Your petty cash, without the retyping", "Receipts to spreadsheet, minus the spreadsheet", "40 shipping bills a month, keyed by hand?"],
-  emailExample: `Hi [Name],
-Most finance teams end the month the same way: an envelope of receipts, and someone retyping them into a spreadsheet. Shipping bills are the worst of it, because every charge line, BL number and container number gets keyed by hand.
-Doc Ledger takes the typing out. Your staff photograph the receipt, the system reads it and fills in the fields, and a person checks the result and saves it. Finance exports a finished four sheet workbook instead of building one.
-It handles what generic expense apps do not: freight invoices with itemised charges, fuel receipts with litres, odometer and plate, foreign currency converted at the rate on the day it was spent, and duplicate receipts rejected before they reach your books.
-Your company files things your own way, so you define your own document types. Name the fields you need, describe what the document looks like, and it reads for those instead of ours.
-Worth fifteen minutes to show you?
-[Your name]`,
+  // The first email (D070, Saaqib: "the previous pitch was ass"). Short, one person to one person, and the
+  // link does the selling: a demo company named after them with one of their kinds of document already read.
+  subjectExamples: ["TLM's freight invoices", "Charge lines, without the typing", "Your shipping bills at month end"],
+  emailExample: `Hi Rajesh,
+
+Four facilities across JAFZA and Dubai South means a lot of freight and customs invoices by month end, most of them keyed in line by line.
+
+Doc Ledger reads them from a photo: every charge line, the BL and container numbers, and foreign currency at the rate of the day. Someone checks it against the bill and saves.
+
+I set up a demo company for TLM with one of your kinds of bill already in it, no signup:
+{preview}
+
+If it looks useful, reply and I will set it up for your team. The first month is free.
+
+Saaqib`,
   emailRules: [
-    "About 150 to 180 words. No adjectives doing the selling.",
-    "The first sentence describes their Tuesday (their month end, their paperwork), never our product.",
-    "The differentiator (their own document types) is the last thing before the ask, so it stays in mind.",
-    "Never say AI in the subject line. The pain is the retyping; AI is how it is solved, not what is sold.",
-    "Subject under 8 words, plain, no clickbait, no exclamation marks, no emojis, no bullet lists.",
-    "One specific detail about their company in the first two sentences, from the research, never invented.",
+    "60 to 100 words before the signature. Four short paragraphs at most. No feature lists, no bullet points.",
+    "The first sentence is about them: one true detail from the research, tied to the paperwork it creates. Never open with a generalisation about finance teams, never open with our product.",
+    "One or two sentences on what Doc Ledger does, in plain words and only for the document that matters to them.",
+    "Then one sentence introducing the demo company made for them, ending with a colon, and the line {preview} on its own under it.",
+    "The ask is one small step: reply and we set it up for their team, first month free. No call to book in the first email.",
+    "Write as Saaqib, the founder, to one person: I, not we (we only for building things for them). Warm and direct, no flattery.",
+    "Never write: I hope this finds you well, streamline, seamless, revolutionise, game changer, cutting edge, powerful, solution, leverage, just checking in, exclamation marks, AI in the subject.",
+    "Subject: two to five words about their paperwork or their company, no product name, no question marks.",
     "End with the signature block from the clipboard and one plain opt out line: Reply stop and I will not write again.",
   ],
   replyWalkthrough: [

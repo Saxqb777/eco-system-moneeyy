@@ -4,7 +4,7 @@ import type { Db } from "@/db/client";
 import { agents, approvals, clicks, deals, floors, posts, taskEvents, tasks } from "@/db/schema";
 import { clipboardValue } from "@/lib/clipboard";
 import { getSettings, setSetting } from "@/lib/settings";
-import { getTelegramConfig, sendNow } from "@/lib/telegram";
+import { channelChatId, getTelegramConfig, sendNow } from "@/lib/telegram";
 import { dubaiParts } from "@/lib/time";
 import { openTasksOfKind } from "./playbooks";
 
@@ -59,11 +59,11 @@ export async function publishPost(db: Db, a: typeof approvals.$inferSelect, now 
   if (!post) return { ok: false, error: "post row missing" };
   if (post.status === "posted") return { ok: true };
   if (post.scheduledAt && post.scheduledAt.getTime() > now.getTime()) return { ok: false, error: `scheduled for ${post.scheduledAt.toISOString().slice(11, 16)} UTC` };
-  const channel = await clipboardValue(db, "deals_channel");
-  if (!channel) return { ok: false, error: "Telegram deals channel not on the clipboard" };
+  const channel = channelChatId(await clipboardValue(db, "deals_channel"));
+  if (!channel) return { ok: false, error: "Telegram deals channel not on the clipboard (paste the @handle)" };
   const cfg = await getTelegramConfig(db);
   if (!cfg) return { ok: false, error: "Telegram bot token not on the clipboard" };
-  const messageId = await sendNow(cfg.token, channel.startsWith("@") ? channel : `@${channel}`, post.body);
+  const messageId = await sendNow(cfg.token, channel, post.body);
   if (!messageId) return { ok: false, error: "the channel refused the post: is the bot an admin with Post messages?" };
   await db.update(posts).set({ status: "posted", postedAt: now, telegramMessageId: messageId, updatedAt: now }).where(eq(posts.id, post.id));
   if (post.dealIds.length) await db.update(deals).set({ status: "posted", updatedAt: now }).where(inArray(deals.id, post.dealIds));
@@ -108,11 +108,11 @@ export async function refreshChannelSubscribers(db: Db, now = new Date()): Promi
   const settingsMap = await getSettings(db);
   const p = dubaiParts(now);
   if (settingsMap.channel_subscribers_day === p.dayKey) return { status: "fresh" };
-  const channel = await clipboardValue(db, "deals_channel");
+  const channel = channelChatId(await clipboardValue(db, "deals_channel"));
   const cfg = await getTelegramConfig(db);
   if (!channel || !cfg) return { status: "skipped" };
   const { telegramCall } = await import("@/lib/telegram");
-  const res = await telegramCall(cfg.token, "getChatMemberCount", { chat_id: channel.startsWith("@") ? channel : `@${channel}` });
+  const res = await telegramCall(cfg.token, "getChatMemberCount", { chat_id: channel });
   if (!res.ok || typeof res.result !== "number") return { status: "failed" };
   await setSetting(db, "channel_subscribers", res.result);
   await setSetting(db, "channel_subscribers_day", p.dayKey);

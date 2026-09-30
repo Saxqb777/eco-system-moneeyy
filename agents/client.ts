@@ -20,6 +20,7 @@ export interface ModelCall {
   schema?: Record<string, unknown>;
   maxTokens?: number;
   webSearchMaxUses?: number;
+  webFetchMaxUses?: number;
   customId?: string;
 }
 
@@ -94,9 +95,10 @@ export function buildParams(call: ModelCall, model: string): MessageCreateParams
     messages: call.messages,
     output_config: { effort: EFFORT[call.agentKey], ...(call.schema ? { format: { type: "json_schema", schema: call.schema } } : {}) },
   };
-  if (call.webSearchMaxUses && call.webSearchMaxUses > 0) {
-    params.tools = [{ type: "web_search_20260318", name: "web_search", max_uses: call.webSearchMaxUses }];
-  }
+  const tools: NonNullable<MessageCreateParamsNonStreaming["tools"]> = [];
+  if (call.webSearchMaxUses && call.webSearchMaxUses > 0) tools.push({ type: "web_search_20260318", name: "web_search", max_uses: call.webSearchMaxUses });
+  if (call.webFetchMaxUses && call.webFetchMaxUses > 0) tools.push({ type: "web_fetch_20260318", name: "web_fetch", max_uses: call.webFetchMaxUses, max_content_tokens: 12000 });
+  if (tools.length) params.tools = tools;
   return params;
 }
 

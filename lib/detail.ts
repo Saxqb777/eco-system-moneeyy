@@ -167,7 +167,7 @@ export async function renameAgent(db: Db, agentId: string, raw: unknown, now = n
 }
 
 // The weekly number behind each floor's goal metric. Proxies are labelled as such until the real source connects.
-async function weeklyActual(db: Db, floor: typeof floors.$inferSelect, simulated: boolean, weekStart: Date): Promise<{ value: number; measure: string }> {
+export async function weeklyActual(db: Db, floor: typeof floors.$inferSelect, simulated: boolean, weekStart: Date): Promise<{ value: number; measure: string }> {
   switch (floor.slug) {
     case "docledger": {
       const [r] = await db
@@ -177,6 +177,8 @@ async function weeklyActual(db: Db, floor: typeof floors.$inferSelect, simulated
       return { value: Number(r?.n ?? 0), measure: "Demos booked this week" };
     }
     case "deals": {
+      const s = await getSettings(db);
+      if (!simulated && typeof s.channel_subscribers === "number") return { value: s.channel_subscribers, measure: "Channel subscribers, refreshed daily from Telegram" };
       const [r] = await db
         .select({ n: sql<string>`count(*)` })
         .from(posts)

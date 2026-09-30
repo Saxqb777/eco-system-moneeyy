@@ -126,6 +126,10 @@ export async function deliverMessages(db: Db, now = new Date()): Promise<{ statu
   return { status: "ok", sent, failed };
 }
 
+export async function telegramCall(token: string, method: string, body: Record<string, unknown>) {
+  return api(token, method, body);
+}
+
 // Direct replies from the webhook (an acknowledgement, a command answer). Failures are swallowed: the queue is the reliable path.
 export async function sendNow(token: string, chatId: string, text: string, extra: Record<string, unknown> = {}): Promise<number | null> {
   try {

@@ -2,6 +2,8 @@ import type { Message, MessageCreateParamsNonStreaming } from "@anthropic-ai/sdk
 import type { AnthropicLike } from "@/agents/client";
 import type { TelegramApi } from "@/lib/telegram";
 
+let batchSeq = 0;
+
 // A fake Anthropic client: answers every request with the JSON the test provides, in sync and batch modes.
 export function fakeAnthropic(answer: (params: MessageCreateParamsNonStreaming) => unknown): AnthropicLike & { calls: MessageCreateParamsNonStreaming[]; batches: Map<string, Array<{ custom_id: string; params: MessageCreateParamsNonStreaming }>> } {
   const calls: MessageCreateParamsNonStreaming[] = [];
@@ -27,7 +29,7 @@ export function fakeAnthropic(answer: (params: MessageCreateParamsNonStreaming) 
       },
       batches: {
         async create({ requests }) {
-          const id = `msgbatch_${batchStore.size + 1}`;
+          const id = `msgbatch_${++batchSeq}`;
           batchStore.set(id, requests);
           return { id, processing_status: "in_progress" };
         },

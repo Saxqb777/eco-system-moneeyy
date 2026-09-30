@@ -5,6 +5,7 @@ import type { Db } from "@/db/client";
 import { leads, outreach, taskEvents, tasks } from "@/db/schema";
 import { raiseApproval } from "@/lib/approvals";
 import { clipboardValue } from "@/lib/clipboard";
+import { DEALS_PLAYBOOKS } from "./deals-playbooks";
 
 type TaskRow = typeof tasks.$inferSelect;
 type LeadRow = typeof leads.$inferSelect;
@@ -20,6 +21,7 @@ export interface PlaybookContext {
 export interface Prepared {
   user: string;
   webSearchMaxUses?: number;
+  webFetchMaxUses?: number;
 }
 
 export interface Absorbed {
@@ -33,11 +35,14 @@ export interface Playbook {
   schema: Record<string, unknown>;
   maxTokens: number;
   webSearchMaxUses: number;
+  webFetchMaxUses?: number;
   prepare(task: TaskRow, ctx: PlaybookContext): Promise<Prepared | { skip: string }>;
   absorb(task: TaskRow, output: Record<string, unknown>, ctx: PlaybookContext): Promise<Absorbed>;
 }
 
 const STYLE = "Write plain English in short sentences. Never use hyphens or em dashes in any text you produce, use commas or colons instead. Never invent facts: only report what you saw on a page or in the input.";
+
+export { STYLE, logEvent, str, num, input };
 
 export function dedupeKeyFor(company: string, website: string | null | undefined): string {
   const name = company.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -296,6 +301,7 @@ export const PLAYBOOKS: Record<string, Playbook> = {
   qualify_lead: qualifyLead,
   draft_outreach: draftOutreach,
   follow_up: followUp,
+  ...DEALS_PLAYBOOKS,
 };
 
 export function playbookFor(kind: string): Playbook | null {

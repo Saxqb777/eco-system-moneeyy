@@ -224,3 +224,21 @@ textarea.field { resize: vertical; }
   .panel-hinge { display: none; }
   .two { grid-template-columns: 1fr; }
 }
+
+/* Public deals page: paper on charcoal, same palette as the building. */
+.deals { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; font-family: "IBM Plex Sans", sans-serif; }
+.deals-head h1 { font-family: "Barlow Condensed", sans-serif; font-size: 40px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--brass); margin: 0 0 6px; }
+.deals-head p { color: var(--paper); opacity: 0.85; margin: 0 0 12px; font-size: 14px; }
+.deals-head .key { display: inline-block; text-decoration: none; }
+.deals-list { list-style: none; padding: 0; margin: 20px 0 0; display: grid; gap: 12px; }
+.deal { background: var(--paper); color: var(--ink); padding: 12px 14px; border: 1px solid var(--paper-shade); box-shadow: 2px 3px 0 rgba(0, 0, 0, 0.35); border-left: 6px solid var(--warn); }
+.deal h2 { font-size: 17px; margin: 2px 0 6px; }
+.deal-store { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--wood-dark); font-weight: 600; }
+.deal-price { display: flex; gap: 10px; align-items: baseline; margin-bottom: 6px; }
+.deal-price .now { font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 24px; color: var(--wood-dark); }
+.deal-price .was { text-decoration: line-through; color: var(--muted); }
+.deal-price .off { background: var(--ok); color: #fff; padding: 1px 7px; font-size: 12px; font-weight: 600; }
+.deal-body { margin: 0 0 8px; font-size: 13px; line-height: 1.45; }
+.deal .key { text-decoration: none; display: inline-block; }
+.deal-meta { font-size: 11px; color: var(--muted); margin-top: 6px; }
+.deals-empty, .deals-foot { color: var(--stone); font-size: 13px; margin-top: 20px; }

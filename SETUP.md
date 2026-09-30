@@ -19,8 +19,8 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 | 7 | Resend API key and sending address | Sending approved outreach emails | Now | missing |
 | 8 | DocLedger product facts: one paragraph pitch, pricing, your signature block | Writer and Chaser | Now | missing |
 | 8b | Resend webhook secret for replies (optional) | Chaser reads replies itself | Optional | missing: without it, forward replies with /reply on Telegram |
-| 9 | Affiliate IDs: Amazon.ae tag, Noon, others | Deals Engine going live | Phase 6 | missing |
-| 10 | Telegram deals channel handle, bot added as admin | Publisher | Phase 6 | missing |
+| 9 | Affiliate IDs: Amazon.ae tag, Noon, others | Deals Engine earning (posts run without them, links stay plain) | Now | missing |
+| 10 | Telegram deals channel handle, bot added as admin | Publisher posting to the channel | Now | missing |
 | 11 | Consulting site URL | Ground floor (locked until unlock rule is met) | Later | missing |
 
 ## Steps per item
@@ -80,14 +80,13 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 - One paragraph on what DocLedger does for a freight forwarder, the price, and your signature block (name, title, phone). Writer and Chaser quote it, so keep it true.
 
 ### 9. Affiliate IDs
-- Amazon.ae: affiliate-program.amazon.ae, create an Associates account, copy your tracking tag (looks like name-21).
-- Noon and the others usually run through networks (for example ArabClicks or Involve Asia). Tell me which networks you already have and paste the tracking ids or link templates.
-- Deals without an affiliate id still post with a plain link. They earn nothing but grow the channel.
+- Amazon.ae: affiliate-program.amazon.ae, Associates account, copy the tracking tag (looks like name-21). Paste under "Amazon.ae Associates tag". Every Amazon.ae link gets ?tag= added.
+- Noon and the others usually run through a network (ArabClicks, Involve Asia). Paste a link template with {url} where the product link goes, for example https://network.example/click?u={url}. Without one the post carries the plain store link and earns nothing, but the channel still grows.
 
 ### 10. Telegram deals channel
-- Create a public channel in Telegram, pick a handle (for example @uaedailydeals).
-- Channel settings, Administrators, add your bot with Post messages permission.
-- Paste the handle into the clipboard.
+- Create a public channel in Telegram (for example @uaedailydeals). Add your bot (the same one as item 4) as an admin with "Post messages". Paste the handle under "Telegram deals channel handle".
+- Scout scans the store deal pages every morning at 09:00 Dubai, Editor writes up to 10 posts, each one lands on the red phone. Approved posts go out one an hour from 10:00 to 22:00 Dubai. After 14 days Warden may ask you once to auto approve this floor.
+- Every post links through https://the-tower-saxqb777s-projects.vercel.app/go/<code>, so clicks are counted. The public page https://the-tower-saxqb777s-projects.vercel.app/deals lists what was posted. Subscriber count is read from Telegram once a day for the floor's goal.
 
 ### 11. Consulting site URL
 - Only needed when Ground floor unlocks (first DocLedger demo booked and budget level 2 or higher).

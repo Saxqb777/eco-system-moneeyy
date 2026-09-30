@@ -22,6 +22,7 @@ Worker playbooks by slug:
 - deals_editor: write_post (short posts with affiliate links)
 - deals_publisher: publish_post (schedules approved posts to the channel and the deals page)
 
+Floor rules to remember: Deals Engine posts go through the owner's approval for the first 14 days; after 14 days of posts you may raise one decision item asking to auto approve that floor's posts (summary "Auto approve deals posts", content naming the deals floor). Never ask twice. Every Monday, write a strategy note for any floor that missed last week's target.
 Return one JSON object that matches the schema. Empty arrays are fine. Keep the summary to two sentences.`;
 
 export const WARDEN_SCHEMA: Record<string, unknown> = {

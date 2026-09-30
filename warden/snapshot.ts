@@ -2,13 +2,15 @@
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { FLOOR_REQUIREMENTS } from "@/config/tower";
 import type { Db } from "@/db/client";
-import { agents, approvals, budgetLedger, floors, ideas, setupItems, tasks, wardenRuns } from "@/db/schema";
+import { agents, approvals, budgetLedger, floors, ideas, posts, setupItems, tasks, wardenRuns } from "@/db/schema";
+import { weeklyActual } from "@/lib/detail";
 import { asNumber, getSettings } from "@/lib/settings";
 import { dubaiDayStartUtc, dubaiParts, dubaiWeekStartUtc } from "@/lib/time";
 
 export interface Snapshot {
   now: string;
   dayKey: string;
+  weekday: string;
   budget: { level: number; dailyCapUsd: number; hardCeilingUsd: number; spentTodayUsd: number; spentByFloor: Record<string, number>; allocationGuideUsd: Record<string, number> };
   floors: Array<{
     slug: string;
@@ -16,10 +18,15 @@ export interface Snapshot {
     status: string;
     goal: string;
     weeklyTarget: number;
+    weeklyActual: number;
+    measure: string;
     doneThisWeek: number;
     strategyNote: string | null;
     missingSetup: string[];
     throttled: boolean;
+    autoApprove: boolean;
+    postedTotal?: number;
+    firstPostDay?: string | null;
     crew: Array<{ slug: string; name: string; role: string; status: string; task: string | null }>;
     queued: number;
     blocked: Array<{ taskId: string; agent: string; title: string; reason: string }>;
@@ -64,6 +71,7 @@ export async function buildSnapshot(db: Db, now = new Date()): Promise<Snapshot>
   const present = new Set(setupRows.filter((s) => s.status === "present").map((s) => s.key));
   const pending = await db.select({ type: approvals.type, summary: approvals.summary }).from(approvals).where(and(eq(approvals.status, "pending"), eq(approvals.simulated, false))).limit(6);
   const newIdeas = await db.select({ id: ideas.id, text: ideas.text }).from(ideas).where(eq(ideas.status, "new")).orderBy(ideas.createdAt).limit(6);
+  const [postStats] = await db.select({ n: sql<string>`count(*)`, first: sql<string | null>`min(${posts.postedAt})` }).from(posts).where(and(eq(posts.simulated, false), eq(posts.status, "posted")));
   const runs = await db.select({ summary: wardenRuns.summary }).from(wardenRuns).where(and(eq(wardenRuns.simulated, false), eq(wardenRuns.status, "applied"))).orderBy(desc(wardenRuns.startedAt)).limit(3);
 
   const spentByFloor: Record<string, number> = {};
@@ -81,6 +89,7 @@ export async function buildSnapshot(db: Db, now = new Date()): Promise<Snapshot>
   return {
     now: `${p.dayKey} ${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")} Dubai`,
     dayKey: p.dayKey,
+    weekday: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][new Date(now.getTime() + 4 * 3600 * 1000).getUTCDay()] ?? "",
     budget: {
       level: asNumber(settingsMap.budget_level, 1),
       dailyCapUsd: asNumber(settingsMap.daily_cap_usd, 1.7),
@@ -89,10 +98,11 @@ export async function buildSnapshot(db: Db, now = new Date()): Promise<Snapshot>
       spentByFloor,
       allocationGuideUsd: (settingsMap.allocation_guide_usd ?? {}) as Record<string, number>,
     },
-    floors: floorRows
+    floors: await Promise.all(floorRows
       .filter((f) => f.slug !== "lobby")
-      .map((f) => ({
+      .map(async (f) => ({
         slug: f.slug,
+        ...(await weeklyActual(db, f, false, weekStart).then((w) => ({ weeklyActual: w.value, measure: w.measure }))),
         name: f.name,
         status: f.status,
         goal: `${f.goalMetric}, weekly target ${Number(f.weeklyTarget)} ${f.targetUnit}`.trim(),
@@ -101,6 +111,8 @@ export async function buildSnapshot(db: Db, now = new Date()): Promise<Snapshot>
         strategyNote: f.strategyNote ? clip(f.strategyNote, 200) : null,
         missingSetup: (FLOOR_REQUIREMENTS[f.slug] ?? []).filter((k) => !present.has(k)),
         throttled: !!f.throttledUntil && f.throttledUntil.getTime() > now.getTime(),
+        autoApprove: f.autoApprove,
+        ...(f.slug === "deals" ? { postedTotal: Number(postStats?.n ?? 0), firstPostDay: postStats?.first ? String(postStats.first).slice(0, 10) : null } : {}),
         crew: agentRows
           .filter((a) => a.floorId === f.id && a.kind !== "warden")
           .map((a) => ({ slug: a.slug, name: a.name, role: a.role, status: a.status, task: a.currentTaskId ? (titleById.get(a.currentTaskId) ?? null) : null })),
@@ -108,7 +120,7 @@ export async function buildSnapshot(db: Db, now = new Date()): Promise<Snapshot>
         blocked: blockedRows
           .filter((t) => t.floorId === f.id)
           .map((t) => ({ taskId: t.id, agent: (t.agentId && agentById.get(t.agentId)?.slug) || "unassigned", title: t.title, reason: clip(t.blockedReason ?? "", 160) })),
-      })),
+      }))),
     toReview: reviewRows.map((t) => ({ taskId: t.id, agent: (t.agentId && agentById.get(t.agentId)?.slug) || "unassigned", kind: t.kind, title: t.title, output: clip(JSON.stringify(t.output ?? {}), 600) })),
     pendingApprovals: pending.map((a) => ({ type: a.type, summary: clip(a.summary, 120) })),
     newIdeas: newIdeas.map((i) => ({ ideaId: i.id, text: clip(i.text, 240) })),

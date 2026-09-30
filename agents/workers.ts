@@ -80,6 +80,7 @@ export async function submitQueuedTasks(db: Db, now = new Date()): Promise<{ sta
       schema: playbook.schema,
       maxTokens: playbook.maxTokens,
       webSearchMaxUses: prepared.webSearchMaxUses ?? playbook.webSearchMaxUses,
+      webFetchMaxUses: prepared.webFetchMaxUses ?? playbook.webFetchMaxUses,
     };
     items.push({ customId: `task:${t.id}`, call });
     budgetLeft -= EST_TASK_USD;

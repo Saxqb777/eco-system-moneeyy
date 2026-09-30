@@ -114,7 +114,8 @@ export async function runTick(trigger: TickTrigger, now = new Date()): Promise<T
         briefStatus = "queued";
       } else briefStatus = "telegram not paired";
     }
-    steps.deliver = { brief: briefStatus, webhook: (await ensureWebhook(db)).status, ...(await deliverMessages(db, now)) };
+    const { refreshChannelSubscribers } = await import("@/agents/deals");
+    steps.deliver = { brief: briefStatus, webhook: (await ensureWebhook(db)).status, subscribers: (await refreshChannelSubscribers(db, now)).status, ...(await deliverMessages(db, now)) };
 
     // 8. Simulation keeps history continuous when nobody watches.
     steps.simulation = simulation ? await runSimulation(db, now, { maxSlices: 72 }) : { status: "off" };

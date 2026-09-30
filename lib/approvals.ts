@@ -17,6 +17,7 @@ export interface RaiseApprovalInput {
   agentId?: string | null;
   floorId?: string | null;
   simulated?: boolean;
+  autoApproved?: boolean; // a floor rule Saaqib approved earlier (Deals Engine after 14 days)
 }
 
 // Creates the row and, for real items, rings the red phone on Telegram with inline buttons.
@@ -34,12 +35,13 @@ export async function raiseApproval(db: Db, input: RaiseApprovalInput, now = new
       agentId: input.agentId ?? null,
       floorId: input.floorId ?? null,
       simulated: input.simulated ?? false,
+      ...(input.autoApproved ? { status: "approved", decidedAt: now, decidedVia: "auto" } : {}),
       createdAt: now,
       updatedAt: now,
     })
     .returning({ id: approvals.id });
   const id = row?.id ?? "";
-  if (!input.simulated && id) {
+  if (!input.simulated && id && !input.autoApproved) {
     const lines = [`Approval needed: ${input.summary}`];
     if (input.riskNote) lines.push(`Risk: ${input.riskNote}`);
     if (input.previewUrl) lines.push(`Preview: ${input.previewUrl}`);
@@ -78,6 +80,11 @@ async function executeApproval(db: Db, a: typeof approvals.$inferSelect, now: Da
       return { floor: slug, status: "live" };
     }
     case "decision": {
+      // A floor rule: Warden asked to auto approve a floor's public posts (Deals Engine after 14 days).
+      if (typeof content.autoApproveFloor === "string") {
+        await db.update(floors).set({ autoApprove: true, autoApproveSince: now, updatedAt: now }).where(eq(floors.slug, content.autoApproveFloor));
+        return { autoApproveFloor: content.autoApproveFloor };
+      }
       // A blocked task waits on the owner. The answer becomes task input and the task goes back in the queue.
       if (a.taskId) {
         const [t] = await db.select().from(tasks).where(eq(tasks.id, a.taskId)).limit(1);

@@ -156,6 +156,10 @@ export async function applyWardenDecisions(db: Db, runId: string, d: WardenDecis
       const m = a.content.match(/(\d+(?:\.\d+)?)\s*USD/i);
       if (m) content.proposedCapUsd = Number(m[1]);
     }
+    if (a.type === "decision" && /auto approve/i.test(a.summary + a.content)) {
+      const slug = [...floorBySlug.keys()].find((k) => a.content.toLowerCase().includes(k) || a.summary.toLowerCase().includes(k)) ?? "deals";
+      content.autoApproveFloor = slug;
+    }
     if (a.type === "floor_unlock") {
       const slug = [...floorBySlug.keys()].find((k) => a.content.toLowerCase().includes(k) || a.summary.toLowerCase().includes(k));
       if (slug) content.floor = slug;

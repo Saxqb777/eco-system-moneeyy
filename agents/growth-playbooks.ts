@@ -13,6 +13,7 @@ import { normaliseCountry, regionFor, skippedCountries } from "@/lib/markets";
 import { getSettings, setSetting } from "@/lib/settings";
 import { enqueueMessage } from "@/lib/telegram";
 import { plainDashes } from "@/lib/text";
+import { siteLine } from "@/lib/site";
 import { salesFunnel } from "./docledger-autonomy";
 import { IDEA_OWNERS, OWNER_LABEL, allExperiments, experimentLines, isIdeaOwner, type GrowthIdea } from "./experiments";
 import { STYLE, input, logEvent, num, str, type Playbook } from "./playbook-core";
@@ -48,7 +49,7 @@ export type SuccessStep = (typeof SUCCESS_STEPS)[number]["key"];
 async function ownerFacts(db: Db): Promise<string> {
   const own = await clipboardValue(db, "docledger_product_facts");
   const address = await clipboardValue(db, "business_address");
-  return `Price and signature from the founder: ${own ?? "not pasted yet. Do not quote a price. Sign as: The Doc Ledger team."}${address ? `\nPostal address, the last line of the signature: ${address}` : ""}`;
+  return `Price and signature from the founder: ${own ?? "not pasted yet. Do not quote a price. Sign as: The Doc Ledger team."}${address ? `\nPostal address, the last line of the signature: ${address}` : ""}${await siteLine(db)}`;
 }
 
 async function docledgerFloorId(db: Db): Promise<string | null> {

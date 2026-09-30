@@ -14,6 +14,7 @@ import { encryptSecret } from "@/lib/crypto";
 import { getSettings, setSetting } from "@/lib/settings";
 import { setTelegramApi } from "@/lib/telegram";
 import { processTelegramUpdate } from "@/lib/telegram-inbound";
+import { docledgerBase, siteLine, siteRoute } from "@/lib/site";
 import { fakeAnthropic, fakeTelegram, testSecretsKey } from "./helpers/fakes";
 import { makeTestDb } from "./helpers/pglite";
 
@@ -217,5 +218,21 @@ describe("The DocLedger Growth floor", () => {
     expect(lines.some((l) => l.startsWith("Partners:"))).toBe(true);
     const brief = await buildBrief(db, new Date(NOW.getTime() + 60 * 60_000));
     expect(formatBrief(brief)).toContain("Stand up, the last 24 hours:");
+  });
+
+  it("serves docledger.site as the company's own page, with previews, and never the Tower", async () => {
+    expect(siteRoute("docledger.site", "/")).toEqual({ action: "rewrite", to: "/docledger" });
+    expect(siteRoute("docledger.site", "/for/abc123")).toEqual({ action: "next" });
+    expect(siteRoute("docledger.site", "/api/state")).toEqual({ action: "redirect", to: "https://docledger.site/" });
+    expect(siteRoute("DocLedger.site:443", "/login")).toEqual({ action: "redirect", to: "https://docledger.site/" });
+    expect(siteRoute("www.docledger.site", "/for/abc123")).toEqual({ action: "redirect", to: "https://docledger.site/for/abc123" });
+    expect(siteRoute("the-tower-saxqb777s-projects.vercel.app", "/")).toEqual({ action: "tower" });
+    // Preview links move to the site only once it is switched on.
+    expect(await docledgerBase(db)).toMatch(/vercel\.app$/);
+    expect(await siteLine(db)).toBe("");
+    await setSetting(db, "docledger_site_url", "https://docledger.site/");
+    expect(await docledgerBase(db)).toBe("https://docledger.site");
+    expect(await siteLine(db)).toBe("\nCompany website: https://docledger.site");
+    await setSetting(db, "docledger_site_url", null);
   });
 });

@@ -82,6 +82,12 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 - Approved outreach emails are sent by the next heartbeat. Nothing goes out without your Approve.
 - Replies, two ways: (a) Resend Receiving: add the MX record for a subdomain, create a webhook for email.received pointing at https://the-tower-saxqb777s-projects.vercel.app/api/email/inbound, paste the signing secret under "Resend webhook secret". (b) Forward by hand on Telegram: /reply Gulf Crescent Freight: their text. Chaser picks it up either way.
 
+### 7b. Company website on docledger.site (D067)
+- Nothing for you to do. The Tower's deployment serves the DocLedger home page on https://docledger.site (and www redirects there). Only the home page and the per company previews live on that domain; the game stays on the Tower address.
+- DNS at Spaceship: an A record for @ and a CNAME for www pointing at Vercel, added next to the six email records, which stay as they are.
+- The page words come from config/docledger.ts until the Marketer's first pack arrives, then from his web page words. The booking button uses your calendar link.
+- Once the domain answers, preview links in emails move from the vercel.app address to docledger.site (settings.docledger_site_url).
+
 ### 8. DocLedger price and signature block
 - The product story, the email rules and the reply walkthrough are in the repo (config/docledger.ts) from your brief of 30 September. Writer and Chaser quote them.
 - Paste only what they cannot know: your price line (for example 99 USD a month per company, first month free) and the signature Writer signs with (name, title, phone). Until it is pasted, emails quote no price and sign as the Doc Ledger team.

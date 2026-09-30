@@ -14,6 +14,7 @@ import { experimentLines } from "./experiments";
 import { REPLY_INTENTS, autoSendAllowed, isHot, notifyHotLead, snoozeLead } from "./docledger-autonomy";
 import { STYLE, input, logEvent, num, str, type Playbook, type PlaybookContext, type TaskRow } from "./playbook-core";
 import { plainDashes } from "@/lib/text";
+import { docledgerBase, siteLine } from "@/lib/site";
 import { RESEARCH_EFFORT } from "@/config/models";
 export type { Absorbed, Playbook, PlaybookContext, Prepared } from "./playbook-core";
 
@@ -32,7 +33,7 @@ export function dedupeKeyFor(company: string, website: string | null | undefined
 async function facts(db: Db): Promise<string> {
   const own = await clipboardValue(db, "docledger_product_facts");
   const address = await clipboardValue(db, "business_address");
-  return `${docledgerKnowledge()}\n\nPrice and signature from the owner: ${own ?? "not pasted yet. Do not quote a price. Sign as: The Doc Ledger team."}${address ? `\nPostal address, the last line of the signature: ${address}` : ""}`;
+  return `${docledgerKnowledge()}\n\nPrice and signature from the owner: ${own ?? "not pasted yet. Do not quote a price. Sign as: The Doc Ledger team."}${address ? `\nPostal address, the last line of the signature: ${address}` : ""}${await siteLine(db)}`;
 }
 
 // The preview link goes where the Writer put {preview}. When the Writer already introduced it ("I made a
@@ -250,7 +251,8 @@ ${STYLE}`,
     const points = Array.isArray(previewRaw.points) ? previewRaw.points.filter((x): x is string => typeof x === "string" && x.trim().length > 0).slice(0, 4) : [];
     const sampleFields = Array.isArray(previewRaw.sampleFields) ? previewRaw.sampleFields.filter((f): f is { field: string; value: string } => !!f && typeof f === "object" && typeof (f as { field?: unknown }).field === "string" && typeof (f as { value?: unknown }).value === "string").slice(0, 8) : [];
     const preview = str(previewRaw.headline, 120) && points.length >= 2 ? { headline: plainDashes(str(previewRaw.headline, 120)), intro: plainDashes(str(previewRaw.intro, 400)), points: points.map(plainDashes), sampleDocument: str(previewRaw.sampleDocument, 120) || "Shipping line bill", sampleFields } : null;
-    const base = (process.env.APP_URL ?? "https://the-tower-saxqb777s-projects.vercel.app").replace(/\/$/, "");
+    // docledger.site once it is live (D067), the Tower's address until then.
+    const base = await docledgerBase(ctx.db);
     const previewCode = preview ? (lead.previewCode ?? shortCode()) : null;
     const previewUrl = previewCode ? `${base}/for/${previewCode}` : null;
     let body = plainDashes(str(output.body, 4000));

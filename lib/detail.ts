@@ -1,5 +1,5 @@
 // Panel data: one worker, one floor, or the Warden's desk. Real rows or simulated rows, never mixed.
-import { and, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, ne, or, sql } from "drizzle-orm";
 import { FLOOR_REQUIREMENTS } from "@/config/tower";
 import type { Db } from "@/db/client";
 import { agentRuns, agents, approvals, budgetLedger, floors, leads, posts, revenue, setupItems, taskEvents, tasks, wardenRuns } from "@/db/schema";
@@ -185,6 +185,14 @@ export async function weeklyActual(db: Db, floor: typeof floors.$inferSelect, si
         .where(and(eq(posts.floorId, floor.id), eq(posts.simulated, simulated), eq(posts.status, "posted"), gte(posts.postedAt, weekStart)));
       return { value: Number(r?.n ?? 0), measure: "Posts published this week (subscriber count arrives with the channel)" };
     }
+    case "growth": {
+      // The Growth floor's goal is the company's: companies that became paying customers this week.
+      const [r] = await db
+        .select({ n: sql<string>`count(*)` })
+        .from(leads)
+        .where(and(eq(leads.simulated, simulated), eq(leads.status, "client"), gte(leads.updatedAt, weekStart)));
+      return { value: Number(r?.n ?? 0), measure: "Paying customers this week" };
+    }
     case "penthouse":
     case "lobby": {
       const [rev] = await db
@@ -204,7 +212,7 @@ export async function weeklyActual(db: Db, floor: typeof floors.$inferSelect, si
 
 export async function getFloorDetail(db: Db, slug: string, now = new Date()): Promise<FloorDetail | null> {
   const [f] = await db.select().from(floors).where(eq(floors.slug, slug)).limit(1);
-  if (!f) return null;
+  if (!f || f.status === "archived") return null;
   const simulated = await simulationOn(db);
   const weekStart = dubaiWeekStartUtc(now);
   const dayStart = dubaiDayStartUtc(now);
@@ -305,7 +313,7 @@ export async function getWardenSummary(db: Db, now = new Date()): Promise<Warden
   const simulated = asBool(settingsMap.simulation_mode, true);
   const dayStart = dubaiDayStartUtc(now);
   const brief = await buildBrief(db, now);
-  const floorRows = await db.select({ id: floors.id, slug: floors.slug, name: floors.name }).from(floors).orderBy(desc(floors.level));
+  const floorRows = await db.select({ id: floors.id, slug: floors.slug, name: floors.name }).from(floors).where(ne(floors.status, "archived")).orderBy(desc(floors.level));
   const todayRows = await db
     .select({ floorId: budgetLedger.floorId, total: sql<string>`coalesce(sum(${budgetLedger.amountUsd}), 0)` })
     .from(budgetLedger)

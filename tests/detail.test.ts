@@ -75,15 +75,15 @@ describe("panel data on a real schema", () => {
   });
 
   it("pauses and resumes a floor, parking and waking its crew", async () => {
-    expect(await setFloorPaused(db, "deals", true, NOON)).toEqual({ ok: true, status: "paused" });
-    const [paused] = await db.select().from(floors).where(eq(floors.slug, "deals")).limit(1);
+    expect(await setFloorPaused(db, "growth", true, NOON)).toEqual({ ok: true, status: "paused" });
+    const [paused] = await db.select().from(floors).where(eq(floors.slug, "growth")).limit(1);
     expect(paused!.status).toBe("paused");
     expect(paused!.pausedReason).toMatch(/owner/);
     const crew = await db.select().from(agents).where(eq(agents.floorId, paused!.id));
     expect(crew.every((a) => a.status === "paused" || a.status === "blocked" || a.status === "helping")).toBe(true);
 
-    expect(await setFloorPaused(db, "deals", false, NOON)).toEqual({ ok: true, status: "live" });
-    const [live] = await db.select().from(floors).where(eq(floors.slug, "deals")).limit(1);
+    expect(await setFloorPaused(db, "growth", false, NOON)).toEqual({ ok: true, status: "live" });
+    const [live] = await db.select().from(floors).where(eq(floors.slug, "growth")).limit(1);
     expect(live!.status).toBe("live");
     expect(live!.pausedReason).toBeNull();
     const woke = await db.select().from(agents).where(eq(agents.floorId, live!.id));
@@ -97,7 +97,7 @@ describe("panel data on a real schema", () => {
     const b = await buildBrief(db, NOON);
     expect(b.dayKey).toBe("2026-09-29");
     expect(b.simulated).toBe(true);
-    expect(b.floors.map((f) => f.slug)).toEqual(["penthouse", "docledger", "deals", "content", "service", "lobby"]);
+    expect(b.floors.map((f) => f.slug)).toEqual(["penthouse", "docledger", "growth", "content", "service", "lobby"]);
     expect(b.floors.find((f) => f.slug === "content")!.line).toMatch(/Unlocks/);
     expect(b.needs.some((n) => /Anthropic API key/.test(n))).toBe(true);
     expect(b.moneyOutTodayUsd).toBeGreaterThan(0);

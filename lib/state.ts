@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { FLOOR_REQUIREMENTS } from "@/config/tower";
 import type { Db } from "@/db/client";
 import { agents, approvals, floors, setupItems, taskEvents, tasks, ticks } from "@/db/schema";
@@ -32,6 +32,8 @@ export interface TowerState {
     behindTarget: boolean;
     missingSetup: string[];
     isBusiness: boolean;
+    // The Growth floor's whiteboard: the company's week in numbers.
+    board?: string[];
     agents: Array<{
       id: string;
       slug: string;
@@ -43,6 +45,8 @@ export interface TowerState {
       sprite: unknown;
       currentTask: { id: string; title: string; kind: string; status: string; startedAt: string | null; dueAt: string | null; blockedReason: string | null } | null;
       stats: { tasksDone: number; tasksFailed: number; successRate: number; avgReviewScore: number | null };
+      // Ideas or tickets this worker put on the owner's phone that still wait: a light bulb over the head.
+      waitingOnOwner: number;
     }>;
   }>;
   pendingApprovals: number;
@@ -55,15 +59,19 @@ export async function getTowerState(db: Db, now = new Date()): Promise<TowerStat
   const settingsMap = await getSettings(db);
   const simulationMode = asBool(settingsMap.simulation_mode, true);
   const [floorRows, agentRows, setupRows, real, simulated, events, tickRows, pending] = await Promise.all([
-    db.select().from(floors).orderBy(desc(floors.level)),
+    // Archived floors (a closed business) are not part of the building any more.
+    db.select().from(floors).where(ne(floors.status, "archived")).orderBy(desc(floors.level)),
     db.select().from(agents),
     db.select().from(setupItems).orderBy(setupItems.sort),
     getSpendSummary(db, false, now),
     getSpendSummary(db, true, now),
     db.select().from(taskEvents).orderBy(desc(taskEvents.id)).limit(40),
     db.select().from(ticks).orderBy(desc(ticks.startedAt)).limit(5),
-    db.select({ id: approvals.id }).from(approvals).where(eq(approvals.status, "pending")),
+    db.select({ id: approvals.id, agentId: approvals.agentId, type: approvals.type }).from(approvals).where(eq(approvals.status, "pending")),
   ]);
+  const waitingByAgent = new Map<string, number>();
+  for (const a of pending) if (a.agentId && a.type === "decision") waitingByAgent.set(a.agentId, (waitingByAgent.get(a.agentId) ?? 0) + 1);
+  const board = floorRows.some((f) => f.slug === "growth") ? await companyBoard(db, now, simulationMode) : undefined;
 
   const taskIds = agentRows.map((a) => a.currentTaskId).filter((x): x is string => !!x);
   const taskRows = taskIds.length ? await db.select().from(tasks).where(and(inArray(tasks.id, taskIds))) : [];
@@ -101,6 +109,7 @@ export async function getTowerState(db: Db, now = new Date()): Promise<TowerStat
       behindTarget: f.status === "paused" || (!!f.throttledUntil && f.throttledUntil.getTime() > now.getTime()) || (!!f.strategyUpdatedAt && now.getTime() - f.strategyUpdatedAt.getTime() < 7 * 24 * 60 * 60 * 1000),
       missingSetup: (FLOOR_REQUIREMENTS[f.slug] ?? []).filter((k) => !presentSetup.has(k)),
       isBusiness: f.isBusiness,
+      ...(f.slug === "growth" && board ? { board } : {}),
       // A locked floor stands empty: its dust sheets show, its old crew does not (Deals closed 2026-09-30).
       agents: agentRows
         .filter((a) => a.floorId === f.id && f.status !== "locked")
@@ -125,6 +134,7 @@ export async function getTowerState(db: Db, now = new Date()): Promise<TowerStat
               successRate: total ? Math.round((a.tasksDone / total) * 100) : 0,
               avgReviewScore: a.reviewCount ? Math.round((Number(a.reviewScoreSum) / a.reviewCount) * 10) / 10 : null,
             },
+            waitingOnOwner: waitingByAgent.get(a.id) ?? 0,
           };
         }),
     })),
@@ -133,4 +143,19 @@ export async function getTowerState(db: Db, now = new Date()): Promise<TowerStat
     lastTicks: tickRows.map((t) => ({ id: t.id, trigger: t.trigger, status: t.status, startedAt: t.startedAt.toISOString(), finishedAt: t.finishedAt?.toISOString() ?? null, error: t.error })),
     setup: setupRows.map((s) => ({ key: s.key, label: s.label, status: s.status, hint: s.hint, requiredFor: s.requiredFor })),
   };
+}
+
+// The whiteboard's six numbers in one round trip: this week's leads, emails and replies, and where the company stands.
+export async function companyBoard(db: Db, now: Date, simulated: boolean): Promise<string[]> {
+  const since = new Date(now.getTime() - 7 * 24 * 3600 * 1000).toISOString();
+  const res = (await db.execute(sql`select
+    (select count(*) from leads where simulated = ${simulated} and created_at >= ${since} and coalesce(segment, '') not like 'partner%') as leads,
+    (select count(*) from outreach where simulated = ${simulated} and sent_at >= ${since}) as sent,
+    (select count(*) from outreach where simulated = ${simulated} and reply_at >= ${since}) as replies,
+    (select count(*) from leads where simulated = ${simulated} and coalesce(segment, '') like 'partner%') as partners,
+    (select count(*) from leads where simulated = ${simulated} and status = 'trial') as trials,
+    (select count(*) from leads where simulated = ${simulated} and status = 'client') as clients`)) as unknown as { rows: Array<Record<string, unknown>> };
+  const r = res.rows?.[0] ?? {};
+  const n = (k: string) => Number(r[k] ?? 0);
+  return [`Leads ${n("leads")}`, `Emails ${n("sent")}`, `Replies ${n("replies")}`, `Partners ${n("partners")}`, `In trial ${n("trials")}`, `Customers ${n("clients")}`];
 }

@@ -1,5 +1,5 @@
 // The compact state Warden reads each run: about 4k tokens at most, everything else stays in the database.
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import { FLOOR_REQUIREMENTS } from "@/config/tower";
 import type { Db } from "@/db/client";
 import { agents, approvals, budgetLedger, clicks, deals, floors, ideas, posts, setupItems, tasks, wardenRuns } from "@/db/schema";
@@ -8,6 +8,7 @@ import { botChats, channelHealthFrom } from "@/lib/channel";
 import { weeklyActual } from "@/lib/detail";
 import { asNumber, getSettings } from "@/lib/settings";
 import { dubaiDayStartUtc, dubaiParts, dubaiWeekStartUtc } from "@/lib/time";
+import { companyPulse, type CompanyPulse } from "@/agents/growth";
 
 export interface Snapshot {
   now: string;
@@ -30,6 +31,7 @@ export interface Snapshot {
     postedTotal?: number;
     firstPostDay?: string | null;
     sales?: SalesFunnel;
+    company?: CompanyPulse;
     channel?: { members: number | null; growthDay: number | null; growthWeek: number | null; botCanPost: boolean | null; engagementPostsThisWeek: number; clicksThisWeek: number; topCategories: string[]; shareChats: number; shareSpotsKnown: number };
     crew: Array<{ slug: string; name: string; role: string; status: string; task: string | null }>;
     queued: number;
@@ -51,7 +53,7 @@ export async function buildSnapshot(db: Db, now = new Date()): Promise<Snapshot>
   const weekStart = dubaiWeekStartUtc(now);
   const p = dubaiParts(now);
 
-  const floorRows = await db.select().from(floors).orderBy(desc(floors.level));
+  const floorRows = await db.select().from(floors).where(ne(floors.status, "archived")).orderBy(desc(floors.level));
   const agentRows = await db.select().from(agents);
   const spendRows = await db
     .select({ floorId: budgetLedger.floorId, t: sql<string>`coalesce(sum(${budgetLedger.amountUsd}), 0)` })
@@ -90,6 +92,7 @@ export async function buildSnapshot(db: Db, now = new Date()): Promise<Snapshot>
     .limit(3);
   const channelHealth = channelHealthFrom(settingsMap, p.dayKey);
   const funnel = await salesFunnel(db, now);
+  const pulse = await companyPulse(db, now);
   const shareSpots = Array.isArray(settingsMap.share_spots) ? settingsMap.share_spots.length : 0;
   const runs = await db.select({ summary: wardenRuns.summary }).from(wardenRuns).where(and(eq(wardenRuns.simulated, false), eq(wardenRuns.status, "applied"))).orderBy(desc(wardenRuns.startedAt)).limit(3);
 
@@ -132,6 +135,7 @@ export async function buildSnapshot(db: Db, now = new Date()): Promise<Snapshot>
         throttled: !!f.throttledUntil && f.throttledUntil.getTime() > now.getTime(),
         autoApprove: f.autoApprove,
         ...(f.slug === "docledger" ? { sales: funnel } : {}),
+        ...(f.slug === "growth" ? { company: pulse } : {}),
         ...(f.slug === "deals"
           ? {
               postedTotal: Number(postStats?.n ?? 0),

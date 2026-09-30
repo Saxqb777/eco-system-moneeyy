@@ -14,7 +14,7 @@ Postgres on Neon, managed with Drizzle. Conventions:
 ### settings
 | column | type | notes |
 |--------|------|-------|
-| key | text, pk | simulation_mode, daily_cap_usd (1.70), hard_ceiling_usd (5.00), budget_level (1), timezone (Asia/Dubai), warden_interval_hours (4), brief_hour_local (8), model_overrides, sound_enabled, owner_chat_id, launch_date, express_until (ISO time, D057), tick_lock ({holder, at}: the one running tick; updated_at older than 6 minutes means free, D058) |
+| key | text, pk | simulation_mode, daily_cap_usd (1.70), hard_ceiling_usd (5.00), budget_level (1), timezone (Asia/Dubai), warden_interval_hours (4), brief_hour_local (8), model_overrides, sound_enabled, owner_chat_id, launch_date, express_until (ISO time, D057), tick_lock ({holder, at}: the one running tick; updated_at older than 6 minutes means free, D058), floor_share ({docledger: 0.55, growth: 0.25}, D065), docledger_experiments (approved growth ideas: title, owner, instructions, metric, startedAt, endsAt), docledger_roadmap ({items, updatedAt} from Product), docledger_marketing (the Marketer's latest pack), founder_report and founder_report_at (Finance), pipeline_day_growth, pipeline_day_product, pipeline_day_finance |
 | value | jsonb | |
 | updated_at | timestamptz | |
 
@@ -432,3 +432,12 @@ One row per heartbeat so the status page and Warden can see the pulse.
 - The deals table is the Deals Engine product deals. DocLedger sales progress lives on leads.status (demo_booked, client), so no second deals table is needed.
 - Warden is a row in agents (kind warden) so it has a sprite, a location and stats like everyone else.
 - Locked floors already have their rows and unlock conditions from day one so the padlock labels come from the database.
+
+### D065 notes (DocLedger Growth)
+- floors.status gains "archived": a closed business, kept but not shown or run (the Deals Engine since 2026-09-30).
+- leads.status gains "trial" (free month, started by /trial) and "client" (paying, /won). decision_maker gains trialStart, successSteps (welcome, day3, day7, day21, offer), monthlyUsd and wonAt.
+- leads.segment "partner_<kind>" marks referral partners (accounting_firm, association, software_reseller, software_vendor, consultant, other); they skip the Analyst and the Writer.
+- tickets.status gains "proposed" (Product's ticket waiting on the owner; approved becomes backlog, rejected becomes rejected).
+- revenue.source "docledger_subscription": the first month a customer paid, entered by the owner with /won.
+- approvals.content.growthIdea (an idea from Growth) and approvals.content.ticketId (a Build decision).
+- New task kinds: growth_ideas, find_partners, product_review, marketing_pack (direct lane), success_email (direct lane), founder_report (Finance, no model, written done).

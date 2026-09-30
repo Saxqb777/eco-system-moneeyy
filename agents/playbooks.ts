@@ -9,6 +9,8 @@ import { clipboardValue } from "@/lib/clipboard";
 import { DOCLEDGER, docledgerKnowledge } from "@/config/docledger";
 import { normaliseCountry, regionFor, skippedCountries } from "@/lib/markets";
 import { DEALS_PLAYBOOKS } from "./deals-playbooks";
+import { GROWTH_PLAYBOOKS } from "./growth-playbooks";
+import { experimentLines } from "./experiments";
 import { REPLY_INTENTS, autoSendAllowed, isHot, notifyHotLead, snoozeLead } from "./docledger-autonomy";
 import { STYLE, input, logEvent, num, str, type Playbook, type PlaybookContext, type TaskRow } from "./playbook-core";
 import { plainDashes } from "@/lib/text";
@@ -86,7 +88,7 @@ ${STYLE}`,
     const focus = str(input(task).instructions) || `Freight forwarders and customs brokers in ${regionFor(ctx.now)}.`;
     const skip = await skippedCountries(ctx.db);
     const skipLine = Object.entries(skip).map(([c, why]) => `${c} (${why})`).join("; ") || "none";
-    return { user: `Focus from Warden: ${focus}\nToday: ${ctx.now.toISOString().slice(0, 10)}\nSkip these countries: ${skipLine}\nExclusion list (already known): ${exclude}\n\nSearch the web before you answer. An answer without a search is not accepted. Find the leads and return the JSON object.` };
+    return { user: `Focus from Warden: ${focus}\n${await experimentLines(ctx.db, ctx.now, "scout")}Today: ${ctx.now.toISOString().slice(0, 10)}\nSkip these countries: ${skipLine}\nExclusion list (already known): ${exclude}\n\nSearch the web before you answer. An answer without a search is not accepted. Find the leads and return the JSON object.` };
   },
   async absorb(task, output, ctx) {
     const rows = Array.isArray(output.leads) ? output.leads : [];
@@ -157,7 +159,7 @@ ${STYLE}`,
     const retry = input(task).retry === true;
     if (lead.status !== "new" && !(retry && lead.status === "no_contact")) return { skip: `Lead ${lead.company} is already ${lead.status}` };
     const f = await facts(ctx.db);
-    return { user: `Product facts:\n${f}\n\n${retry ? "Second try: the first look found no email. Open the website and its contact page this time.\n" : ""}Company: ${lead.company}\nCountry: ${lead.country}\nWebsite: ${lead.website ?? "unknown, search for it"}\nSegment: ${lead.segment ?? "unknown"}\nCity: ${lead.city ?? "unknown"}\nSeen at: ${lead.sourceUrl ?? "unknown"}\nScout's note: ${lead.scoreReason ?? ""}\n\nOpen the website and its contact or about page${lead.website ? "" : " (search for it first)"}, and search for the finance or operations lead. Qualify this company and return the JSON object.` };
+    return { user: `Product facts:\n${f}\n\n${await experimentLines(ctx.db, ctx.now, "analyst")}${retry ? "Second try: the first look found no email. Open the website and its contact page this time.\n" : ""}Company: ${lead.company}\nCountry: ${lead.country}\nWebsite: ${lead.website ?? "unknown, search for it"}\nSegment: ${lead.segment ?? "unknown"}\nCity: ${lead.city ?? "unknown"}\nSeen at: ${lead.sourceUrl ?? "unknown"}\nScout's note: ${lead.scoreReason ?? ""}\n\nOpen the website and its contact or about page${lead.website ? "" : " (search for it first)"}, and search for the finance or operations lead. Qualify this company and return the JSON object.` };
   },
   async absorb(task, output, ctx) {
     const leadId = str(input(task).leadId);
@@ -233,7 +235,7 @@ ${STYLE}`,
     const feedback = str(input(task).feedback);
     const f = await facts(ctx.db);
     return {
-      user: `${f}\n\nCompany: ${lead.company} (${lead.segment ?? "company"}, ${[lead.city, lead.country].filter(Boolean).join(", ")})\nWrite for a reader in ${lead.country}: their spelling, their currency in any example, no Gulf place names unless they are in the Gulf.\nWebsite: ${lead.website ?? "unknown"}\nWhy they fit: ${lead.scoreReason ?? ""}\nAngle: ${typeof dm.angle === "string" && dm.angle ? dm.angle : "shipping bills and petty cash"}\nResearch:\n${research.length ? research.map((r) => `- ${r}`).join("\n") : "- nothing yet, one web search allowed"}\nDecision maker: ${typeof dm.name === "string" && dm.name ? dm.name : "unknown"}, ${typeof dm.title === "string" && dm.title ? dm.title : "unknown title"}\n${feedback ? `Warden's feedback on the last draft: ${feedback}\n` : ""}\nWrite the email and return the JSON object.`,
+      user: `${f}\n\n${await experimentLines(ctx.db, ctx.now, "writer")}Company: ${lead.company} (${lead.segment ?? "company"}, ${[lead.city, lead.country].filter(Boolean).join(", ")})\nWrite for a reader in ${lead.country}: their spelling, their currency in any example, no Gulf place names unless they are in the Gulf.\nWebsite: ${lead.website ?? "unknown"}\nWhy they fit: ${lead.scoreReason ?? ""}\nAngle: ${typeof dm.angle === "string" && dm.angle ? dm.angle : "shipping bills and petty cash"}\nResearch:\n${research.length ? research.map((r) => `- ${r}`).join("\n") : "- nothing yet, one web search allowed"}\nDecision maker: ${typeof dm.name === "string" && dm.name ? dm.name : "unknown"}, ${typeof dm.title === "string" && dm.title ? dm.title : "unknown title"}\n${feedback ? `Warden's feedback on the last draft: ${feedback}\n` : ""}\nWrite the email and return the JSON object.`,
       webSearchMaxUses: research.length >= 2 ? 0 : 2,
     };
   },
@@ -330,10 +332,16 @@ ${STYLE}`,
     const thread = await ctx.db.select().from(outreach).where(and(eq(outreach.leadId, lead.id), eq(outreach.simulated, false))).orderBy(outreach.step);
     const calendar = (await clipboardValue(ctx.db, "calendar_link")) ?? "";
     const f = await facts(ctx.db);
+    // Partners and companies in their free month read differently from a prospect.
+    const who = lead.segment?.startsWith("partner")
+      ? "This contact is a possible referral partner, not a customer: talk about the partnership (they refer clients, a share of the fee agreed on a call with the founder), never pitch them as a buyer.\n"
+      : lead.status === "trial"
+        ? "This company is in its free first month: help them, answer fully, no selling.\n"
+        : "";
     const lines = thread.map((t) => `Step ${t.step} (${t.status}${t.sentAt ? `, sent ${t.sentAt.toISOString().slice(0, 10)}` : ""}):\nSubject: ${t.subject ?? ""}\n${t.bodyText ?? ""}${t.replyText ? `\n\nTheir reply (${t.replyAt?.toISOString().slice(0, 10) ?? ""}):\n${t.replyText}` : ""}`);
     const checkIn = input(task).mode === "check_in";
     const mode = checkIn ? `They asked for time or were away. It is time to check back in: write a short, friendly follow up step ${o.step + 1} that picks up from their last message.` : o.replyText ? "They replied. Handle the reply." : `No reply after step ${o.step}. Write follow up step ${o.step + 1}.`;
-    return { user: `Product facts and signature:\n${f}\n\nCalendar link: ${calendar || "not pasted yet, ask them for two times instead"}\nCompany: ${lead.company}, contact ${(lead.decisionMaker as Record<string, string> | null)?.name ?? "unknown"}\nToday: ${ctx.now.toISOString().slice(0, 10)}\n\nThread:\n${lines.join("\n\n")}\n\n${mode}\nReturn the JSON object.` };
+    return { user: `Product facts and signature:\n${f}\n\n${await experimentLines(ctx.db, ctx.now, "chaser")}${who}Calendar link: ${calendar || "not pasted yet, ask them for two times instead"}\nCompany: ${lead.company}, contact ${(lead.decisionMaker as Record<string, string> | null)?.name ?? "unknown"}\nToday: ${ctx.now.toISOString().slice(0, 10)}\n\nThread:\n${lines.join("\n\n")}\n\n${mode}\nReturn the JSON object.` };
   },
   async absorb(task, output, ctx) {
     const outreachId = str(input(task).outreachId);
@@ -389,6 +397,7 @@ export const PLAYBOOKS: Record<string, Playbook> = {
   draft_outreach: draftOutreach,
   follow_up: followUp,
   ...DEALS_PLAYBOOKS,
+  ...GROWTH_PLAYBOOKS,
 };
 
 export function playbookFor(kind: string): Playbook | null {

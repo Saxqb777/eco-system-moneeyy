@@ -59,6 +59,11 @@ export const STRATEGY_NOTES: Record<string, string[]> = {
     "Emails that mention customs documentation delays get replies. Writer leads with that.",
     "Two demos slipped. Chaser books the slot in the first reply, no back and forth.",
   ],
+  growth: [
+    "Accounting firms that serve forwarders answer partner emails. Partners doubles down there.",
+    "Replies ask about PDF bills from shipping lines. Product puts it at the top of the roadmap.",
+    "Subject lines naming the port get more replies. Growth runs that test for two weeks.",
+  ],
   deals: [
     "Electronics deals above 30 percent off get the clicks. Scout filters for those first.",
     "Posts after 20:00 Dubai do better. Publisher moves half the slots to the evening.",

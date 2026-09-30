@@ -54,7 +54,14 @@ export interface GuardResult {
   pausedFloors: string[];
 }
 
-// Rule 2: never exceed the daily cap. Rule from the brief: throttle any floor above 40 percent alone.
+// The share of the daily cap one business floor may use alone (D065): settings.floor_share per slug, 40 percent otherwise.
+export function floorShare(settingsMap: Record<string, unknown>, slug: string): number {
+  const shares = (settingsMap.floor_share ?? {}) as Record<string, unknown>;
+  const v = Number(shares[slug]);
+  return Number.isFinite(v) && v > 0 && v <= 1 ? v : 0.4;
+}
+
+// Rule 2: never exceed the daily cap. Rule from the brief: throttle any floor above its share alone.
 export async function guardSpend(db: Db, now = new Date()): Promise<GuardResult> {
   const s = await getSettings(db);
   const capUsd = asNumber(s.daily_cap_usd, 1.7);
@@ -66,7 +73,7 @@ export async function guardSpend(db: Db, now = new Date()): Promise<GuardResult>
 
   for (const f of liveFloors) {
     const spent = summary.todayByFloor[f.id] ?? 0;
-    if (f.isBusiness && spent > capUsd * 0.4) {
+    if (f.isBusiness && spent > capUsd * floorShare(s, f.slug)) {
       throttled.push(f.slug);
       await db.update(floors).set({ throttledUntil: dayEnd, updatedAt: now }).where(eq(floors.id, f.id));
     }

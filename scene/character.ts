@@ -40,6 +40,11 @@ function hexToNum(hex: string | undefined, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+// Seated workers sit high enough that the chest, arms and head show over the desk top (desk top 36 above the floor).
+const SEAT_Y = -12;
+// How far the forearms reach in toward the keyboard while typing.
+const TYPE_REACH = 0.42;
+
 export class CharacterSprite extends Container {
   readonly agentId: string;
   readonly isWarden: boolean;
@@ -59,6 +64,8 @@ export class CharacterSprite extends Container {
   private readonly bubble = new Container();
   private readonly tag = new Container();
   private readonly zz = new Container();
+  // A light bulb over the head while the owner has this worker's idea or ticket on his phone.
+  private readonly bulb = new Graphics();
   private t = 0;
   private walkPhase = 0;
   private spinPhase = 0;
@@ -176,9 +183,16 @@ export class CharacterSprite extends Container {
     }
     this.zz.visible = false;
 
+    this.bulb.circle(0, 0, 6).fill(0xffd35a);
+    this.bulb.circle(-2, -2, 2).fill(0xfff4c2);
+    this.bulb.rect(-3, 5, 6, 4).fill(0x8c8f96);
+    this.bulb.rect(-3, 7, 6, 1).fill(0x5f636a);
+    this.bulb.position.set(-19, -this.bodyHeight + 2);
+    this.bulb.visible = false;
+
     this.bubble.visible = false;
     this.tag.visible = false;
-    this.addChild(this.bubble, this.tag, this.zz);
+    this.addChild(this.bubble, this.tag, this.zz, this.bulb);
     this.setTag(name);
     this.eventMode = "static";
     this.cursor = "pointer";
@@ -239,7 +253,7 @@ export class CharacterSprite extends Container {
     this.legR.visible = !seated || pose === "feet_up";
     this.legL.rotation = 0;
     this.legR.rotation = 0;
-    this.body.position.set(0, seated ? 14 : 0);
+    this.body.position.set(0, seated ? SEAT_Y : 0);
     this.body.rotation = 0;
     this.torso.rotation = this.look.slouch && !this.isWarden ? -0.14 : 0;
     this.alpha = pose === "dim" ? 0.6 : 1;
@@ -250,16 +264,16 @@ export class CharacterSprite extends Container {
     this.zz.visible = false;
     switch (pose) {
       case "sit_idle":
-        // leaning back, arms crossed on the chest
-        this.torso.rotation += 0.12;
-        this.armL.rotation = -1.7;
-        this.armR.rotation = 1.7;
+        // leaning back, arms folded on the chest
+        this.torso.rotation += 0.08;
+        this.armL.rotation = -1.5;
+        this.armR.rotation = 1.5;
         break;
       case "sit_type":
-        // leaning in over the keyboard
-        this.torso.rotation -= 0.12;
-        this.armL.rotation = -1.05;
-        this.armR.rotation = 1.05;
+        // leaning in a little, both hands down on the keyboard on the desk in front
+        this.torso.rotation -= 0.05;
+        this.armL.rotation = -TYPE_REACH;
+        this.armR.rotation = TYPE_REACH;
         break;
       case "dim":
         this.armL.rotation = -1.7;
@@ -308,9 +322,17 @@ export class CharacterSprite extends Container {
     this.legR.position.y = -18;
   }
 
+  setBulb(on: boolean) {
+    this.bulb.visible = on;
+  }
+
   update(dtMs: number) {
     this.t += dtMs;
     const s = this.t / 1000;
+    if (this.bulb.visible) {
+      this.bulb.alpha = 0.75 + Math.sin(s * TAU * 0.6) * 0.25;
+      this.bulb.y = -this.bodyHeight + 2 + this.body.position.y + Math.sin(s * TAU * 0.4) * 1.5;
+    }
     switch (this.pose) {
       case "sit_idle":
       case "dim":
@@ -318,12 +340,12 @@ export class CharacterSprite extends Container {
         this.head.rotation = Math.sin(s * TAU * 0.15) * 0.05;
         break;
       case "sit_type": {
-        // hands hammer the keys: fast alternating strokes, shoulders bob, head nods a little
-        const k = s * TAU * 5.5;
-        this.armL.rotation = -1.05 + Math.max(0, Math.sin(k)) * 0.35;
-        this.armR.rotation = 1.05 - Math.max(0, Math.sin(k + Math.PI)) * 0.35;
-        this.body.position.y = 14 + Math.abs(Math.sin(k)) * 0.8;
-        this.head.rotation = Math.sin(s * TAU * 0.8) * 0.04;
+        // typing: small, smooth taps from each hand in turn, the head following the screen now and then
+        const k = s * TAU * 2.4;
+        this.armL.rotation = -TYPE_REACH + Math.sin(k) * 0.06;
+        this.armR.rotation = TYPE_REACH + Math.sin(k + 2.2) * 0.06;
+        this.body.position.y = SEAT_Y + Math.sin(k * 0.5) * 0.25;
+        this.head.rotation = Math.sin(s * TAU * 0.35) * 0.05;
         this.bubble.position.y = -this.bodyHeight - 12 + Math.sin(s * TAU * 0.5) * 2;
         break;
       }
@@ -336,8 +358,9 @@ export class CharacterSprite extends Container {
         this.legR.rotation = -sw * 0.45;
         this.body.position.y = -Math.abs(Math.sin(this.walkPhase)) * 2;
         if (this.pose === "walk") {
-          this.armL.rotation = -0.12 - sw * 0.35;
-          this.armR.rotation = 0.12 + sw * 0.35;
+          // both arms swing the same way, like a pendulum, instead of flapping in and out
+          this.armL.rotation = -0.1 + sw * 0.22;
+          this.armR.rotation = 0.1 + sw * 0.22;
         }
         break;
       }
@@ -370,7 +393,7 @@ export class CharacterSprite extends Container {
         this.armR.rotation = 2.5 + Math.sin(s * TAU * 0.5) * 0.2;
         break;
       case "chat":
-        this.armR.rotation = 1.2 + Math.sin(s * TAU * 1.3) * 0.3;
+        this.armR.rotation = 1.1 + Math.sin(s * TAU * 0.8) * 0.16;
         this.head.rotation = Math.sin(s * TAU * 0.6) * 0.08;
         break;
       case "feet_up":

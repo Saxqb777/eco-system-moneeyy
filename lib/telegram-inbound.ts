@@ -1,5 +1,5 @@
 // What arrives from Saaqib's phone: approve and reject buttons, feedback lines, commands, and plain ideas.
-import { eq } from "drizzle-orm";
+import { eq, ne } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { approvals, floors, ideas } from "@/db/schema";
 import { applyApprovalDecision } from "@/lib/approvals";
@@ -32,6 +32,9 @@ const HELP = [
   "/run: Warden runs now (once an hour)",
   "/reply <company>: <their text>, forward an email reply by hand",
   "/send <company>: <your text>, write to a lead yourself, it goes out now and replaces the drafted answer",
+  "/trial <company>: they started the free month, Success takes over",
+  "/won <company> <USD a month>: a paying customer",
+  "/lost <company>: close a company, nobody writes again",
   "Anything else you write becomes an idea in Warden's mail slot.",
 ].join("\n");
 
@@ -141,7 +144,7 @@ export async function processTelegramUpdate(db: Db, u: TelegramUpdate, now = new
       }
       case "pause":
       case "resume": {
-        const rows = await db.select({ slug: floors.slug, name: floors.name }).from(floors);
+        const rows = await db.select({ slug: floors.slug, name: floors.name }).from(floors).where(ne(floors.status, "archived"));
         const floor = findFloor(rows, arg);
         if (!floor) {
           await sendNow(cfg.token, chatId, `Which floor? ${rows.map((r) => r.slug).join(", ")}`);
@@ -179,6 +182,24 @@ export async function processTelegramUpdate(db: Db, u: TelegramUpdate, now = new
         const r = await ownerSend(db, m[1]!, m[2]!, now);
         await sendNow(cfg.token, chatId, r.message);
         return { handled: r.ok ? "owner sent" : "owner send failed" };
+      }
+      case "trial":
+      case "lost": {
+        if (!arg) {
+          await sendNow(cfg.token, chatId, `Format: /${name} <company>`);
+          return { handled: `${name} without company` };
+        }
+        const { ownerMarksLead } = await import("@/agents/growth");
+        const r = await ownerMarksLead(db, name as "trial" | "lost", arg, null, now);
+        await sendNow(cfg.token, chatId, r.message);
+        return { handled: r.ok ? `lead ${name}` : `${name} failed`, wantsTick: r.ok && name === "trial" ? "manual" : undefined };
+      }
+      case "won": {
+        const m = arg.match(/^(.+?)\s+(\d+(?:\.\d+)?)\s*(?:usd)?$/i);
+        const { ownerMarksLead } = await import("@/agents/growth");
+        const r = await ownerMarksLead(db, "won", m ? m[1]! : arg, m ? Number(m[2]) : null, now);
+        await sendNow(cfg.token, chatId, r.message);
+        return { handled: r.ok ? "lead won" : "won failed" };
       }
       case "run":
         await sendNow(cfg.token, chatId, "Warden is on it. Instant runs are limited to one an hour.");

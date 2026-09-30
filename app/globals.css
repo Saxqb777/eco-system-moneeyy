@@ -295,3 +295,20 @@ textarea.field { resize: vertical; }
 .how.auto, .how.approved, .how.yours { color: var(--ok); }
 .how.waiting { color: var(--warn); }
 .how.rejected { color: var(--bad); }
+
+/* Company tab (D065): DocLedger as a startup */
+.kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; }
+.kpi { background: var(--paper); border: 1px solid var(--paper-shade); padding: 6px 8px; box-shadow: 1px 2px 0 rgba(0, 0, 0, 0.25); }
+.kpi b { display: block; font-family: var(--font-display, inherit); font-size: 20px; line-height: 1.1; color: var(--ink); }
+.kpi span { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.team-row, .idea-row, .road-row { border-left: 4px solid var(--paper-shade); padding: 5px 8px; margin-bottom: 6px; background: rgba(255, 250, 240, 0.5); }
+.team-row.working, .idea-row.running, .team-row.client { border-left-color: var(--ok); }
+.team-row.blocked, .idea-row.waiting { border-left-color: var(--warn); }
+.team-row.trial { border-left-color: var(--brass); }
+.idea-row.ended { opacity: 0.7; }
+.road-row.now { border-left-color: var(--bad); }
+.road-row.next { border-left-color: var(--warn); }
+.road-pill { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid var(--paper-shade); padding: 0 5px; color: var(--wood-dark); }
+.post-card { border: 1px dashed var(--paper-shade); padding: 6px 8px; margin-bottom: 8px; }
+.post-card pre, pre.report { white-space: pre-wrap; font: inherit; font-size: 13px; margin: 6px 0 0; }
+@media (max-width: 480px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

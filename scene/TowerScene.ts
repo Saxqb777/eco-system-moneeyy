@@ -44,6 +44,8 @@ export class TowerScene {
   private readonly floorsLayer = new Container();
   private readonly deskLayer = new Container();
   private readonly charLayer = new Container();
+  // Desk fronts, over the seated workers: they sit behind their desks with only the chest up showing.
+  private readonly deskFrontLayer = new Container();
   private readonly tintLayer = new Container();
   private readonly lift = new Lift();
   private readonly hud = new RoofHud();
@@ -119,7 +121,7 @@ export class TowerScene {
     this.world.addChild(
       this.skyG, this.stars, this.moon, this.sun,
       this.skyline.far, this.skyline.near,
-      this.shell.back, this.lift.back, this.floorsLayer, this.deskLayer, this.charLayer, this.ambient.layer,
+      this.shell.back, this.lift.back, this.floorsLayer, this.charLayer, this.deskFrontLayer, this.deskLayer, this.ambient.layer,
       this.tintLayer, this.lift.container, this.shell.front, this.platesLayer,
       this.nightOverlay, this.hazeOverlay, this.sandOverlay, this.effects.layer, this.hud.container, this.speaker,
     );
@@ -351,6 +353,7 @@ export class TowerScene {
 
   private rebuildFloors(state: TowerState) {
     this.floorsLayer.removeChildren();
+    this.deskFrontLayer.removeChildren();
     this.platesLayer.removeChildren();
     this.tintLayer.removeChildren();
     this.floorBuilds.clear();
@@ -358,7 +361,9 @@ export class TowerScene {
     for (const f of state.floors) {
       const build = buildFloor({ slug: f.slug, name: f.name, level: f.level, status: f.status, unlockRule: f.unlockRule }, night);
       this.floorsLayer.addChild(build.container);
+      this.deskFrontLayer.addChild(build.front);
       this.tintLayer.addChild(build.tint);
+      if (build.board && f.board) build.board.set(f.board);
       this.floorBuilds.set(f.slug, build);
       const plate = floorPlate(f.name, FLOOR_ACCENT[f.slug] ?? C.stone, f.level);
       plate.on("pointertap", () => {
@@ -423,6 +428,7 @@ export class TowerScene {
       const capHit = f.status === "paused" && !!f.pausedReason && /cap/i.test(f.pausedReason);
       const build = this.floorBuilds.get(f.slug);
       if (build) build.tint.alpha = capHit ? 0.22 : 0;
+      if (build?.board && f.board) build.board.set(f.board);
       for (const a of f.agents) {
         this.agentsById.set(a.id, a);
         tasksDone.set(a.id, a.stats.tasksDone);
@@ -452,6 +458,7 @@ export class TowerScene {
         this.ensurePlate(a, f.slug);
         this.setDeskLamp(a);
         this.applyAgent(sprite, a, f.slug, isWarden, capHit);
+        sprite.setBulb((a.waitingOnOwner ?? 0) > 0);
         // finished tasks fly to the roof
         const before = this.prev?.tasksDone.get(a.id);
         if (before !== undefined && a.stats.tasksDone > before && !this.lowEffects) {

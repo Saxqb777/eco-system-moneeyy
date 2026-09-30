@@ -1,6 +1,6 @@
 // The morning brief, built from data so it reads as Warden without a model call.
 // Phase 3 shows it in the Warden panel. Phase 4 sends the same lines to Telegram at 08:00 Dubai.
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { agents, approvals, budgetLedger, floors, revenue, setupItems, tasks, wardenRuns } from "@/db/schema";
 import { FLOOR_REQUIREMENTS } from "@/config/tower";
@@ -19,6 +19,8 @@ export interface Brief {
   needs: string[];
   floors: Array<{ slug: string; name: string; level: number; line: string }>;
   notes: string[];
+  // The morning stand up: what each DocLedger teammate finished in the last 24 hours (D065).
+  team: string[];
 }
 
 const COST_KINDS = ["api_cost", "web_search"];
@@ -61,7 +63,7 @@ export async function buildBrief(db: Db, now = new Date()): Promise<Brief> {
     .groupBy(revenue.floorId);
   const revToday = new Map(revRows.map((r) => [r.floorId ?? "", Number(r.today)]));
 
-  const floorRows = await db.select().from(floors).orderBy(desc(floors.level));
+  const floorRows = await db.select().from(floors).where(ne(floors.status, "archived")).orderBy(desc(floors.level));
   const agentRows = await db.select().from(agents);
   const doneRows = await db
     .select({ floorId: tasks.floorId, n: sql<string>`count(*)` })
@@ -138,6 +140,7 @@ export async function buildBrief(db: Db, now = new Date()): Promise<Brief> {
     needs,
     floors: floorLines,
     notes: runs.map((r) => r.summary).filter((s): s is string => !!s),
+    team: simulated ? [] : await (await import("@/agents/growth")).standUp(db, now),
   };
 }
 
@@ -154,6 +157,11 @@ export function formatBrief(b: Brief): string {
   lines.push("");
   lines.push("Floors:");
   for (const f of b.floors) lines.push(`• ${f.name}: ${f.line}`);
+  if (b.team?.length) {
+    lines.push("");
+    lines.push("Stand up, the last 24 hours:");
+    for (const t of b.team) lines.push(`• ${t}`);
+  }
   if (b.notes.length) {
     lines.push("");
     lines.push(`Warden: ${b.notes[0]}`);

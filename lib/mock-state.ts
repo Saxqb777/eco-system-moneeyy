@@ -5,7 +5,7 @@ import type { TowerState } from "@/lib/state";
 import type { AgentDetail, FloorDetail, WardenSummary } from "@/lib/detail";
 
 export function mockState(now = new Date()): TowerState {
-  const floors = FLOORS.map((f) => ({
+  const floors = FLOORS.filter((f) => f.status !== "archived").map((f) => ({
     id: `floor_${f.slug}`,
     slug: f.slug,
     name: f.name,
@@ -20,16 +20,21 @@ export function mockState(now = new Date()): TowerState {
     pausedReason: null,
     throttled: false,
     behindTarget: f.slug === "docledger",
-    missingSetup: f.slug === "deals" ? ["affiliate_amazon_ae", "deals_channel"] : [],
+    missingSetup: [] as string[],
     isBusiness: f.isBusiness,
+    ...(f.slug === "growth" ? { board: ["Leads 11", "Emails 4", "Replies 1", "Partners 2", "In trial 0", "Customers 0"] } : {}),
     agents: AGENTS.filter((a) => a.floorSlug === f.slug).map((a, i) => {
-      const status = a.kind === "warden" ? "idle" : a.slug === "docledger_chaser" ? "blocked" : a.slug === "deals_editor" ? "idle" : i % 2 === 0 ? "working" : "idle";
+      const status = a.kind === "warden" ? "idle" : a.slug === "docledger_chaser" ? "blocked" : a.slug === "growth_finance" ? "idle" : i % 2 === 0 ? "working" : "idle";
       const titles: Record<string, string> = {
         docledger_scout: "Find freight forwarders",
         docledger_writer: "Draft outreach email",
         docledger_builder: "Fix invoice export",
-        deals_scout: "Scan Amazon deals",
-        deals_publisher: "Publish deal post",
+        growth_lead: "Pitch three ideas",
+        growth_partners: "Find accounting partners",
+        growth_product: "Update the roadmap",
+        growth_marketer: "Write LinkedIn post",
+        growth_success: "Welcome a trial",
+        growth_finance: "Count the funnel",
       };
       return {
         id: `agent_${a.slug}`,
@@ -42,6 +47,7 @@ export function mockState(now = new Date()): TowerState {
         sprite: a.sprite,
         currentTask: status === "idle" ? null : { id: `task_${a.slug}`, title: titles[a.slug] ?? "Chase warm reply", kind: "x", status: status === "blocked" ? "blocked" : "running", startedAt: now.toISOString(), dueAt: null, blockedReason: status === "blocked" ? "Need the calendar link to book the demo" : null },
         stats: { tasksDone: 12 + i * 3, tasksFailed: 1, successRate: 92, avgReviewScore: 8.1 },
+        waitingOnOwner: a.slug === "growth_lead" ? 2 : 0,
       };
     }),
   }));
@@ -143,14 +149,14 @@ export function mockFloorDetail(slug: string, now = new Date()): FloorDetail | n
     goalMetric: f.goalMetric,
     weeklyTarget: f.weeklyTarget,
     targetUnit: f.targetUnit,
-    weeklyActual: f.slug === "deals" ? 9 : 0,
-    measure: f.slug === "deals" ? "Posts published this week (subscriber count arrives with the channel)" : f.slug === "docledger" ? "Demos booked this week" : f.goalMetric,
+    weeklyActual: 0,
+    measure: f.slug === "growth" ? "Paying customers this week" : f.slug === "docledger" ? "Demos booked this week" : f.goalMetric,
     unlockRule: f.unlockRule,
     strategyNote: f.strategyNote,
     strategyUpdatedAt: f.strategyNote ? ago(now, 600) : null,
     pausedReason: null,
     throttledUntil: null,
-    niche: f.slug === "docledger" ? "freight forwarders" : f.slug === "deals" ? "UAE online deals" : null,
+    niche: f.slug === "docledger" ? "freight forwarders" : f.slug === "growth" ? "growth, partners, product, marketing" : null,
     monthlyGuideUsd: live ? 9 : 0,
     autoApprove: false,
     isBusiness: f.isBusiness,
@@ -159,12 +165,12 @@ export function mockFloorDetail(slug: string, now = new Date()): FloorDetail | n
     activeTasks: active,
     blockers: active.filter((t) => t.status === "blocked").map((t) => ({ taskId: t.id, title: t.title, agentName: t.agentName, reason: t.blockedReason ?? "", since: ago(now, 12) })),
     queued: live ? 2 : 0,
-    doneThisWeek: f.slug === "docledger" ? 23 : f.slug === "deals" ? 41 : 0,
+    doneThisWeek: f.slug === "docledger" ? 23 : f.slug === "growth" ? 17 : 0,
     money: {
-      revenueWeekUsd: f.slug === "deals" ? 12.4 : 0,
-      revenueTotalUsd: f.slug === "deals" ? 52.4 : 0,
-      spendWeekUsd: f.slug === "docledger" ? 2.1 : f.slug === "deals" ? 1.4 : 0,
-      spendTodayUsd: f.slug === "docledger" ? 0.55 : f.slug === "deals" ? 0.38 : 0,
+      revenueWeekUsd: f.slug === "docledger" ? 99 : 0,
+      revenueTotalUsd: f.slug === "docledger" ? 99 : 0,
+      spendWeekUsd: f.slug === "docledger" ? 2.1 : f.slug === "growth" ? 1.4 : 0,
+      spendTodayUsd: f.slug === "docledger" ? 0.55 : f.slug === "growth" ? 0.38 : 0,
     },
     simulated: true,
   };
@@ -182,26 +188,27 @@ export function mockWardenSummary(now = new Date()): WardenSummary {
       needs: [
         "3 approvals waiting on the red phone",
         "Chaser on DocLedger Sales is blocked: Need the calendar link to book the demo",
-        "Deals Engine runs simulated until you paste: Amazon.ae Associates tag, Telegram deals channel handle",
+        "2 ideas from Growth wait on the red phone",
         "Anthropic API key: the building stays in simulation until it is on the clipboard",
       ],
       floors: [
         { slug: "penthouse", name: "Penthouse", level: 5, line: "Warden at the desk, last run Reviewed the queue, reassigned two stale tasks, spend is inside the cap." },
         { slug: "docledger", name: "DocLedger Sales", level: 4, line: "4 done today, 2 at work, 1 blocked, spent 0.55 USD, note: Jebel Ali forwarders answer faster. Scout shifts there this week." },
-        { slug: "deals", name: "Deals Engine", level: 3, line: "7 done today, 2 at work, spent 0.38 USD, earned 12.40 USD" },
+        { slug: "growth", name: "DocLedger Growth", level: 3, line: "7 done today, 2 at work, spent 0.38 USD" },
         { slug: "content", name: "Content Studio", level: 2, line: "Unlocks when tower net earnings pass 100 USD and budget level is 2 or higher" },
         { slug: "service", name: "Consulting Desk", level: 1, line: "Unlocks after the first DocLedger demo is booked and budget level is 2 or higher" },
         { slug: "lobby", name: "Lobby", level: 0, line: "Petty cash 38.20 USD in the drawer" },
       ],
       notes: ["Reviewed the queue, reassigned two stale tasks, spend is inside the cap.", "One worker raised a hand. Went down, unblocked it, back in the office."],
+      team: ["Scout: 1 done, last: Found 6 new leads", "Analyst: 5 done, last: Scored PSZ Logistics: 8/10, email found", "Growth: 1 done, last: Brought 2 ideas to the founder", "Partners: 1 done, last: Found 2 partners, emails on the phone"],
     },
     budget: {
       level: 1,
       dailyCapUsd: 1.7,
       hardCeilingUsd: 5,
       spendTodayUsd: 0.93,
-      todayByFloor: [{ slug: "docledger", name: "DocLedger Sales", usd: 0.55 }, { slug: "deals", name: "Deals Engine", usd: 0.38 }],
-      allocationGuide: { warden: 6, deals: 9, docledger: 9, builder: 12, web_search: 9, buffer: 5 },
+      todayByFloor: [{ slug: "docledger", name: "DocLedger Sales", usd: 0.55 }, { slug: "growth", name: "DocLedger Growth", usd: 0.38 }],
+      allocationGuide: { warden: 6, growth: 9, docledger: 9, builder: 12, web_search: 9, buffer: 5 },
     },
     runs: [
       { id: "r1", mode: "batch", trigger: "schedule", status: "applied", summary: "Reviewed the queue, reassigned two stale tasks, spend is inside the cap.", costUsd: 0.06, startedAt: ago(now, 240) },
@@ -231,18 +238,18 @@ export function mockApprovals(status: string, now = new Date()) {
       taskId: "t4", agentId: "agent_docledger_builder", floorId: "floor_docledger", simulated: true, createdAt: ago(now, 130), decidedAt: null, decidedVia: null,
     },
     {
-      id: "ap3", type: "public_post", status: "pending",
-      summary: "Post to the deals channel: Anker 65W charger 38 percent off",
-      content: { body: "Anker 65W GaN charger\nAED 89, was AED 145 (38 percent off)\nAmazon.ae, ships today\nhttps://example.invalid/amazon/anker65", store: "amazon_ae", dealId: "d1" },
-      previewUrl: null, riskNote: "Public post on the Telegram channel with an affiliate link.", feedback: null,
-      taskId: "t5", agentId: "agent_deals_editor", floorId: "floor_deals", simulated: true, createdAt: ago(now, 15), decidedAt: null, decidedVia: null,
+      id: "ap3", type: "decision", status: "pending",
+      summary: "Idea: Partner with bookkeeping firms that serve Jebel Ali forwarders",
+      content: { growthIdea: { title: "Partner with bookkeeping firms that serve Jebel Ali forwarders", why: "Three replies said their accountant keys the bills.", experiment: "Partners writes to ten bookkeeping firms in Dubai.", metric: "partner calls booked", owner: "partners", instructions: "Focus on bookkeeping firms with logistics clients in Dubai.", days: 14 }, text: "Three replies said their accountant keys the bills.\nThe test: Partners writes to ten bookkeeping firms in Dubai.\nWe measure: partner calls booked\nCarried by Partners for 14 days." },
+      previewUrl: null, riskNote: "Approve to hand it to Partners for 14 days. Anything it sends still comes to you first.", feedback: null,
+      taskId: null, agentId: "agent_growth_lead", floorId: "floor_growth", simulated: true, createdAt: ago(now, 15), decidedAt: null, decidedVia: null,
     },
   ];
 }
 
 export function mockIdeas(now = new Date()) {
   return [
-    { id: "i2", text: "Post the best deal of the day at 6pm", source: "telegram", status: "new", floorId: null, ticketId: null, wardenReply: null, handledAt: null, createdAt: ago(now, 60) },
+    { id: "i2", text: "Offer to set up their first document type for them", source: "telegram", status: "new", floorId: null, ticketId: null, wardenReply: null, handledAt: null, createdAt: ago(now, 60) },
     { id: "i1", text: "Try the Sharjah free zone forwarders too", source: "ui", status: "ticketed", floorId: "floor_docledger", ticketId: null, wardenReply: "Added to Scout's list for next week.", handledAt: ago(now, 700), createdAt: ago(now, 720) },
   ];
 }
@@ -302,4 +309,41 @@ export function mockMailbox(now = new Date()): { threads: MailThread[]; details:
     }),
   ];
   return { threads: list.map(({ title: _t, leadStatus: _l, previewUrl: _p, items: _i, ...t }) => t), details: Object.fromEntries(list.map((d) => [d.leadId, d])) };
+}
+
+export function mockCompany(now = new Date()): import("@/lib/company").CompanyView {
+  const team = AGENTS.filter((a) => a.floorSlug === "docledger" || a.floorSlug === "growth").map((a, i) => ({
+    id: `agent_${a.slug}`,
+    name: a.name,
+    role: a.role,
+    floor: (a.floorSlug === "growth" ? "Growth" : "Sales") as "Sales" | "Growth",
+    status: i % 3 === 0 ? "working" : "idle",
+    lastWork: ({ docledger_scout: "Found 6 new leads", docledger_analyst: "Scored PSZ Logistics: 8/10, email found", docledger_writer: "Drafted the email to LBX Logistics", docledger_chaser: "Nothing to chase yet", docledger_builder: "Waiting for a ticket", growth_lead: "Brought 2 ideas to the founder", growth_partners: "Found 2 partners, emails on the phone", growth_product: "Roadmap updated (3 items), one ticket on the phone", growth_marketer: "Wrote 2 LinkedIn posts, a listing and page copy", growth_success: "No company in a free month yet", growth_finance: "Numbers: 11 leads, 4 emails, 1 replies this week, 1.28 USD spent" } as Record<string, string>)[a.slug] ?? null,
+    lastAt: ago(now, 30 + i * 20),
+    doneWeek: 3 + i,
+  }));
+  return {
+    numbers: { from: ago(now, 7 * 1440), to: now.toISOString(), leads: 11, partners: 2, emailsSent: 4, replies: 1, demos: 0, trials: 0, clients: 0, mrrUsd: 0, revenueUsd: 0, spendUsd: 3.42, costPerLeadUsd: 0.31, costPerReplyUsd: 3.42, allTime: { leads: 11, emailsSent: 4, replies: 1, clients: 0, revenueUsd: 0, spendUsd: 3.42 } },
+    team,
+    ideas: [
+      { id: "ap3", title: "Partner with bookkeeping firms that serve Jebel Ali forwarders", owner: "partners", state: "waiting", why: "Three replies said their accountant keys the bills.", endsAt: null },
+      { id: "x1", title: "Name the port in the subject line", owner: "writer", state: "running", why: "Local detail gets opened.", endsAt: new Date(now.getTime() + 9 * 86400000).toISOString() },
+    ],
+    roadmap: [
+      { title: "Read PDF bills from shipping lines", why: "Asked for twice this week", evidence: "Two forwarders asked whether PDFs work", priority: "now" },
+      { title: "Arabic receipts", why: "Gulf distributors keep Arabic fuel slips", evidence: "One reply mentioned Arabic slips", priority: "next" },
+      { title: "Export to Zoho Books", why: "Partners resell Zoho", evidence: "Ledger Lane Accounting uses Zoho", priority: "later" },
+    ],
+    marketing: {
+      at: ago(now, 300),
+      linkedin: [
+        { hook: "Every forwarder has the envelope.", body: "Month end in a freight office: an envelope of shipping bills and someone retyping every charge line. We built Doc Ledger so the team photographs the bill and checks the fields instead. What is the one document your finance team hates retyping?" },
+        { hook: "What we learned this week.", body: "Three freight companies told us the same thing: their accountant keys the bills, not their staff. So this week we are talking to accountants too." },
+      ],
+      listing: { tagline: "Receipts into accounts, on your terms", description: "Doc Ledger reads shipping bills, fuel receipts and petty cash, converts currencies at the rate of the day, and lets each company define its own document types.", categories: ["Expense management", "Accounting", "Logistics"] },
+      page: { headline: "Stop retyping shipping bills", subheadline: "Photograph the bill, check the fields, done.", points: ["Every charge line, BL and container number", "Foreign currency fixed at the rate of the day", "Your own document types when ours do not fit"], cta: "Start the free month" },
+    },
+    report: { at: ago(now, 600), text: "Founder report from Finance, last 7 days\nLeads found: 11, partners found: 2\nEmails sent: 4, replies: 1, demos: 0" },
+    customers: [],
+  };
 }

@@ -52,11 +52,11 @@ describe("Telegram", () => {
     expect(lastText()).toMatch(/DocLedger Sales/);
     await processTelegramUpdate(db, { update_id: 6, message: { message_id: 6, text: "/brief", chat: { id: OWNER } } }, NOW);
     expect(lastText()).toMatch(/Morning brief/);
-    await processTelegramUpdate(db, { update_id: 7, message: { message_id: 7, text: "/pause deals", chat: { id: OWNER } } }, NOW);
-    const [paused] = await db.select().from(floors).where(eq(floors.slug, "deals")).limit(1);
+    await processTelegramUpdate(db, { update_id: 7, message: { message_id: 7, text: "/pause growth", chat: { id: OWNER } } }, NOW);
+    const [paused] = await db.select().from(floors).where(eq(floors.slug, "growth")).limit(1);
     expect(paused!.status).toBe("paused");
-    await processTelegramUpdate(db, { update_id: 8, message: { message_id: 8, text: "/resume Deals Engine", chat: { id: OWNER } } }, NOW);
-    const [live] = await db.select().from(floors).where(eq(floors.slug, "deals")).limit(1);
+    await processTelegramUpdate(db, { update_id: 8, message: { message_id: 8, text: "/resume DocLedger Growth", chat: { id: OWNER } } }, NOW);
+    const [live] = await db.select().from(floors).where(eq(floors.slug, "growth")).limit(1);
     expect(live!.status).toBe("live");
     await processTelegramUpdate(db, { update_id: 9, message: { message_id: 9, text: "/cap", chat: { id: OWNER } } }, NOW);
     expect(lastText()).toMatch(/Daily cap 1.70 USD/);

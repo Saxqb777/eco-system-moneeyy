@@ -36,6 +36,7 @@ beforeAll(async () => {
   await paste("calendar_link", "https://cal.com/saaqib/15min");
   // This file is about DocLedger only: keep the Deals floor quiet.
   await db.update(floors).set({ status: "paused" }).where(eq(floors.slug, "deals"));
+  await db.update(floors).set({ status: "paused" }).where(eq(floors.slug, "growth"));
 }, 60_000);
 
 afterAll(async () => {

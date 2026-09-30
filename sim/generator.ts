@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, lt, ne, sql } from "drizzle-orm";
 import { resolveModel, type AgentModelKey } from "@/config/models";
 import type { Db } from "@/db/client";
 import {
@@ -70,7 +70,7 @@ interface World {
 }
 
 async function loadWorld(db: Db): Promise<World> {
-  const floorRows = await db.select().from(floors);
+  const floorRows = await db.select().from(floors).where(ne(floors.status, "archived"));
   const agentRows = await db.select().from(agents);
   const floorsBySlug = new Map(floorRows.map((f) => [f.slug, f]));
   const floorsById = new Map(floorRows.map((f) => [f.id, f]));
@@ -174,6 +174,8 @@ async function simulateSlice(db: Db, world: World, t: Date, summary: SimSummary)
     const rand = rngFor("revenue", t.toISOString(), floor.slug);
     const perSlice = 1 / (30 * 12);
     if (rand() < perSlice) {
+      // Only the sales floor invoices; the Growth floor earns through it.
+      if (floor.slug === "growth") continue;
       const amount = floor.slug === "deals" ? between(rand, 2, 15) + rand() : between(rand, 150, 400);
       const source = floor.slug === "deals" ? "commission" : "invoice";
       const [row] = await db
@@ -462,7 +464,7 @@ async function simulateWardenRun(db: Db, world: World, t: Date) {
   await db.insert(wardenRuns).values({ mode: "batch", trigger: "schedule", status: "applied", summary, decisions: { simulated: true }, costUsd: cost.toFixed(6), agentRunId: run?.id ?? null, startedAt: t, finishedAt: t, simulated: true });
   await logEvent(db, { agentId: world.warden.id, floorId: world.warden.floorId, type: "log", message: `Warden run: ${summary}`, at: t });
   if (rand() < 0.25) {
-    const slug = pick(rand, ["docledger", "deals"]);
+    const slug = pick(rand, ["docledger", "growth"]);
     const floor = world.floorsBySlug.get(slug);
     const notes = STRATEGY_NOTES[slug];
     if (floor && notes) {

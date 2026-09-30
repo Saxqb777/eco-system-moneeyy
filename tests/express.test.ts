@@ -69,6 +69,17 @@ describe("Express mode and the Analyst's second look", () => {
     expect(await db.select().from(tasks).where(and(eq(tasks.kind, "qualify_lead"), sql`${tasks.input} ->> 'retry' = 'true'`))).toHaveLength(1);
   });
 
+  it("lets one worker run several tasks side by side in express mode", async () => {
+    await setSetting(db, "express_until", new Date(NOW.getTime() + 3600_000).toISOString());
+    const [floor] = await db.select().from(floors).where(eq(floors.slug, "docledger")).limit(1);
+    for (const c of ["Alpha Freight", "Beta Freight", "Gamma Freight"]) await db.insert(leads).values({ floorId: floor!.id, company: c, dedupeKey: c.toLowerCase(), country: "GB", status: "new", simulated: false });
+    await advancePipelines(db, NOW);
+    const res = await submitQueuedTasks(db, NOW);
+    expect(res.submitted).toBe(3);
+    const statuses = (await db.select().from(leads)).filter((l) => l.company.endsWith("Freight")).map((l) => l.status);
+    expect(statuses).toEqual(["no_contact", "no_contact", "no_contact"]);
+  });
+
   it("puts tasks from a tick that died mid express run back in the queue", async () => {
     const [analyst] = await db.select().from(agents).where(eq(agents.slug, "docledger_analyst")).limit(1);
     const [t] = await db.insert(tasks).values({ floorId: analyst!.floorId, agentId: analyst!.id, kind: "qualify_lead", title: "Stuck", status: "running", batchId: "express", startedAt: new Date(NOW.getTime() - 20 * 60_000), attempts: 1, simulated: false }).returning();

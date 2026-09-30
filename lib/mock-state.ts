@@ -1,5 +1,6 @@
 // Fixture state for local screenshots and tests. Never used on Vercel: only when TOWER_MOCK_STATE is 1.
 import { AGENTS, FLOORS, SETUP_ITEMS } from "@/config/tower";
+import type { MailMessage, MailThread, MailThreadDetail } from "@/lib/mailbox";
 import type { TowerState } from "@/lib/state";
 import type { AgentDetail, FloorDetail, WardenSummary } from "@/lib/detail";
 
@@ -253,4 +254,52 @@ export function mockSetup(now = new Date()) {
     hint: s.key === "docledger_repo_url" ? "https://github.com/Saxqb777/docledger" : null,
     providedAt: s.key === "docledger_repo_url" ? ago(now, 900) : null,
   }));
+}
+
+// Mailbox fixtures for the local visual check: one thread in each state that matters.
+export function mockMailbox(now = new Date()): { threads: MailThread[]; details: Record<string, MailThreadDetail> } {
+  const ago = (h: number) => new Date(now.getTime() - h * 3600 * 1000).toISOString();
+  const msg = (id: string, from: "us" | "them", step: number, h: number, body: string, how: MailMessage["how"], subject: string | null = null, status = "sent"): MailMessage => ({ id, from, step, subject, body, at: ago(h), how, status: from === "them" ? "reply" : status, approvalId: null, previewUrl: null });
+  const detail = (d: Omit<MailThreadDetail, "lastAt" | "lastLine" | "lastFrom" | "messages">): MailThreadDetail => {
+    const last = d.items.at(-1)!;
+    const line = (last.from === "us" && last.subject ? `${last.subject}: ${last.body}` : last.body).replace(/\s+/g, " ");
+    return { ...d, lastAt: last.at, lastLine: line.length > 110 ? `${line.slice(0, 107)}...` : line, lastFrom: last.from, messages: d.items.length };
+  };
+  const list: MailThreadDetail[] = [
+    detail({
+      leadId: "mock-thames", company: "Thames Freight Ltd", contact: "Olivia Grant", email: "olivia@thamesfreight.example", country: "GB", city: "Felixstowe", state: "hot", title: "Finance Manager", leadStatus: "replied", previewUrl: "/for/mock01",
+      items: [
+        msg("t1", "us", 1, 50, "Hi Olivia,\nMost finance teams end the month the same way: an envelope of receipts and someone retyping them. At Felixstowe that is forty shipping line bills a month, every charge line keyed by hand.\nWorth fifteen minutes?\nSaaqib Khan, Founder, DocLedger", "auto", "Forty shipping bills, none retyped"),
+        msg("t2", "them", 1, 20, "This looks useful. Could we see it next week? And what would it cost for three people in finance?", null),
+        msg("t3", "us", 2, 19, "Happy to show you. Pick any 15 minutes here: cal.com/saaqib/15min. The first month is free, and after that plans start at 99 USD a month for the company, shaped around your own documents.", "waiting", "Re: Forty shipping bills, none retyped", "draft"),
+      ],
+    }),
+    detail({
+      leadId: "mock-gulf", company: "Gulf Crescent Freight", contact: "Farah Haddad", email: "farah@gulfcrescent.example", country: "AE", city: "Jebel Ali", state: "waiting", title: "Operations Manager", leadStatus: "drafted", previewUrl: "/for/mock02",
+      items: [msg("g1", "us", 1, 2, "Hi Farah,\nYour month end at Jebel Ali ends with a pile of Maersk bills and someone retyping every container number.\nWorth fifteen minutes?", "waiting", "Customs documents at Jebel Ali", "draft")],
+    }),
+    detail({
+      leadId: "mock-harbour", company: "Harbour Link Pty", contact: "Sam Kelly", email: "sam@harbourlink.example", country: "AU", city: "Sydney", state: "sent", title: "Accounts Manager", leadStatus: "contacted", previewUrl: null,
+      items: [
+        msg("h1", "us", 1, 120, "Hi Sam,\nFuel receipts with litres, odometer and plate, typed one by one at month end.\nWorth fifteen minutes?", "approved", "Fuel receipts, without the typing"),
+        msg("h2", "us", 2, 30, "Hi Sam, one more thing: the same receipt submitted twice is rejected before it reaches the books.\nReply stop and I will not write again.", "auto", "Duplicates, caught at the door"),
+      ],
+    }),
+    detail({
+      leadId: "mock-desert", company: "Desert Link Shipping", contact: "Ali Rahman", email: "ali@desertlink.example", country: "AE", city: "Sharjah", state: "paused", title: "Finance Manager", leadStatus: "replied", previewUrl: null,
+      items: [
+        msg("d1", "us", 1, 200, "Hi Ali,\nShipping bills are the worst part of month end.\nWorth fifteen minutes?", "auto", "Your shipping bills"),
+        msg("d2", "them", 1, 150, "It is our busy season, try me in a month.", null),
+        msg("d3", "us", 2, 149, "Understood, good luck with the season. I will check back in a month.", "auto", "Re: Your shipping bills"),
+      ],
+    }),
+    detail({
+      leadId: "mock-marina", company: "Marina Cargo", contact: "Zed Ali", email: "zed@marinacargo.example", country: "AE", city: "Dubai", state: "closed", title: "Owner", leadStatus: "lost", previewUrl: null,
+      items: [
+        msg("m1", "us", 1, 300, "Hi Zed,\nPetty cash, without the retyping.\nWorth fifteen minutes?", "auto", "Your petty cash"),
+        msg("m2", "them", 1, 280, "Please remove me from your list.", null),
+      ],
+    }),
+  ];
+  return { threads: list.map(({ title: _t, leadStatus: _l, previewUrl: _p, items: _i, ...t }) => t), details: Object.fromEntries(list.map((d) => [d.leadId, d])) };
 }

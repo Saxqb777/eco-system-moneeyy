@@ -31,6 +31,10 @@ export interface FloorBuild {
   tint: Graphics; // amber tint for a paused floor
   front: Container; // desk fronts, drawn over the seated workers so they sit behind their desks
   board: Whiteboard | null;
+  monitorAt: Map<number, P.MonitorProp>; // the monitor beside each desk, keyed by the desk slot
+  // Where people stand for the little things of office life: the window, the printer, the board, the door.
+  spots: { window?: number; printer?: number; board?: number; door?: number; counter?: number };
+  clocks: P.WallClock[];
 }
 
 const IX = BUILDING.interiorX;
@@ -56,7 +60,7 @@ export function buildFloor(info: FloorInfo, night: boolean): FloorBuild {
   const locked = info.status === "locked";
   const accent = FLOOR_ACCENT[info.slug] ?? C.stone;
   const g = new Graphics();
-  const build: FloorBuild = { container: c, deskSlots: DESK_SLOTS[info.slug] ?? [], monitors: [], plants: [], fans: [], lamps: new Map(), coolerX: null, extras: [], tint: new Graphics(), front: new Container(), board: null };
+  const build: FloorBuild = { container: c, deskSlots: DESK_SLOTS[info.slug] ?? [], monitors: [], plants: [], fans: [], lamps: new Map(), coolerX: null, extras: [], tint: new Graphics(), front: new Container(), board: null, monitorAt: new Map(), spots: {}, clocks: [] };
 
   const wallBase = locked ? mix(C.charcoalDark, accent, 0.08) : mix(C.charcoal, accent, night ? 0.32 : 0.42);
   twoTone(g, IX, top, IW, h, wallBase, 0.62, locked ? 0.08 : 0.14);
@@ -101,6 +105,7 @@ export function buildFloor(info: FloorInfo, night: boolean): FloorBuild {
       const m = P.monitorProp(sx + 25, y - 40, on);
       c.addChild(m.container);
       build.monitors.push(m);
+      build.monitorAt.set(sx, m);
       const lamp = P.deskLamp(sx - deskW / 2 + 12, y - 36);
       c.addChild(lamp.container);
       build.lamps.set(sx, lamp);
@@ -129,6 +134,8 @@ export function buildFloor(info: FloorInfo, night: boolean): FloorBuild {
     c.addChild(part);
     c.addChild(P.waterCooler(985, y - 1));
     build.coolerX = 985;
+    c.addChild(P.printer(945, y - 1));
+    build.spots = { window: 735, printer: 945 };
     c.addChild(P.toolBench(WORKSHOP.benchX, y - 1));
     c.addChild(P.cabinet(IR - 26, y - 1, 50));
     addDesks(slots, 86);
@@ -142,6 +149,7 @@ export function buildFloor(info: FloorInfo, night: boolean): FloorBuild {
     addDesks(slots, 84);
     // the team's whiteboard on its stand at the end of the room, clear of the desks
     build.board = whiteboard(c, IR - 116, top + 12, y);
+    build.spots = { window: 925, board: IR - 132 };
   } else if (info.slug === "deals") {
     addPlant(IX + 26, 0.9);
     c.addChild(P.wallArt(620, top + 34, 34, 24));
@@ -179,6 +187,9 @@ export function buildFloor(info: FloorInfo, night: boolean): FloorBuild {
     c.addChild(P.phone(PENTHOUSE.deskX - 52, y - 37));
     c.addChild(P.clipboard(PENTHOUSE.deskX + 10, y - 37));
     c.addChild(P.lamp(PENTHOUSE.deskX + 58, y - 37, on, false));
+    const clock = P.wallClock(1010, top + 30);
+    c.addChild(clock.container);
+    build.clocks.push(clock);
   } else if (info.slug === "lobby") {
     const fan = P.ceilingFan(640, top + 4);
     c.addChild(fan.container);
@@ -188,6 +199,10 @@ export function buildFloor(info: FloorInfo, night: boolean): FloorBuild {
     addPlant(IX + 28, 1.2);
     c.addChild(P.sofa(IX + 130, y - 1));
     c.addChild(P.rug(700, y - 1, 240, 0x6b2a26));
+    c.addChild(P.brassLetters("DOCLEDGER", 800, top + 14, 22));
+    const clock = P.wallClock(560, top + 40, 12);
+    c.addChild(clock.container);
+    build.clocks.push(clock);
     c.addChild(P.receptionDesk(700, y - 1));
     // the receptionist sits behind the petty cash counter, under an OPEN sign
     const receptionist = new CharacterSprite("receptionist", "Reception", { hair: 2, glasses: true, mug: false, slouch: false, coat: false, tone: 2, mugColor: "#F3E9D2" }, false);
@@ -199,6 +214,7 @@ export function buildFloor(info: FloorInfo, night: boolean): FloorBuild {
     c.addChild(P.cashCounter(980, y - 1));
     c.addChild(P.openSign(980, y - 112));
     c.addChild(P.doorway(1170, y - 1));
+    build.spots = { door: 1170, counter: 1040 };
     addPlant(IR - 20, 1);
   } else {
     addDesks(slots, 84);

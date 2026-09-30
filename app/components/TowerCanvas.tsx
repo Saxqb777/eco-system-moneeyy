@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { RunReport } from "@/lib/run-summary";
 import type { TowerState } from "@/lib/state";
 import type { Selection, TowerScene } from "@/scene/TowerScene";
 import { PanelHost, parsePanelParam, type PanelSel } from "./panels/PanelHost";
@@ -120,22 +121,40 @@ export default function TowerCanvas({ initialState, soundEnabled }: Props) {
     scene.highlightAgent(panel?.type === "agent" ? panel.id : panel?.type === "warden" && panel.tab === "office" ? wardenId : null);
   }, [panel, panelOpen, ready]);
 
-  useEffect(() => {
-    const poll = setInterval(async () => {
-      try {
-        const res = await fetch("/api/state", { cache: "no-store" });
-        const data = await res.json();
-        if (data.ok) {
-          stateRef.current = data.state;
-          setState(data.state);
-          sceneRef.current?.applyState(data.state);
-        }
-      } catch {
-        // keep the last state
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch("/api/state", { cache: "no-store" });
+      const data = await res.json();
+      if (data.ok) {
+        stateRef.current = data.state;
+        setState(data.state);
+        sceneRef.current?.applyState(data.state);
       }
-    }, 5000);
-    return () => clearInterval(poll);
+    } catch {
+      // keep the last state
+    }
   }, []);
+
+  useEffect(() => {
+    const poll = setInterval(() => void refresh(), 5000);
+    return () => clearInterval(poll);
+  }, [refresh]);
+
+  // Run the Tower now (Warden panel): the building plays the run, and the state is fetched at once after.
+  useEffect(() => {
+    const onStart = () => sceneRef.current?.runStarted();
+    const onDone = (e: Event) => {
+      const report = (e as CustomEvent<RunReport>).detail;
+      if (report) sceneRef.current?.runFinished(report);
+      void refresh();
+    };
+    window.addEventListener("tower:run-start", onStart);
+    window.addEventListener("tower:run", onDone);
+    return () => {
+      window.removeEventListener("tower:run-start", onStart);
+      window.removeEventListener("tower:run", onDone);
+    };
+  }, [refresh]);
 
   useEffect(() => {
     if (!state.simulationMode) return;

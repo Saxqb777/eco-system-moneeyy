@@ -145,15 +145,17 @@ describe("The Run the Tower now answer", () => {
     );
     expect(r.capped).toBe(true);
     expect(r.headline).toBe("Daily cap reached");
+    expect(r.sub).toBe("Back at midnight Dubai, in 55 min");
     expect(r.lines.join(" ")).toBe("Daily cap reached: 1.86 of 1.70 USD spent today. Work starts again at midnight Dubai, in 55 min. To go on now, raise the daily cap in the Budget tab. 2 items wait for you on the red phone.");
   });
 
   it("names floors that came back and the work that started", () => {
     const r = runReport({ guard: { capHit: false, resumedFloors: ["docledger", "growth"] }, submit: { submitted: 3, direct: 1 }, warden: { status: "skipped", reason: "an instant run for manual already happened this hour" } });
     expect(r.headline).toBe("3 tasks at work");
+    expect(r.sub).toBe("1 finished already");
     expect(r.lines[0]).toBe("DocLedger Sales and DocLedger Growth are back at work.");
     expect(r.lines[1]).toBe("Floors: 3 tasks worked, 1 finished already.");
-    expect(r.lines.join(" ")).not.toMatch(/[—–]| - /);
+    expect(r.lines.join(" ")).not.toMatch(/[\u2014\u2013]| - /);
   });
 
   it("points at the Resume button for a floor the owner paused", () => {

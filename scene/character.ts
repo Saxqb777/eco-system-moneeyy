@@ -30,7 +30,11 @@ export type Pose =
   | "spin"
   | "drink"
   | "coffee"
-  | "stretch";
+  | "stretch"
+  | "cheer"
+  | "point"
+  | "phone"
+  | "wave";
 
 const TAU = Math.PI * 2;
 
@@ -53,6 +57,8 @@ export class CharacterSprite extends Container {
   pose: Pose = "stand";
   facing = 1;
   busyUntil = 0; // idle director leaves the sprite alone until this time
+  // Out on an errand (a lift ride, a tour, a visit): state updates leave the sprite alone until it is back.
+  away = false;
   private readonly body = new Container();
   private readonly legL = new Graphics();
   private readonly legR = new Graphics();
@@ -66,6 +72,16 @@ export class CharacterSprite extends Container {
   private readonly zz = new Container();
   // A light bulb over the head while the owner has this worker's idea or ticket on his phone.
   private readonly bulb = new Graphics();
+  // A folder in the right hand, for errands between desks and floors.
+  private readonly folder = new Graphics();
+  // A phone in the right hand for the phone pose.
+  private readonly handset = new Graphics();
+  // Typing comes in bursts: a run of keys, then a look at the screen, now and then a hand to the chin.
+  private typing = true;
+  private typeClock = 0;
+  private typeNext = 1500;
+  private thinking = false;
+  private bubbleLift = 0;
   private t = 0;
   private walkPhase = 0;
   private spinPhase = 0;
@@ -129,6 +145,18 @@ export class CharacterSprite extends Container {
     this.mug.position.set(0, 14);
     this.mug.visible = false;
     this.armR.addChild(this.mug);
+    this.folder.rect(-7, 0, 13, 10).fill(0xe2c27a);
+    this.folder.rect(-7, 0, 13, 2).fill(0xc9a45a);
+    this.folder.rect(-7, 0, 5, 2).fill(0xd1b06a);
+    this.folder.rect(-5, 4, 9, 1).fill(0xf3e9d2);
+    this.folder.position.set(0, 15);
+    this.folder.visible = false;
+    this.armR.addChild(this.folder);
+    this.handset.roundRect(-2, 0, 5, 10, 1).fill(0x1e1e22);
+    this.handset.rect(-1, 1, 3, 6).fill(0x5da9e9);
+    this.handset.position.set(-1, 13);
+    this.handset.visible = false;
+    this.armR.addChild(this.handset);
 
     const hg = new Graphics();
     hg.roundRect(-7, -16, 14, 15, 3).fill(skin);
@@ -212,7 +240,7 @@ export class CharacterSprite extends Container {
   }
 
   // Paper task label. Big enough to read the three words from across the room. Alert style for blocked.
-  setBubble(text: string | null, style: "task" | "alert" | "chat" = "task") {
+  setBubble(text: string | null, style: "task" | "alert" | "chat" = "task", lift = 0) {
     this.bubble.removeChildren();
     if (!text) {
       this.bubble.visible = false;
@@ -231,7 +259,8 @@ export class CharacterSprite extends Container {
     g.poly([-5, 0, 5, 0, 0, 6]).fill(C.paper);
     t.position.set(-w / 2 + 10, -h + 5);
     this.bubble.addChild(g, t);
-    this.bubble.position.set(0, -this.bodyHeight - 12);
+    this.bubbleLift = lift;
+    this.bubble.position.set(0, -this.bodyHeight - 12 - lift);
     this.bubble.visible = true;
   }
 
@@ -257,11 +286,18 @@ export class CharacterSprite extends Container {
     this.body.rotation = 0;
     this.torso.rotation = this.look.slouch && !this.isWarden ? -0.14 : 0;
     this.alpha = pose === "dim" ? 0.6 : 1;
+    // seated people draw over anyone walking between the desks, so their task labels stay readable
+    this.zIndex = seated ? 2 : 1;
     this.armL.rotation = -0.12;
     this.armR.rotation = 0.12;
     this.head.rotation = 0;
+    this.head.position.x = this.look.slouch && !this.isWarden ? -3 : 0;
+    this.armL.position.y = -38;
+    this.armR.position.y = -38;
     this.mug.visible = false;
+    this.handset.visible = false;
     this.zz.visible = false;
+    this.thinking = false;
     switch (pose) {
       case "sit_idle":
         // leaning back, arms folded on the chest
@@ -314,6 +350,22 @@ export class CharacterSprite extends Container {
       case "chat":
         this.armR.rotation = 1.2;
         break;
+      case "cheer":
+        this.armL.rotation = -2.8;
+        this.armR.rotation = 2.8;
+        this.head.rotation = -0.1;
+        break;
+      case "point":
+        this.armR.rotation = -1.45;
+        break;
+      case "phone":
+        this.armR.rotation = 2.75;
+        this.handset.visible = true;
+        this.head.rotation = 0.12;
+        break;
+      case "wave":
+        this.armR.rotation = 2.9;
+        break;
       default:
         break;
     }
@@ -324,6 +376,15 @@ export class CharacterSprite extends Container {
 
   setBulb(on: boolean) {
     this.bulb.visible = on;
+  }
+
+  setCarry(on: boolean) {
+    this.folder.visible = on;
+  }
+
+  // True while the hands are on the keys, so the monitor next to the worker can scroll with them.
+  get keysActive(): boolean {
+    return this.pose === "sit_type" && this.typing;
   }
 
   update(dtMs: number) {
@@ -340,15 +401,59 @@ export class CharacterSprite extends Container {
         this.head.rotation = Math.sin(s * TAU * 0.15) * 0.05;
         break;
       case "sit_type": {
-        // typing: small, smooth taps from each hand in turn, the head following the screen now and then
-        const k = s * TAU * 2.4;
-        this.armL.rotation = -TYPE_REACH + Math.sin(k) * 0.06;
-        this.armR.rotation = TYPE_REACH + Math.sin(k + 2.2) * 0.06;
-        this.body.position.y = SEAT_Y + Math.sin(k * 0.5) * 0.25;
-        this.head.rotation = Math.sin(s * TAU * 0.35) * 0.05;
-        this.bubble.position.y = -this.bodyHeight - 12 + Math.sin(s * TAU * 0.5) * 2;
+        // Typing in bursts: quick taps from each hand in turn, then a pause to read the screen beside the
+        // desk, now and then a hand to the chin while thinking. The hands stay down on the keyboard.
+        this.typeClock += dtMs;
+        if (this.typeClock > this.typeNext) {
+          this.typeClock = 0;
+          this.typing = !this.typing;
+          this.thinking = !this.typing && Math.random() < 0.3;
+          this.typeNext = this.typing ? 1400 + Math.random() * 2600 : 700 + Math.random() * 1500;
+        }
+        if (this.typing) {
+          const k = s * TAU * 4.2;
+          const tapL = Math.max(0, Math.sin(k));
+          const tapR = Math.max(0, Math.sin(k + Math.PI * 0.9));
+          this.armL.rotation = -TYPE_REACH - tapL * 0.1;
+          this.armR.rotation = TYPE_REACH + tapR * 0.1;
+          this.armL.position.y = -38 - tapL * 1.6;
+          this.armR.position.y = -38 - tapR * 1.6;
+          this.torso.rotation = (this.look.slouch ? -0.14 : 0) - 0.07;
+          this.head.rotation = 0.04 + Math.sin(s * TAU * 0.9) * 0.03;
+          this.head.position.x = (this.look.slouch ? -3 : 0) + 0.5;
+        } else {
+          this.armL.position.y = -38;
+          this.armR.position.y = -38;
+          this.armL.rotation = -TYPE_REACH;
+          this.armR.rotation = this.thinking ? 2.55 : TYPE_REACH;
+          this.torso.rotation = (this.look.slouch ? -0.14 : 0) + (this.thinking ? 0.04 : -0.02);
+          // eyes on the monitor to the side
+          this.head.rotation = this.thinking ? -0.12 : 0.14;
+          this.head.position.x = (this.look.slouch ? -3 : 0) + (this.thinking ? 0 : 1.5);
+        }
+        this.body.position.y = SEAT_Y + Math.sin(s * TAU * 1.1) * 0.3;
+        this.bubble.position.y = -this.bodyHeight - 12 - this.bubbleLift + Math.sin(s * TAU * 0.5) * 2;
         break;
       }
+      case "cheer": {
+        const b = Math.abs(Math.sin(s * TAU * 1.6));
+        this.body.position.y = -b * 4;
+        this.armL.rotation = -2.8 + Math.sin(s * TAU * 3.2) * 0.2;
+        this.armR.rotation = 2.8 - Math.sin(s * TAU * 3.2) * 0.2;
+        break;
+      }
+      case "point":
+        this.armR.rotation = -1.45 + Math.sin(s * TAU * 0.9) * 0.1;
+        this.head.rotation = Math.sin(s * TAU * 0.4) * 0.05;
+        break;
+      case "phone":
+        this.armR.rotation = 2.75 + Math.sin(s * TAU * 0.3) * 0.05;
+        this.armL.rotation = -0.3 + Math.sin(s * TAU * 0.7) * 0.25;
+        this.head.rotation = 0.12 + Math.sin(s * TAU * 0.5) * 0.05;
+        break;
+      case "wave":
+        this.armR.rotation = 2.9 + Math.sin(s * TAU * 2) * 0.35;
+        break;
       case "walk":
       case "pace": {
         const rate = this.pose === "pace" ? 1.1 : 1.6;

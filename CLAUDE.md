@@ -11,7 +11,7 @@ Read this file first in every session. It is the cross chat memory for this repo
 ## Non negotiable rules (short form, full text in the brief)
 1. No external side effects (email, public post, merge, spend, cap raise) without an approved approval queue item.
 2. Never exceed the daily API spend cap. Warden pauses floors when the cap hits.
-3. Never merge to main in any repo. Builder opens pull requests only.
+3. The Tower repo (Saxqb777/eco-system-moneeyy): Claude merges its own pull requests once typecheck, tests and the build pass locally and CI is green, then tells Saaqib in a short message what went live (his choice 2026-09-30, D055). Every other repo, including DocLedger: never merge to main, the Builder opens pull requests only.
 4. Simulation mode must work with zero API keys.
 5. It must look like a real game. A generic AI dashboard look means the phase is rejected.
 6. Ask Saaqib when blocked on something only he can provide. Never fake it, never stub it silently. Keep SETUP.md current.
@@ -21,7 +21,7 @@ Read this file first in every session. It is the cross chat memory for this repo
 - Chat replies: dead simple, bullets. Explain heavily only when asked or when it really matters.
 - Never implement or change anything without a full final confirmation. Propose first, then wait.
 - One phase at a time. After each phase: deploy, give the URL, a 5 line summary and what is needed from him. Then stop.
-- Development branch: claude/relaxed-ritchie-kwg8g6. Never push anywhere else without permission.
+- Development branch: claude/relaxed-ritchie-kwg8g6. Never push anywhere else without permission. Merging a green pull request from it into main on The Tower repo is allowed (D055); pushing to main directly is not.
 
 ## Where things live
 - docs/MASTER_PROMPT.md: the brief, verbatim.

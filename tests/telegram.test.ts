@@ -5,7 +5,7 @@ import { approvals, floors, ideas, messagesOut, setupItems } from "@/db/schema";
 import { raiseApproval } from "@/lib/approvals";
 import { encryptSecret } from "@/lib/crypto";
 import { getSetting, setSetting } from "@/lib/settings";
-import { deliverMessages, pairingCode, setTelegramApi } from "@/lib/telegram";
+import { channelChatId, deliverMessages, pairingCode, setTelegramApi } from "@/lib/telegram";
 import { processTelegramUpdate } from "@/lib/telegram-inbound";
 import { fakeTelegram, testSecretsKey } from "./helpers/fakes";
 import { makeTestDb } from "./helpers/pglite";
@@ -124,5 +124,25 @@ describe("Telegram", () => {
     expect(later.sent).toBe(1);
     setTelegramApi(tg.api);
     await setSetting(db, "telegram_pending_reject", null);
+  });
+});
+
+describe("channelChatId", () => {
+  it("turns whatever the owner pastes into the @handle Telegram expects", () => {
+    expect(channelChatId("@Themarketdeals")).toBe("@Themarketdeals");
+    expect(channelChatId("Themarketdeals")).toBe("@Themarketdeals");
+    expect(channelChatId("t.me/Themarketdeals")).toBe("@Themarketdeals");
+    expect(channelChatId("https://t.me/Themarketdeals/")).toBe("@Themarketdeals");
+    expect(channelChatId("  https://telegram.me/Themarketdeals?start=1 ")).toBe("@Themarketdeals");
+    expect(channelChatId("-1001234567890")).toBe("-1001234567890");
+  });
+
+  it("refuses junk instead of building a wrong chat id", () => {
+    expect(channelChatId("")).toBeNull();
+    expect(channelChatId(null)).toBeNull();
+    expect(channelChatId("@")).toBeNull();
+    expect(channelChatId("t.me/")).toBeNull();
+    expect(channelChatId("ab")).toBeNull();
+    expect(channelChatId("has space here")).toBeNull();
   });
 });

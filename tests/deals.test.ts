@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { collectBatches } from "@/agents/batches";
 import { setAnthropicFactory } from "@/agents/client";
 import { advancePipelines } from "@/agents/pipeline";
-import { latestPostedDeals, recordClick } from "@/agents/deals";
+import { latestPostedDeals, recordClick, refreshChannelSubscribers } from "@/agents/deals";
 import { handleTaskBatchResult, submitQueuedTasks } from "@/agents/workers";
 import type { Db } from "@/db/client";
 import { approvals, clicks, deals, floors, posts, setupItems, tasks } from "@/db/schema";
@@ -139,5 +139,14 @@ describe("Deals Engine", () => {
     expect(ap!.status).toBe("approved");
     const before = tg.calls.filter((c) => c.method === "sendMessage" && c.body.chat_id === "4242" && String(c.body.text).includes("MX Master"));
     expect(before).toHaveLength(0);
+  });
+  it("refreshes the subscriber count even when the channel was pasted as a t.me link", async () => {
+    await paste("deals_channel", "t.me/uaedailydeals");
+    await setSetting(db, "channel_subscribers_day", "");
+    const res = await refreshChannelSubscribers(db, TEN);
+    expect(res.status).toBe("updated");
+    const call = tg.calls.find((c) => c.method === "getChatMemberCount");
+    expect(call?.body.chat_id).toBe("@uaedailydeals");
+    await paste("deals_channel", "@uaedailydeals");
   });
 });

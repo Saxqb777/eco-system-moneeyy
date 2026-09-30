@@ -12,15 +12,15 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 | 2 | Nothing: the heartbeat authenticates with a GitHub OIDC token, no secrets needed | Hourly heartbeat | Done | done 2026-09-29, first scheduled run landed 22:55 UTC the same day |
 | 2b | Two clicks: GitHub default branch to main, Vercel production branch to main | Pull request flow | Done | done 2026-09-29 by Saaqib |
 | 2c | Backup heartbeat: not needed any more, the schedule fires since the Phase 2 merge touched the workflow file on main (first run 2026-09-29 22:55 UTC) | Hourly heartbeat | Done | done 2026-09-29 |
-| 3 | Anthropic API key | Leaving simulation mode, every real agent run | Now (Phase 4 is built) | missing |
-| 4 | Telegram bot token, then pair your chat with /pair | Warden messages, approvals over Telegram, morning brief | Now (Phase 4 is built) | missing |
-| 5 | DocLedger GitHub repo URL and a GitHub token for it | Builder (nightly at 02:00 Dubai, built in Phase 5) | Now | missing (repo likely Saxqb777/docledger, confirm) |
-| 6 | Calendar booking link | Chaser demo booking | Now | missing |
+| 3 | Anthropic API key | Leaving simulation mode, every real agent run | Done | done 2026-09-30 07:28 UTC, simulation off, first real batch and Warden run 07:40 to 07:43 UTC |
+| 4 | Telegram bot token, then pair your chat with /pair | Warden messages, approvals over Telegram, morning brief | Done | done 2026-09-30, chat paired, first four messages delivered 08:18 UTC |
+| 5 | DocLedger GitHub repo URL and a GitHub token for it | Builder (nightly at 02:00 Dubai, built in Phase 5) | Done | done 2026-09-30 (Saxqb777/docledger plus token), first Builder night is 22:00 UTC |
+| 6 | Calendar booking link | Chaser demo booking | Done | done 2026-09-30 (cal.com 15 min link) |
 | 7 | Resend API key and sending address | Sending approved outreach emails | Now | missing |
 | 8 | DocLedger price line and signature block (the pitch itself is in the repo) | Writer and Chaser | Now | missing |
 | 8b | Resend webhook secret for replies (optional) | Chaser reads replies itself | Optional | missing: without it, forward replies with /reply on Telegram |
 | 9 | Affiliate IDs: Amazon.ae tag, Noon, others | Deals Engine earning (posts run without them, links stay plain) | Now | missing |
-| 10 | Telegram deals channel handle, bot added as admin | Publisher posting to the channel | Now | missing |
+| 10 | Telegram deals channel handle, bot added as admin | Publisher posting to the channel | Now | pasted 2026-09-30 as t.me/Themarketdeals: re paste as @Themarketdeals (the bot needs the @ handle), then confirm the bot is admin with Post messages |
 | 11 | Consulting site URL | Ground floor (locked until unlock rule is met) | Later | missing |
 
 ## Steps per item

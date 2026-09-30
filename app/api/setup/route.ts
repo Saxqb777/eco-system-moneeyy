@@ -5,7 +5,7 @@ import { setupItems } from "@/db/schema";
 import { encryptSecret, secretHint } from "@/lib/crypto";
 import { bad, json, readJson } from "@/lib/http";
 import { mockEnabled, mockSetup } from "@/lib/mock-state";
-import { pairingCode } from "@/lib/telegram";
+import { channelChatId, pairingCode } from "@/lib/telegram";
 import { runTick } from "@/warden/tick";
 
 export const dynamic = "force-dynamic";
@@ -35,8 +35,13 @@ export async function POST(req: Request) {
     return json({ ok: true, key: item.key, status: "missing" });
   }
 
-  const value = (body.value ?? "").trim();
+  let value = (body.value ?? "").trim();
   if (!value) return bad("value is empty");
+  if (item.key === "deals_channel") {
+    const clean = channelChatId(value);
+    if (!clean) return bad("Paste the channel handle like @uaedailydeals (or its t.me link).");
+    value = clean;
+  }
   if (item.kind === "url" && !/^https?:\/\//.test(value)) return bad("Expected a URL starting with http");
   if (item.key === "telegram_chat_id" && !/^-?\d{5,20}$/.test(value)) return bad("A chat id is a number. Easiest: open your bot in Telegram and send the /pair line shown here.");
 

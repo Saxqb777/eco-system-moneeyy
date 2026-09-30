@@ -57,6 +57,7 @@ export function fakeTelegram(): { api: TelegramApi; calls: Array<{ method: strin
   let n = 100;
   const api: TelegramApi = async (_token, method, body) => {
     calls.push({ method, body });
+    if (method === "getChatMemberCount") return { ok: true, result: 1234 };
     return { ok: true, result: { message_id: ++n } };
   };
   return { api, calls };

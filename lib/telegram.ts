@@ -38,6 +38,18 @@ async function setupValue(db: Db, key: string): Promise<string | null> {
   }
 }
 
+// The deals channel as Telegram wants it: "@name" for a public channel, or the numeric id for a private one.
+// Accepts whatever the owner pastes: @name, name, t.me/name, https://t.me/name/, telegram.me/name.
+export function channelChatId(raw: string | null | undefined): string | null {
+  let v = (raw ?? "").trim();
+  if (!v) return null;
+  if (/^-?\d{5,20}$/.test(v)) return v;
+  v = v.replace(/^https?:\/\//i, "").replace(/^(www\.)?(t\.me|telegram\.me|telegram\.dog)\//i, "");
+  v = v.replace(/^@+/, "").split(/[/?#\s]/)[0] ?? "";
+  if (!/^[A-Za-z][A-Za-z0-9_]{3,31}$/.test(v)) return null;
+  return `@${v}`;
+}
+
 export async function getTelegramConfig(db: Db): Promise<TelegramConfig | null> {
   const token = await setupValue(db, "telegram_bot_token");
   if (!token) return null;

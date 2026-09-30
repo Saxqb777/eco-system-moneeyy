@@ -1,6 +1,7 @@
 import { latestPostedDeals } from "@/agents/deals";
 import { getDb } from "@/db/client";
 import { clipboardValue } from "@/lib/clipboard";
+import { channelChatId } from "@/lib/telegram";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export default async function DealsPage() {
   let channel: string | null = null;
   try {
     rows = await latestPostedDeals(db, 40);
-    channel = await clipboardValue(db, "deals_channel");
+    channel = channelChatId(await clipboardValue(db, "deals_channel"));
   } catch {
     rows = [];
   }

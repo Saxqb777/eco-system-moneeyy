@@ -9,6 +9,7 @@ import { deliverMessages, ensureWebhook, getTelegramConfig } from "@/lib/telegra
 import { dubaiParts } from "@/lib/time";
 import { runSimulation } from "@/sim/generator";
 import { handleWardenBatchResult, runWarden, scheduledRunExists } from "@/warden/decide";
+import { expressActive } from "@/agents/workers";
 
 export type TickTrigger = "cron" | "manual" | "setup" | "idea" | "blocked" | "ui";
 
@@ -84,7 +85,7 @@ export async function runTick(trigger: TickTrigger, now = new Date()): Promise<T
       const slotStart = new Date(now.getTime() - interval * 60 * 60 * 1000 + 30 * 60 * 1000);
       if (!due) steps.warden = { status: "not due", nextAt: `every ${interval} h on the hour, Dubai time` };
       else if (await scheduledRunExists(db, slotStart)) steps.warden = { status: "already ran this slot" };
-      else steps.warden = await runWarden(db, { mode: "batch", trigger: "schedule", now });
+      else steps.warden = await runWarden(db, { mode: expressActive(settingsMap, now) ? "sync" : "batch", trigger: "schedule", now });
     } else {
       steps.warden = { status: "skipped", reason: `trigger ${trigger} does not run Warden` };
     }

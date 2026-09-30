@@ -54,7 +54,7 @@ ${STYLE}`,
           required: ["company", "website", "segment", "city", "country", "sourceUrl", "phone", "why"],
           properties: {
             company: { type: "string" },
-            website: { type: "string", description: "root URL or empty" },
+            website: { type: "string", description: "the company's own website root URL; search for it if the page you found does not link it, empty only if it truly has none" },
             segment: { type: "string", enum: ["freight_forwarder", "customs_broker", "small_3pl", "distributor", "trading_company"] },
             city: { type: "string" },
             country: { type: "string", description: "two letter country code, for example GB, US, AU, SG, AE" },
@@ -108,18 +108,20 @@ ${STYLE}`,
 const qualifyLead: Playbook = {
   kind: "qualify_lead",
   webSearchMaxUses: 3,
-  maxTokens: 1500,
+  webFetchMaxUses: 4,
+  maxTokens: 2500,
   system: `You are Analyst on the DocLedger Sales floor of The Tower.
 ${docledgerKnowledge()}
 For one company: judge how well Doc Ledger fits (1 to 10), find the person who would buy it (finance manager, accounts manager, operations manager, managing director or owner), and do a little research so Writer can open with something true about them: what they move or sell, their fleet or routes, how many branches, anything recent. Two or three facts, each one sentence, each one seen on a page. Then pick the angle: which pain is theirs most (shipping bills, fuel receipts, petty cash, foreign currency, duplicates, their own document types).
-Look for a public work email on the company site or a public directory. If you cannot find an email, leave it empty and say so, never guess one.
+Find the email: open the company website with the fetch tool (search for it first if you do not have it), then its contact, about or team page. A named person's work email is best; a general company address on the site such as info@, accounts@, finance@, sales@ or operations@ is fine when no named one is public. Copy it exactly as written on the page. If there is none, leave it empty and say so, never guess one. Return the website you used.
 A score of 6 or more means qualified. Finance teams handling freight invoices and fleets score high. Couriers, airlines and shipping lines score low.
 ${STYLE}`,
   schema: {
     type: "object",
     additionalProperties: false,
-    required: ["score", "reason", "qualified", "decisionMaker", "research", "angle", "notes"],
+    required: ["score", "reason", "qualified", "decisionMaker", "research", "angle", "website", "notes"],
     properties: {
+      website: { type: "string", description: "the company website you used, root URL, or empty" },
       score: { type: "integer" },
       reason: { type: "string" },
       qualified: { type: "boolean" },
@@ -138,20 +140,25 @@ ${STYLE}`,
     const leadId = str(input(task).leadId);
     const [lead] = leadId ? await ctx.db.select().from(leads).where(eq(leads.id, leadId)).limit(1) : [];
     if (!lead) return { skip: "No lead attached to this task" };
-    if (lead.status !== "new") return { skip: `Lead ${lead.company} is already ${lead.status}` };
+    const retry = input(task).retry === true;
+    if (lead.status !== "new" && !(retry && lead.status === "no_contact")) return { skip: `Lead ${lead.company} is already ${lead.status}` };
     const f = await facts(ctx.db);
-    return { user: `Product facts:\n${f}\n\nCompany: ${lead.company}\nWebsite: ${lead.website ?? "unknown"}\nSegment: ${lead.segment ?? "unknown"}\nCity: ${lead.city ?? "unknown"}\nSeen at: ${lead.sourceUrl ?? "unknown"}\nScout's note: ${lead.scoreReason ?? ""}\n\nQualify this company and return the JSON object.` };
+    return { user: `Product facts:\n${f}\n\n${retry ? "Second try: the first look found no email. Open the website and its contact page this time.\n" : ""}Company: ${lead.company}\nCountry: ${lead.country}\nWebsite: ${lead.website ?? "unknown, search for it"}\nSegment: ${lead.segment ?? "unknown"}\nCity: ${lead.city ?? "unknown"}\nSeen at: ${lead.sourceUrl ?? "unknown"}\nScout's note: ${lead.scoreReason ?? ""}\n\nQualify this company and return the JSON object.` };
   },
   async absorb(task, output, ctx) {
     const leadId = str(input(task).leadId);
     const dmRaw = (output.decisionMaker ?? {}) as Record<string, unknown>;
     const email = str(dmRaw.email, 120).toLowerCase();
     const research = Array.isArray(output.research) ? output.research.filter((r): r is string => typeof r === "string" && r.trim().length > 0).map((r) => r.trim().slice(0, 240)).slice(0, 4) : [];
-    const dm = { name: str(dmRaw.name, 80), title: str(dmRaw.title, 80), email: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? email : "", linkedin: str(dmRaw.linkedin, 200), confidence: Math.min(1, Math.max(0, num(dmRaw.confidence, 0))), research, angle: str(output.angle, 80) };
+    const retried = input(task).retry === true;
+    const dm = { name: str(dmRaw.name, 80), title: str(dmRaw.title, 80), email: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? email : "", linkedin: str(dmRaw.linkedin, 200), confidence: Math.min(1, Math.max(0, num(dmRaw.confidence, 0))), research, angle: str(output.angle, 80), ...(retried ? { retried: true } : {}) };
     const score = Math.min(10, Math.max(1, Math.round(num(output.score, 1))));
     const qualified = output.qualified === true && score >= 6;
     const status = !qualified ? "disqualified" : dm.email ? "qualified" : "no_contact";
-    await ctx.db.update(leads).set({ score, scoreReason: str(output.reason, 400) || null, decisionMaker: dm, status, updatedAt: ctx.now }).where(eq(leads.id, leadId));
+    const site = str(output.website, 200);
+    const [before] = await ctx.db.select({ website: leads.website }).from(leads).where(eq(leads.id, leadId)).limit(1);
+    const website = before?.website || (/^https?:\/\//.test(site) ? site : null);
+    await ctx.db.update(leads).set({ score, scoreReason: str(output.reason, 400) || null, decisionMaker: dm, status, website, updatedAt: ctx.now }).where(eq(leads.id, leadId));
     const [lead] = await ctx.db.select({ company: leads.company }).from(leads).where(eq(leads.id, leadId)).limit(1);
     const company = lead?.company ?? "the lead";
     return { summary: `Scored ${company}: ${score}/10, ${status === "qualified" ? `${dm.name || "decision maker"} found` : status === "no_contact" ? "qualified but no public email" : "not a fit"}`, extra: { company, score, qualified, status } };

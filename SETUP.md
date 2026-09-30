@@ -20,7 +20,7 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 | 8 | DocLedger price line and signature block (the pitch itself is in the repo) | Writer and Chaser | Now | missing |
 | 8b | Resend webhook secret for replies (optional) | Chaser reads replies itself | Done | done 2026-09-30 09:06 UTC |
 | 9 | Affiliate IDs: Amazon.ae tag, Noon, others | Deals Engine earning (posts run without them, links stay plain) | Done for Amazon | Amazon.ae tag themarketde0c-21 saved 2026-09-30 (right account). Noon and others optional |
-| 10 | Telegram deals channel handle, bot added as admin | Publisher posting to the channel | Done | t.me/Themarketdeals works since pull request 7 (subscriber count reads 1 on 2026-09-30). Confirm the bot is admin with Post messages; the first real post proves it |
+| 10 | Telegram deals channel handle, bot added as admin | Publisher posting to the channel | Done | t.me/Themarketdeals works since pull request 7. Bot @Thedealsmarketbot added as channel admin by Saaqib 2026-09-30 (it was missing before). Not verifiable from here: the first approved post proves Post Messages works |
 | 11 | Consulting site URL | Ground floor (locked until unlock rule is met) | Later | missing |
 
 ## Steps per item

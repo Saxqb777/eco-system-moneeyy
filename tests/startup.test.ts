@@ -255,3 +255,22 @@ describe("The DocLedger Growth floor", () => {
     }
   });
 });
+
+describe("The clipboard of a closed floor", () => {
+  it("hides the Deals items while the Deals floor is archived, and keeps their values", async () => {
+    const { db, close } = await makeTestDb();
+    try {
+      const { visibleSetupRows } = await import("@/lib/clipboard");
+      await db.update(floors).set({ status: "archived" }).where(eq(floors.slug, "deals"));
+      const keys = (await visibleSetupRows(db)).map((r) => r.key);
+      expect(keys).toContain("docledger_repo_url");
+      expect(keys).not.toContain("deals_channel");
+      expect(keys).not.toContain("affiliate_amazon_ae");
+      expect(keys).not.toContain("x_credentials");
+      await db.update(floors).set({ status: "live" }).where(eq(floors.slug, "deals"));
+      expect((await visibleSetupRows(db)).map((r) => r.key)).toContain("deals_channel");
+    } finally {
+      await close();
+    }
+  });
+});

@@ -94,6 +94,16 @@ describe("Warden real loop", () => {
     expect(queue.some((m) => m.kind === "warden_note")).toBe(true);
   });
 
+  it("sends no rework back to a closed floor", async () => {
+    const scout = await scoutId();
+    const [deals] = await db.select().from(floors).where(eq(floors.slug, "deals")).limit(1);
+    await db.update(floors).set({ status: "archived" }).where(eq(floors.id, deals!.id));
+    const [bad] = await db.insert(tasks).values({ floorId: deals!.id, agentId: scout, kind: "find_deals", title: "Closed floor work", status: "review", output: {}, simulated: false }).returning();
+    await applyWardenDecisions(db, "run-test-closed", { summary: "Reviewed", assignments: [], reviews: [{ taskId: bad!.id, score: 2, reason: "Nothing found", decision: "reject" }], strategyNotes: [], ideaActions: [], budgetMoves: [], approvalsToRaise: [], messagesToOwner: [], blockedResolutions: [] }, NOW);
+    expect(await db.select().from(tasks).where(eq(tasks.parentTaskId, bad!.id))).toHaveLength(0);
+    await db.update(floors).set({ status: "live" }).where(eq(floors.id, deals!.id));
+  });
+
   it("reviews finished work: accept and reject with a requeue", async () => {
     const scout = await scoutId();
     const [good] = await db.insert(tasks).values({ agentId: scout, kind: "find_leads", title: "Good work", status: "review", output: { found: 5 }, simulated: false }).returning();

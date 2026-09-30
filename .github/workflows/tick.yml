@@ -1,14 +1,22 @@
 name: tick
 
-# The heartbeat. Hourly at minute 7, plus 03:55 UTC so the morning brief lands at 08:00 Dubai.
+# The heartbeat. Every 15 minutes, off the busy top and half of the hour, plus 03:55 UTC so the
+# morning brief lands at 08:00 Dubai. GitHub skips scheduled runs under load (only 4 of 13 hourly
+# runs landed on the first night), so more tries keep the floors moving. Every tick is safe to repeat:
+# Warden runs once per slot, batches and posts are deduplicated.
 # Authenticates with a GitHub OIDC token that the Tower verifies. No secrets to configure.
 # GitHub registers the schedule when this file changes on the default branch, so a merge that
 # touches this file re registers it.
 on:
   schedule:
-    - cron: "7 * * * *"
+    - cron: "3,18,33,48 * * * *"
     - cron: "55 3 * * *"
   workflow_dispatch:
+
+# A slow tick never overlaps the next one.
+concurrency:
+  group: tick
+  cancel-in-progress: false
 
 permissions:
   id-token: write

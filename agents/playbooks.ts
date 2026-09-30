@@ -8,6 +8,7 @@ import { shortCode } from "@/lib/affiliate";
 import { clipboardValue } from "@/lib/clipboard";
 import { DOCLEDGER, docledgerKnowledge } from "@/config/docledger";
 import { DEALS_PLAYBOOKS } from "./deals-playbooks";
+import { REPLY_INTENTS, autoSendAllowed, isHot, notifyHotLead, snoozeLead } from "./docledger-autonomy";
 import { STYLE, input, logEvent, num, str, type Playbook, type PlaybookContext, type TaskRow } from "./playbook-core";
 export type { Absorbed, Playbook, PlaybookContext, Prepared } from "./playbook-core";
 
@@ -150,7 +151,7 @@ const draftOutreach: Playbook = {
   kind: "draft_outreach",
   webSearchMaxUses: 2,
   maxTokens: 1500,
-  system: `You are Writer on the DocLedger Sales floor of The Tower. You write one first email to the decision maker at a qualified company. Nothing you write is sent by you: the owner approves every email.
+  system: `You are Writer on the DocLedger Sales floor of The Tower. You write one first email to the decision maker at a qualified company. Until the owner switches on auto send your email waits for his approval; after that it goes out on its own, so write every email as if it will be sent as it is.
 ${docledgerKnowledge()}
 
 Rules for the email:
@@ -225,6 +226,7 @@ ${STYLE}`,
     if (preview) await ctx.db.update(leads).set({ preview, previewCode, updatedAt: ctx.now }).where(eq(leads.id, lead.id));
     const words = body.split(/\s+/).filter(Boolean).length;
     const [row] = await ctx.db.insert(outreach).values({ leadId: lead.id, step: 1, channel: "email", subject, bodyText: body, status: "draft", simulated: false, createdAt: ctx.now, updatedAt: ctx.now }).returning({ id: outreach.id });
+    const auto = await autoSendAllowed(ctx.db, ctx.floorId, ctx.now);
     const { id: approvalId } = await raiseApproval(ctx.db, {
       type: "outreach_email",
       summary: `Send first outreach email to ${dm.name || "the decision maker"} at ${lead.company}`,
@@ -234,10 +236,11 @@ ${STYLE}`,
       taskId: task.id,
       agentId: ctx.agentId,
       floorId: ctx.floorId,
+      autoApproved: auto,
     }, ctx.now);
     if (row) await ctx.db.update(outreach).set({ approvalId, updatedAt: ctx.now }).where(eq(outreach.id, row.id));
     await ctx.db.update(leads).set({ status: "drafted", updatedAt: ctx.now }).where(eq(leads.id, lead.id));
-    return { summary: `Outreach drafted for ${lead.company}, waiting for approval`, extra: { company: lead.company, subject, words, personalisation: str(output.personalisation, 200) } };
+    return { summary: auto ? `Outreach for ${lead.company} goes out on its own (floor rule)` : `Outreach drafted for ${lead.company}, waiting for approval`, extra: { company: lead.company, subject, words, autoSent: auto, personalisation: str(output.personalisation, 200) } };
   },
 };
 
@@ -246,7 +249,7 @@ const followUp: Playbook = {
   kind: "follow_up",
   webSearchMaxUses: 0,
   maxTokens: 1200,
-  system: `You are Chaser on the DocLedger Sales floor of The Tower. You handle the thread after the first email. Nothing you write is sent by you: the owner approves every email.
+  system: `You are Chaser on the DocLedger Sales floor of The Tower. You handle the thread after the first email. Routine emails you write (follow ups, answers to simple questions, a polite reply to not now) may go out on their own once the owner has switched that on. Anything that smells like a sale (a demo, a price, a trial, a contract, a meeting) goes to the owner first: he closes.
 ${docledgerKnowledge()}
 
 When they reply, answer what they actually asked, then walk them through the parts that matter to them, in this order and in your own words:
@@ -258,15 +261,28 @@ Read the thread and the reply if there is one, then choose:
 - follow_up: no reply yet, write a short nudge with one new angle from this list, never one already used in the thread: ${DOCLEDGER.followUpAngles.join(" | ")}
 - propose_times: they are interested, answer their question, offer the calendar link to pick a 15 minute slot.
 - book_confirm: they picked or confirmed a time, confirm it warmly and say what the demo covers (their own receipts, ten minutes).
-- close: they said no or stop. Write nothing to send, just note it.
+- close: they said no or stop, or asked not to be contacted. Write nothing to send, just note it.
+Also classify their reply as intent:
+- no_reply: there is no reply, you are writing a follow up.
+- question: a simple question about how it works, answer it.
+- interested: they want a demo, a call, a trial, the price, a quote, or to talk to someone. The owner answers these himself, you write the suggested answer.
+- booking: they picked or confirmed a time.
+- not_now: maybe later, busy season, check back next quarter. Write a short friendly reply that you will check back in a month, no pitch.
+- no: they are not interested. Use close.
+- unsubscribe: they asked to be removed. Use close.
+- out_of_office: an automatic away message. Use close for the action, write nothing, the Tower will check back in a week.
+- other: anything else.
+Write summary as one plain line for the owner: who, what they said, what they want.
 Replies under 160 words, follow ups under 90. No bullet lists, no emojis, no exclamation marks. Include the opt out line only in follow_up. A good last line for a warm reply: ${DOCLEDGER.closingLine}
 ${STYLE}`,
   schema: {
     type: "object",
     additionalProperties: false,
-    required: ["action", "subject", "body", "demoBooked", "note"],
+    required: ["action", "intent", "summary", "subject", "body", "demoBooked", "note"],
     properties: {
       action: { type: "string", enum: ["follow_up", "propose_times", "book_confirm", "close"] },
+      intent: { type: "string", enum: REPLY_INTENTS },
+      summary: { type: "string", description: "one line for the owner: who, what they said, what they want" },
       subject: { type: "string" },
       body: { type: "string" },
       demoBooked: { type: "boolean" },
@@ -284,7 +300,8 @@ ${STYLE}`,
     const calendar = (await clipboardValue(ctx.db, "calendar_link")) ?? "";
     const f = await facts(ctx.db);
     const lines = thread.map((t) => `Step ${t.step} (${t.status}${t.sentAt ? `, sent ${t.sentAt.toISOString().slice(0, 10)}` : ""}):\nSubject: ${t.subject ?? ""}\n${t.bodyText ?? ""}${t.replyText ? `\n\nTheir reply (${t.replyAt?.toISOString().slice(0, 10) ?? ""}):\n${t.replyText}` : ""}`);
-    const mode = o.replyText ? "They replied. Handle the reply." : `No reply after step ${o.step}. Write follow up step ${o.step + 1}.`;
+    const checkIn = input(task).mode === "check_in";
+    const mode = checkIn ? `They asked for time or were away. It is time to check back in: write a short, friendly follow up step ${o.step + 1} that picks up from their last message.` : o.replyText ? "They replied. Handle the reply." : `No reply after step ${o.step}. Write follow up step ${o.step + 1}.`;
     return { user: `Product facts and signature:\n${f}\n\nCalendar link: ${calendar || "not pasted yet, ask them for two times instead"}\nCompany: ${lead.company}, contact ${(lead.decisionMaker as Record<string, string> | null)?.name ?? "unknown"}\nToday: ${ctx.now.toISOString().slice(0, 10)}\n\nThread:\n${lines.join("\n\n")}\n\n${mode}\nReturn the JSON object.` };
   },
   async absorb(task, output, ctx) {
@@ -294,32 +311,44 @@ ${STYLE}`,
     const [lead] = await ctx.db.select().from(leads).where(eq(leads.id, o.leadId)).limit(1);
     if (!lead) return { summary: "Lead vanished" };
     const action = str(output.action, 20) || "follow_up";
+    const intent = (REPLY_INTENTS as string[]).includes(str(output.intent, 20)) ? str(output.intent, 20) : o.replyText ? "other" : "no_reply";
+    const ownerLine = str(output.summary, 300);
     const dm = (lead.decisionMaker ?? {}) as Record<string, string>;
-    if (o.status === "handling") await ctx.db.update(outreach).set({ status: "replied", updatedAt: ctx.now }).where(eq(outreach.id, o.id));
+    // The reply is handled now: "answered" keeps the pipeline from picking the same reply up again.
+    if (o.status === "handling" || o.status === "replied") await ctx.db.update(outreach).set({ status: "answered", updatedAt: ctx.now }).where(eq(outreach.id, o.id));
+    if (intent === "out_of_office") {
+      await snoozeLead(ctx.db, lead.id, 7, ctx.now);
+      return { summary: `${lead.company} is away, checking back in a week`, extra: { action: "snooze", intent, company: lead.company } };
+    }
     if (action === "close") {
       await ctx.db.update(leads).set({ status: "lost", updatedAt: ctx.now }).where(eq(leads.id, lead.id));
-      return { summary: `${lead.company} closed: ${str(output.note, 200) || "they declined"}`, extra: { action, company: lead.company } };
+      return { summary: `${lead.company} closed: ${str(output.note, 200) || "they declined"}`, extra: { action, intent, company: lead.company } };
     }
+    if (intent === "not_now") await snoozeLead(ctx.db, lead.id, 30, ctx.now);
+    const hot = isHot(intent, action);
     const step = o.step + 1;
     const subject = str(output.subject, 120) || `Re: ${o.subject ?? "DocLedger"}`;
     const body = str(output.body, 4000);
     const [row] = await ctx.db.insert(outreach).values({ leadId: lead.id, step, channel: "email", subject, bodyText: body, status: "draft", simulated: false, createdAt: ctx.now, updatedAt: ctx.now }).returning({ id: outreach.id });
-    const label = action === "propose_times" ? "Propose demo times to" : action === "book_confirm" ? "Confirm the demo with" : `Send follow up ${step} to`;
+    const label = hot ? "Hot lead: answer" : action === "propose_times" ? "Propose demo times to" : action === "book_confirm" ? "Confirm the demo with" : `Send follow up ${step} to`;
+    const auto = !hot && (await autoSendAllowed(ctx.db, ctx.floorId, ctx.now));
     const { id: approvalId } = await raiseApproval(ctx.db, {
       type: "outreach_email",
-      summary: `${label} ${dm.name || "the contact"} at ${lead.company}`,
-      content: { to: dm.email ?? "", toName: dm.name, company: lead.company, subject, body, outreachId: row?.id ?? null, step },
-      riskNote: action === "follow_up" ? "Follow up on a cold thread. Opt out line included." : "Reply to a warm thread.",
+      summary: `${label} ${dm.name || "the contact"} at ${lead.company}${hot && ownerLine ? `: ${ownerLine}` : ""}`.slice(0, 200),
+      content: { to: dm.email ?? "", toName: dm.name, company: lead.company, subject, body, outreachId: row?.id ?? null, step, intent, hot, ownerLine },
+      riskNote: hot ? "They are warm: this is yours to close. Approve to send the suggested answer, or reject with one line of what to change." : action === "follow_up" ? "Follow up on a cold thread. Opt out line included." : "Reply to a warm thread.",
       taskId: task.id,
       agentId: ctx.agentId,
       floorId: ctx.floorId,
+      autoApproved: auto,
     }, ctx.now);
     if (row) await ctx.db.update(outreach).set({ approvalId, updatedAt: ctx.now }).where(eq(outreach.id, row.id));
+    if (hot) await notifyHotLead(ctx.db, { company: lead.company, contact: dm.name ? `${dm.name}${dm.title ? `, ${dm.title}` : ""}` : null, summary: ownerLine || `${lead.company} replied and looks interested.`, reply: o.replyText ?? "", suggested: body }, ctx.now);
     if (output.demoBooked === true || action === "book_confirm") {
       await ctx.db.update(leads).set({ status: "demo_booked", updatedAt: ctx.now }).where(eq(leads.id, lead.id));
       await logEvent(ctx.db, { taskId: task.id, agentId: ctx.agentId, floorId: ctx.floorId, type: "milestone", message: `Demo booked with ${lead.company}`, at: ctx.now });
     }
-    return { summary: action === "propose_times" ? `Reply received from ${lead.company}, proposing demo times` : action === "book_confirm" ? `Demo booked with ${lead.company}, confirmation waiting for approval` : `Follow up ${step} drafted for ${lead.company}`, extra: { action, company: lead.company, step } };
+    return { summary: hot ? `Hot reply from ${lead.company}, sent to the owner to close` : action === "book_confirm" ? `Demo booked with ${lead.company}` : auto ? `Follow up ${step} for ${lead.company} goes out on its own` : `Follow up ${step} drafted for ${lead.company}`, extra: { action, intent, hot, autoSent: auto, company: lead.company, step } };
   },
 };
 

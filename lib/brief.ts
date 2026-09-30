@@ -4,6 +4,7 @@ import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { agents, approvals, budgetLedger, floors, revenue, setupItems, tasks, wardenRuns } from "@/db/schema";
 import { FLOOR_REQUIREMENTS } from "@/config/tower";
+import { salesFunnel } from "@/agents/docledger-autonomy";
 import { channelHealthFrom } from "@/lib/channel";
 import { asBool, getSettings } from "@/lib/settings";
 import { dubaiDayStartUtc, dubaiParts } from "@/lib/time";
@@ -90,6 +91,8 @@ export async function buildBrief(db: Db, now = new Date()): Promise<Brief> {
   }
   if (!present.has("anthropic_api_key")) needs.push("Anthropic API key: the building stays in simulation until it is on the clipboard");
   const channel = channelHealthFrom(settingsMap, parts.dayKey);
+  const funnel = simulated ? null : await salesFunnel(db, now);
+  if (funnel && funnel.hotOpen > 0) needs.push(`${funnel.hotOpen} hot DocLedger lead${funnel.hotOpen === 1 ? "" : "s"} waiting for you to close`);
   const botName = (settingsMap.telegram_bot as { username?: string } | null)?.username;
   if (!simulated && channel.botCanPost === false) needs.push(`The bot${botName ? ` @${botName}` : ""} cannot post in the deals channel: make it an admin with Post messages`);
 
@@ -108,6 +111,12 @@ export async function buildBrief(db: Db, now = new Date()): Promise<Brief> {
       bits.push(`spent ${usd(spendToday.get(f.id) ?? 0)}`);
       const rev = revToday.get(f.id) ?? 0;
       if (rev > 0) bits.push(`earned ${usd(rev)}`);
+      if (f.slug === "docledger" && !simulated && funnel) {
+        const bitsSales = [`${funnel.leadsWeek} leads, ${funnel.sentWeek} sent, ${funnel.repliesWeek} replies this week`];
+        if (funnel.demosWeek) bitsSales.push(`${funnel.demosWeek} demo${funnel.demosWeek === 1 ? "" : "s"} booked`);
+        bitsSales.push(funnel.autoSend ? `${funnel.autoSentToday} sent on their own today` : `auto send after ${Math.max(0, 10 - funnel.trustApprovedInARow)} more approvals`);
+        bits.unshift(...bitsSales);
+      }
       if (f.slug === "deals" && !simulated && channel.members !== null) {
         const week = channel.growthWeek;
         bits.unshift(`channel ${channel.members} members${week !== null ? ` (${week >= 0 ? "+" : ""}${week} this week)` : ""}`);

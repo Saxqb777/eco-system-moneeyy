@@ -236,7 +236,7 @@ Indexes on (occurred_at) and (floor_id, occurred_at). The roof counters, the pet
 | country | text | default AE |
 | phone | text | |
 | source_url | text | where Scout found it |
-| decision_maker | jsonb | name, title, email, linkedin, confidence |
+| decision_maker | jsonb | name, title, email, linkedin, confidence, research, angle, snoozeUntil (set on not now: 30 days, out of office: 7 days) |
 | score | int | 1 to 10 from Analyst |
 | score_reason | text | |
 | status | text | new, qualified, disqualified, drafted, contacted, replied, demo_booked, client, lost |
@@ -256,7 +256,7 @@ Indexes on (occurred_at) and (floor_id, occurred_at). The roof counters, the pet
 | body_text | text | |
 | body_html | text | |
 | approval_id | uuid | required before sending |
-| status | text | draft, approved, sent, delivered, replied, bounced, rejected |
+| status | text | draft, approved, sent, delivered, replied, handling, answered (Chaser handled the reply), bounced, rejected |
 | resend_id | text | |
 | sent_at | timestamptz | |
 | reply_text | text | |

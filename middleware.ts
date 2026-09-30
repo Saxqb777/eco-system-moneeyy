@@ -3,7 +3,7 @@ import { OWNER_COOKIE, verifySessionToken } from "@/lib/auth";
 
 // Owner passcode gate. Public: the login page, health, the cron heartbeat (bearer secret),
 // the Telegram webhook (secret header), the public deals page and click links.
-const PUBLIC = [/^\/login$/, /^\/api\/auth\/login$/, /^\/api\/health$/, /^\/api\/tick$/, /^\/api\/telegram$/, /^\/api\/email\/inbound$/, /^\/api\/builder$/, /^\/api\/deals(\/.*)?$/, /^\/deals(\/.*)?$/, /^\/go\/.+$/];
+const PUBLIC = [/^\/login$/, /^\/api\/auth\/login$/, /^\/api\/health$/, /^\/api\/tick$/, /^\/api\/telegram$/, /^\/api\/email\/inbound$/, /^\/api\/builder$/, /^\/api\/deals(\/.*)?$/, /^\/deals(\/.*)?$/, /^\/go\/.+$/, /^\/for\/.+$/];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

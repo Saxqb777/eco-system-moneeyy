@@ -62,7 +62,7 @@ describe("DocLedger pipeline", () => {
         const pearl = text.includes("Pearl Route");
         return { score: 8, reason: "Customs heavy forwarder", qualified: true, decisionMaker: { name: pearl ? "Omar Nair" : "Farah Haddad", title: "Operations Manager", email: pearl ? "omar@pearlroute.example" : "farah@gulfcrescent.example", linkedin: "", confidence: 0.7 }, notes: "" };
       }
-      if (text.includes("Write the email")) return { subject: "Customs documents at Jebel Ali", body: "Hi Farah, ... Reply stop and I will not write again.\nSaaqib Khan", personalisation: "Jebel Ali" };
+      if (text.includes("Write the email")) return { subject: "Customs documents at Jebel Ali", body: "Hi Farah, your month end.\n{preview}\nWorth fifteen minutes?\nSaaqib Khan\nReply stop and I will not write again.", personalisation: "Jebel Ali", preview: { headline: "Forty shipping bills, none retyped", intro: "your month end at Gulf Crescent ends with a pile of Maersk bills.", points: ["Photograph the bill, the fields fill themselves.", "Charge lines add up and cross check the invoice.", "Your own document types when ours do not fit."], sampleDocument: "Shipping line bill, Maersk, Jebel Ali", sampleFields: [{ field: "BL number", value: "MAEU123456 (example)" }, { field: "Container", value: "MSKU7654321 (example)" }, { field: "Total", value: "AED 4,120 (example)" }] } };
       if (text.includes("Thread:")) return { action: "propose_times", subject: "Re: Customs documents at Jebel Ali", body: "Great, pick a slot here: https://cal.com/saaqib/15min", demoBooked: false, note: "warm" };
       return {};
     });
@@ -103,6 +103,10 @@ describe("DocLedger pipeline", () => {
     const drafts = await db.select().from(outreach).where(eq(outreach.simulated, false));
     expect(drafts).toHaveLength(2);
     expect(drafts[0]!.approvalId).toBeTruthy();
+    expect(drafts[0]!.bodyText).toMatch(/A two minute preview made for .*: https?:\/\/\S+\/for\/[a-z0-9]{6}/);
+    expect(drafts[0]!.bodyText).not.toContain("{preview}");
+    const withPreview = await db.select().from(leads).where(eq(leads.simulated, false));
+    expect(withPreview.every((l) => l.previewCode && (l.preview as { points: string[] }).points.length === 3)).toBe(true);
     const pending = await db.select().from(approvals).where(and(eq(approvals.type, "outreach_email"), eq(approvals.status, "pending"), eq(approvals.simulated, false)));
     expect(pending).toHaveLength(2);
     expect((await db.select().from(messagesOut).where(eq(messagesOut.kind, "approval"))).length).toBeGreaterThanOrEqual(2);

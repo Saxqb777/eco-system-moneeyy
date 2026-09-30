@@ -271,6 +271,8 @@ export const leads = pgTable(
     nextActionAt: ts("next_action_at"),
     dedupeKey: text("dedupe_key").notNull().unique(),
     foundByTaskId: uuid("found_by_task_id"),
+    preview: jsonb("preview"),
+    previewCode: text("preview_code").unique(),
     simulated: simulated(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

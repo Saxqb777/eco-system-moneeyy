@@ -7,6 +7,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DOCLEDGER } from "@/config/docledger";
 import { computeCostUsd } from "@/lib/money";
 
 const TOWER_URL = (process.env.TOWER_URL ?? "").replace(/\/$/, "");
@@ -102,7 +103,7 @@ async function main() {
   const testCmd = detectTest(cwd);
 
   const client = new Anthropic({ apiKey: secrets.anthropicKey });
-  const system = `You are Builder on the DocLedger Sales floor of The Tower. You work on one ticket in the DocLedger repository checkout using the tools. Make the smallest change that resolves the ticket, keep the existing style, add or update a test when the repo has tests. Do not touch CI files, secrets or unrelated code. When the change is complete, reply with a short plain English summary of what you changed and why (no hyphens or em dashes). You have at most ${job.caps.toolCalls} tool calls.`;
+  const system = `You are Builder on the DocLedger Sales floor of The Tower. The product: ${DOCLEDGER.paragraph} The strongest selling point is that customers define their own document types, so anything touching document types, extraction fields or the review screen deserves extra care. You work on one ticket in the DocLedger repository checkout using the tools. Make the smallest change that resolves the ticket, keep the existing style, add or update a test when the repo has tests. Do not touch CI files, secrets or unrelated code. When the change is complete, reply with a short plain English summary of what you changed and why (no hyphens or em dashes). You have at most ${job.caps.toolCalls} tool calls.`;
   const messages: MessageParam[] = [{ role: "user", content: `Ticket: ${job.ticket.title}\n\n${job.ticket.description ?? ""}\n\nRepository files (first 200):\n${tree}\n\nTest command detected: ${testCmd ?? "none"}\n\nStart by reading the files that matter, then make the change.` }];
   let toolCalls = 0;
   let costUsd = 0;

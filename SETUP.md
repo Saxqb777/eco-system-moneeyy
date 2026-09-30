@@ -17,7 +17,7 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 | 5 | DocLedger GitHub repo URL and a GitHub token for it | Builder (nightly at 02:00 Dubai, built in Phase 5) | Now | missing (repo likely Saxqb777/docledger, confirm) |
 | 6 | Calendar booking link | Chaser demo booking | Now | missing |
 | 7 | Resend API key and sending address | Sending approved outreach emails | Now | missing |
-| 8 | DocLedger product facts: one paragraph pitch, pricing, your signature block | Writer and Chaser | Now | missing |
+| 8 | DocLedger price line and signature block (the pitch itself is in the repo) | Writer and Chaser | Now | missing |
 | 8b | Resend webhook secret for replies (optional) | Chaser reads replies itself | Optional | missing: without it, forward replies with /reply on Telegram |
 | 9 | Affiliate IDs: Amazon.ae tag, Noon, others | Deals Engine earning (posts run without them, links stay plain) | Now | missing |
 | 10 | Telegram deals channel handle, bot added as admin | Publisher posting to the channel | Now | missing |
@@ -76,8 +76,10 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 - Approved outreach emails are sent by the next heartbeat. Nothing goes out without your Approve.
 - Replies, two ways: (a) Resend Receiving: add the MX record for a subdomain, create a webhook for email.received pointing at https://the-tower-saxqb777s-projects.vercel.app/api/email/inbound, paste the signing secret under "Resend webhook secret". (b) Forward by hand on Telegram: /reply Gulf Crescent Freight: their text. Chaser picks it up either way.
 
-### 8. DocLedger product facts
-- One paragraph on what DocLedger does for a freight forwarder, the price, and your signature block (name, title, phone). Writer and Chaser quote it, so keep it true.
+### 8. DocLedger price and signature block
+- The product story, the email rules and the reply walkthrough are in the repo (config/docledger.ts) from your brief of 30 September. Writer and Chaser quote them.
+- Paste only what they cannot know: your price line (for example 99 USD a month per company, first month free) and the signature Writer signs with (name, title, phone). Until it is pasted, emails quote no price and sign as the Doc Ledger team.
+- Every first email links to a preview page made for that company at /for/<code>, no passcode. You see the link on the approval item before you approve.
 
 ### 9. Affiliate IDs
 - Amazon.ae: affiliate-program.amazon.ae, Associates account, copy the tracking tag (looks like name-21). Paste under "Amazon.ae Associates tag". Every Amazon.ae link gets ?tag= added.

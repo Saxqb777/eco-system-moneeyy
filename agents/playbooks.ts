@@ -12,6 +12,7 @@ import { DEALS_PLAYBOOKS } from "./deals-playbooks";
 import { REPLY_INTENTS, autoSendAllowed, isHot, notifyHotLead, snoozeLead } from "./docledger-autonomy";
 import { STYLE, input, logEvent, num, str, type Playbook, type PlaybookContext, type TaskRow } from "./playbook-core";
 import { plainDashes } from "@/lib/text";
+import { RESEARCH_EFFORT } from "@/config/models";
 export type { Absorbed, Playbook, PlaybookContext, Prepared } from "./playbook-core";
 
 export function dedupeKeyFor(company: string, website: string | null | undefined): string {
@@ -35,6 +36,7 @@ async function facts(db: Db): Promise<string> {
 // Scout: real companies anywhere in the world, never invented. One region a day unless Warden gives a focus.
 const findLeads: Playbook = {
   kind: "find_leads",
+  effort: RESEARCH_EFFORT,
   webSearchMaxUses: 5,
   maxTokens: 2500,
   system: `You are Scout on the DocLedger Sales floor of The Tower.
@@ -74,7 +76,7 @@ ${STYLE}`,
     const focus = str(input(task).instructions) || `Freight forwarders and customs brokers in ${regionFor(ctx.now)}.`;
     const skip = await skippedCountries(ctx.db);
     const skipLine = Object.entries(skip).map(([c, why]) => `${c} (${why})`).join("; ") || "none";
-    return { user: `Focus from Warden: ${focus}\nToday: ${ctx.now.toISOString().slice(0, 10)}\nSkip these countries: ${skipLine}\nExclusion list (already known): ${exclude}\n\nFind the leads and return the JSON object.` };
+    return { user: `Focus from Warden: ${focus}\nToday: ${ctx.now.toISOString().slice(0, 10)}\nSkip these countries: ${skipLine}\nExclusion list (already known): ${exclude}\n\nSearch the web before you answer. An answer without a search is not accepted. Find the leads and return the JSON object.` };
   },
   async absorb(task, output, ctx) {
     const rows = Array.isArray(output.leads) ? output.leads : [];
@@ -108,6 +110,7 @@ ${STYLE}`,
 // Analyst: score the fit, find the decision maker.
 const qualifyLead: Playbook = {
   kind: "qualify_lead",
+  effort: RESEARCH_EFFORT,
   webSearchMaxUses: 3,
   webFetchMaxUses: 4,
   maxTokens: 2500,
@@ -144,7 +147,7 @@ ${STYLE}`,
     const retry = input(task).retry === true;
     if (lead.status !== "new" && !(retry && lead.status === "no_contact")) return { skip: `Lead ${lead.company} is already ${lead.status}` };
     const f = await facts(ctx.db);
-    return { user: `Product facts:\n${f}\n\n${retry ? "Second try: the first look found no email. Open the website and its contact page this time.\n" : ""}Company: ${lead.company}\nCountry: ${lead.country}\nWebsite: ${lead.website ?? "unknown, search for it"}\nSegment: ${lead.segment ?? "unknown"}\nCity: ${lead.city ?? "unknown"}\nSeen at: ${lead.sourceUrl ?? "unknown"}\nScout's note: ${lead.scoreReason ?? ""}\n\nQualify this company and return the JSON object.` };
+    return { user: `Product facts:\n${f}\n\n${retry ? "Second try: the first look found no email. Open the website and its contact page this time.\n" : ""}Company: ${lead.company}\nCountry: ${lead.country}\nWebsite: ${lead.website ?? "unknown, search for it"}\nSegment: ${lead.segment ?? "unknown"}\nCity: ${lead.city ?? "unknown"}\nSeen at: ${lead.sourceUrl ?? "unknown"}\nScout's note: ${lead.scoreReason ?? ""}\n\nOpen the website and its contact or about page${lead.website ? "" : " (search for it first)"}, and search for the finance or operations lead. Qualify this company and return the JSON object.` };
   },
   async absorb(task, output, ctx) {
     const leadId = str(input(task).leadId);

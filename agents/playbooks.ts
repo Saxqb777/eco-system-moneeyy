@@ -33,6 +33,16 @@ async function facts(db: Db): Promise<string> {
   return `${docledgerKnowledge()}\n\nPrice and signature from the owner: ${own ?? "not pasted yet. Do not quote a price. Sign as: The Doc Ledger team."}${address ? `\nPostal address, the last line of the signature: ${address}` : ""}`;
 }
 
+// The preview link goes where the Writer put {preview}. When the Writer already introduced it ("I made a
+// page for you:"), only the link goes in, so the email never says it twice.
+export function insertPreview(body: string, company: string, url: string): string {
+  const line = `A two minute preview made for ${company}: ${url}`;
+  const at = body.indexOf("{preview}");
+  if (at < 0) return `${body.trimEnd()}\n\n${line}`;
+  const lastLine = body.slice(0, at).trimEnd().split("\n").pop() ?? "";
+  return body.replace("{preview}", /:$/.test(lastLine) ? url : line);
+}
+
 // Scout: real companies anywhere in the world, never invented. One region a day unless Warden gives a focus.
 const findLeads: Playbook = {
   kind: "find_leads",
@@ -242,10 +252,8 @@ ${STYLE}`,
     const previewCode = preview ? (lead.previewCode ?? shortCode()) : null;
     const previewUrl = previewCode ? `${base}/for/${previewCode}` : null;
     let body = plainDashes(str(output.body, 4000));
-    if (previewUrl) {
-      const line = `A two minute preview made for ${lead.company}: ${previewUrl}`;
-      body = body.includes("{preview}") ? body.replace("{preview}", line) : `${body.trimEnd()}\n\n${line}`;
-    } else body = body.replace(/\n?\{preview\}\n?/g, "\n");
+    if (previewUrl) body = insertPreview(body, lead.company, previewUrl);
+    else body = body.replace(/\n?\{preview\}\n?/g, "\n");
     if (preview) await ctx.db.update(leads).set({ preview, previewCode, updatedAt: ctx.now }).where(eq(leads.id, lead.id));
     const words = body.split(/\s+/).filter(Boolean).length;
     const [row] = await ctx.db.insert(outreach).values({ leadId: lead.id, step: 1, channel: "email", subject, bodyText: body, status: "draft", simulated: false, createdAt: ctx.now, updatedAt: ctx.now }).returning({ id: outreach.id });

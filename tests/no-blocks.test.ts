@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setAnthropicFactory } from "@/agents/client";
 import { trustEarned } from "@/agents/docledger-autonomy";
+import { insertPreview } from "@/agents/playbooks";
 import { DEALS_AUTO_DECISION, maybeRaiseDealsAutoApprove } from "@/agents/deals";
 import { submitQueuedTasks } from "@/agents/workers";
 import type { Db } from "@/db/client";
@@ -146,6 +147,13 @@ describe("The owner sees what he approves", () => {
     const [m] = await db.select().from(messagesOut).where(and(eq(messagesOut.kind, "approval"), sql`${messagesOut.body} like '%Gulf Crescent%'`)).limit(1);
     expect(m!.body).toContain("Subject: Your shipping bills");
     expect(m!.body).toContain("Worth fifteen minutes?");
+  });
+
+  it("puts the preview link in once, whether or not the Writer introduced it", () => {
+    const url = "https://x.example/for/abc123";
+    expect(insertPreview("Hi,\nI made a page for you:\n{preview}\nThanks", "LBX", url)).toBe(`Hi,\nI made a page for you:\n${url}\nThanks`);
+    expect(insertPreview("Hi,\n{preview}\nThanks", "LBX", url)).toBe(`Hi,\nA two minute preview made for LBX: ${url}\nThanks`);
+    expect(insertPreview("Hi", "LBX", url)).toBe(`Hi\n\nA two minute preview made for LBX: ${url}`);
   });
 
   it("cleans dashes out of agent text without touching words, links or greetings", () => {

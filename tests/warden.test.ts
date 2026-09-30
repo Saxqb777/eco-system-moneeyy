@@ -135,7 +135,7 @@ describe("Warden real loop", () => {
     const [row] = await db.select().from(wardenRuns).where(eq(wardenRuns.id, r.runId!)).limit(1);
     expect(row!.batchId).toMatch(/^msgbatch_/);
     const collected = await collectBatches(db, NOW, async (res) => {
-      if (res.customId.startsWith("warden:")) await handleWardenBatchResult(db, res, NOW);
+      if (res.customId.startsWith("warden_")) await handleWardenBatchResult(db, res, NOW);
     });
     expect(collected.collected).toBe(1);
     const [after] = await db.select().from(wardenRuns).where(eq(wardenRuns.id, r.runId!)).limit(1);

@@ -38,6 +38,7 @@ export async function POST(req: Request) {
   const value = (body.value ?? "").trim();
   if (!value) return bad("value is empty");
   if (item.kind === "url" && !/^https?:\/\//.test(value)) return bad("Expected a URL starting with http");
+  if (item.key === "telegram_chat_id" && !/^-?\d{5,20}$/.test(value)) return bad("A chat id is a number. Easiest: open your bot in Telegram and send the /pair line shown here.");
 
   const hint = item.kind === "secret" ? secretHint(value) : value.length > 80 ? `${value.slice(0, 77)}...` : value;
   await db

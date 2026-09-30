@@ -20,14 +20,14 @@ export interface TickResult {
   steps: Record<string, unknown>;
 }
 
-// Handlers for batch results by custom id prefix. Phase 5 adds "task:" for worker outputs.
+// Handlers for batch results by custom id prefix. worker outputs use "task_".
 type ResultHandler = Parameters<typeof collectBatches>[2];
 
 export function batchResultHandler(): ResultHandler {
   return async (r) => {
     const db = getDb();
-    if (r.customId.startsWith("warden:")) await handleWardenBatchResult(db, r);
-    else if (r.customId.startsWith("task:")) {
+    if (r.customId.startsWith("warden_")) await handleWardenBatchResult(db, r);
+    else if (r.customId.startsWith("task_")) {
       const { handleTaskBatchResult } = await import("@/agents/workers");
       await handleTaskBatchResult(db, r);
     }

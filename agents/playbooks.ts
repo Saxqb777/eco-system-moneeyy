@@ -98,14 +98,14 @@ ${STYLE}`,
     additionalProperties: false,
     required: ["score", "reason", "qualified", "decisionMaker", "notes"],
     properties: {
-      score: { type: "integer", minimum: 1, maximum: 10 },
+      score: { type: "integer" },
       reason: { type: "string" },
       qualified: { type: "boolean" },
       decisionMaker: {
         type: "object",
         additionalProperties: false,
         required: ["name", "title", "email", "linkedin", "confidence"],
-        properties: { name: { type: "string" }, title: { type: "string" }, email: { type: "string" }, linkedin: { type: "string" }, confidence: { type: "number", minimum: 0, maximum: 1 } },
+        properties: { name: { type: "string" }, title: { type: "string" }, email: { type: "string" }, linkedin: { type: "string" }, confidence: { type: "number" } },
       },
       notes: { type: "string" },
     },
@@ -122,7 +122,7 @@ ${STYLE}`,
     const leadId = str(input(task).leadId);
     const dmRaw = (output.decisionMaker ?? {}) as Record<string, unknown>;
     const email = str(dmRaw.email, 120).toLowerCase();
-    const dm = { name: str(dmRaw.name, 80), title: str(dmRaw.title, 80), email: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? email : "", linkedin: str(dmRaw.linkedin, 200), confidence: num(dmRaw.confidence, 0) };
+    const dm = { name: str(dmRaw.name, 80), title: str(dmRaw.title, 80), email: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? email : "", linkedin: str(dmRaw.linkedin, 200), confidence: Math.min(1, Math.max(0, num(dmRaw.confidence, 0))) };
     const score = Math.min(10, Math.max(1, Math.round(num(output.score, 1))));
     const qualified = output.qualified === true && score >= 6;
     const status = !qualified ? "disqualified" : dm.email ? "qualified" : "no_contact";

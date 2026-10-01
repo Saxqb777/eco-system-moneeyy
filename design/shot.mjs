@@ -20,6 +20,10 @@ const shots = [
   { name: "panel-mailbox", width: 1600, height: 900, panel: "warden:mailbox" },
   { name: "panel-mailbox-thread", width: 1600, height: 900, panel: "warden:mailbox", click: ".thread-row.hot" },
   { name: "panel-mailbox-phone", width: 430, height: 900, panel: "warden:mailbox", click: ".thread-row.hot" },
+  { name: "panel-trading", width: 1600, height: 900, panel: "floor:trading" },
+  { name: "panel-trading-phone", width: 430, height: 900, panel: "floor:trading", clip: true },
+  { name: "wall-street", width: 1600, height: 900, dpr: 2, region: { x: 380, y: 536, width: 880, height: 150 }, wait: 11000 },
+  { name: "wall-street-meeting", width: 1600, height: 900, dpr: 2, region: { x: 380, y: 536, width: 880, height: 150 }, wait: 17000 },
 ].filter((s) => !process.env.SHOTS || process.env.SHOTS.split(",").some((p) => s.name.startsWith(p)));
 const ctx = await browser.newContext({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1, ignoreHTTPSErrors: true });
 const login = await ctx.newPage();
@@ -28,20 +32,23 @@ await login.fill('input[name="passcode"]', process.env.PASSCODE || "");
 await login.click('button[type="submit"]');
 await login.waitForURL(`${base}/`, { timeout: 30000 });
 await login.close();
+const state = await ctx.storageState();
 for (const s of shots) {
-  const page = await ctx.newPage();
+  const c = s.dpr ? await browser.newContext({ viewport: { width: s.width, height: s.height }, deviceScaleFactor: s.dpr, ignoreHTTPSErrors: true, storageState: state }) : ctx;
+  const page = await c.newPage();
   await page.setViewportSize({ width: s.width, height: s.height });
   page.on("pageerror", (e) => console.log("pageerror:", e.message));
   page.on("console", (m) => { if (m.type() === "error") console.log("console:", m.text().slice(0, 200)); });
   await page.goto(`${base}/${s.panel ? `?panel=${s.panel}` : ""}`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("canvas", { timeout: 60000 });
-  await page.waitForTimeout(s.panel ? 7000 : 6000);
+  await page.waitForTimeout(s.wait ?? (s.panel ? 7000 : 6000));
   if (s.click) {
     await page.click(s.click);
     await page.waitForTimeout(2500);
   }
-  await page.screenshot({ path: path.join(here, `${s.name}.png`), fullPage: s.name === "game-phone" });
+  await page.screenshot({ path: path.join(here, `${s.name}.png`), fullPage: s.name === "game-phone", ...(s.region ? { clip: s.region } : {}) });
   console.log("shot", s.name);
   await page.close();
+  if (c !== ctx) await c.close();
 }
 await browser.close();

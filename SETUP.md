@@ -24,6 +24,7 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 | 11 | Consulting site URL | Ground floor (locked until unlock rule is met) | Later | missing |
 | 12 | X account keys (optional) | Deal posts also go to X for reach | When you want it | missing: developer.x.com app with Read and write, paste API Key, API Key Secret, Access Token, Access Token Secret separated by spaces in the box "X account for deal posts" |
 | 13 | Facebook Page id and token (optional) | Deal posts also go to your Facebook Page | When you want it | missing: a Page for the deals, a Meta app with pages_manage_posts, a Page token that does not expire; paste the Page ID and the token separated by a space |
+| 16 | Alpaca paper trading keys | Wall Street's real prices and news (D075) | When you can | missing: steps in section 13 below, paste "KEYID SECRET" in the box "Alpaca paper trading keys". Until then stocks wait; crypto may run on the free feed |
 | 15 | DocLedger Facebook Page: Page ID and a Page token | Social posts to the Page (D074) | When you can | missing: steps in section 12 below, paste "PAGEID TOKEN" in the box "DocLedger Facebook Page". Social plans the week already, posts start once it is here |
 | 14 | Business postal address (optional) | DocLedger emails to US companies (US law wants an address under the signature) | When you want US leads | missing: paste the address to print under your signature in the box "Business postal address". Until then the Scout skips the US |
 
@@ -119,6 +120,13 @@ Social, the seventh person on the Growth floor, runs the Page. It needs the Page
 5. Back in the Graph API Explorer, paste the long token and ask for me/accounts. The DocLedger entry shows the Page id and an access_token: that Page token does not expire.
 6. In the game: Warden, Setup, "DocLedger Facebook Page": paste the Page id, a space, then that Page token.
 What happens next: posts start within the hour (09:00 to 21:00 Dubai, at most 2 a day). Every post waits on your tap with the picture shown. After 10 approved in a row the Tower asks once to post on its own; turn it off any time in the Company tab. Answers to comments always wait on you.
+
+### 13. Alpaca paper trading keys (D075)
+Wall Street trades paper money on real prices. Alpaca's free market data needs a free paper account's keys. The floor only reads prices and news with them: it never places an order.
+1. alpaca.markets, Sign up with your email. A Paper Only account works from any country and needs no money or ID.
+2. In the dashboard keep Paper Trading selected, then API Keys, Generate New Keys.
+3. In the game: Warden, Setup, "Alpaca paper trading keys": paste the API Key ID, a space, then the Secret Key.
+What happens next: within 5 minutes the floor reads prices, Larry buys the index at the next US open (17:30 Dubai in summer, 18:30 in winter), the desks start trading. A one time approval asks to raise the daily cap by 2 USD for the floor's AI (his number); DocLedger keeps its own limits.
 
 ## What I set up myself (no action from you, but I ask before doing it)
 - Neon: the tower database, schema, migrations.

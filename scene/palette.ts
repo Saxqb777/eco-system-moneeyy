@@ -49,6 +49,7 @@ export const FLOOR_ACCENT: Record<string, number> = {
   growth: 0x3a86c8,
   deals: 0xf08a24,
   content: 0x5fa55a,
+  trading: 0x1fa35b,
   service: 0xc94f7c,
   lobby: 0x9c8f7a,
 };

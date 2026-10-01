@@ -174,8 +174,8 @@ async function simulateSlice(db: Db, world: World, t: Date, summary: SimSummary)
     const rand = rngFor("revenue", t.toISOString(), floor.slug);
     const perSlice = 1 / (30 * 12);
     if (rand() < perSlice) {
-      // Only the sales floor invoices; the Growth floor earns through it.
-      if (floor.slug === "growth") continue;
+      // Only the sales floor invoices; the Growth floor earns through it. Wall Street trades paper money: never revenue.
+      if (floor.slug === "growth" || floor.slug === "trading") continue;
       const amount = floor.slug === "deals" ? between(rand, 2, 15) + rand() : between(rand, 150, 400);
       const source = floor.slug === "deals" ? "commission" : "invoice";
       const [row] = await db

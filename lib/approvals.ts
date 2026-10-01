@@ -97,6 +97,12 @@ async function executeApproval(db: Db, a: typeof approvals.$inferSelect, now: Da
       const cap = content.proposedCapUsd !== undefined ? Math.min(asNumber(content.proposedCapUsd, 0), ceiling) : Math.min(asNumber(s.daily_cap_usd, 1.7), ceiling);
       await setSetting(db, "hard_ceiling_usd", ceiling);
       await setSetting(db, "daily_cap_usd", cap);
+      // a raise for one floor keeps the others' limits in USD where they were (Wall Street, D075)
+      if (content.floorShare && typeof content.floorShare === "object") {
+        const merged = { ...((s.floor_share ?? {}) as Record<string, unknown>), ...(content.floorShare as Record<string, unknown>) };
+        await setSetting(db, "floor_share", merged);
+        return { hardCeilingUsd: ceiling, dailyCapUsd: cap, floorShare: merged };
+      }
       return { hardCeilingUsd: ceiling, dailyCapUsd: cap };
     }
     case "floor_unlock": {
@@ -121,6 +127,11 @@ async function executeApproval(db: Db, a: typeof approvals.$inferSelect, now: Da
         const { setAutoPost } = await import("@/agents/social");
         await setAutoPost(db, true, now);
         return { socialAutoPost: true };
+      }
+      // Wall Street: the owner lets a frozen desk trade again (D075). Paper money only.
+      if (typeof content.tradingUnfreeze === "string") {
+        const { unfreezeDesk } = await import("@/trading/engine");
+        return { tradingUnfreeze: content.tradingUnfreeze, done: await unfreezeDesk(db, content.tradingUnfreeze, now) };
       }
       // A floor rule: Warden asked to auto approve a floor's public posts (Deals Engine after 14 days).
       if (typeof content.autoApproveFloor === "string") {

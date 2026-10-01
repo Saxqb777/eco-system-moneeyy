@@ -10,6 +10,7 @@ import { MailboxTab } from "./MailboxTab";
 import { Panel, usePoll, type Tab } from "./shared";
 import { ApprovalsTab, BriefTab, BudgetTab, IdeasTab, SetupTab, WardenControls } from "./WardenTabs";
 import { CompanyTab } from "./CompanyTab";
+import { TradingTab } from "./TradingTab";
 
 export type WardenTab = "office" | "company" | "approvals" | "mailbox" | "setup" | "brief" | "budget" | "ideas";
 export type PanelSel = { type: "agent"; id: string } | { type: "floor"; slug: string } | { type: "warden"; tab: WardenTab };
@@ -48,6 +49,7 @@ export function PanelHost({ sel, open, state, scene, onClose, onNavigate }: { se
       </Panel>
     );
   }
+  if (sel.type === "floor" && sel.slug === "trading") return <TradingPanel open={open} state={state} onClose={onClose} onNavigate={onNavigate} />;
   if (sel.type === "floor") {
     const floor = state.floors.find((f) => f.slug === sel.slug);
     return (
@@ -64,6 +66,28 @@ export function PanelHost({ sel, open, state, scene, onClose, onNavigate }: { se
     );
   }
   return <WardenPanel open={open} tab={sel.tab} state={state} scene={scene} onClose={onClose} onNavigate={onNavigate} />;
+}
+
+// Wall Street (D075): the race first, the floor's crew and money one tab over.
+function TradingPanel({ open, state, onClose, onNavigate }: { open: boolean; state: TowerState; onClose: () => void; onNavigate: (sel: PanelSel) => void }) {
+  const [tab, setTab] = useState<"race" | "floor">("race");
+  const floor = state.floors.find((f) => f.slug === "trading");
+  const tabs: Tab[] = [
+    { id: "race", label: "Trading", icon: "chart" },
+    { id: "floor", label: "Floor", icon: "floor" },
+  ];
+  return (
+    <Panel open={open} kicker={floor ? `Level ${floor.level}, paper money` : "Wall Street"} title={floor?.name ?? "Wall Street"} accent={floor?.accent} tabs={tabs} tab={tab} onTab={(id) => setTab(id as "race" | "floor")} onClose={onClose}>
+      {tab === "race" ? <TradingTab /> : null}
+      {tab === "floor" ? (
+        <FloorBody
+          slug="trading"
+          onAgent={(id) => onNavigate({ type: "agent", id })}
+          onSetup={() => onNavigate({ type: "warden", tab: "setup" })}
+        />
+      ) : null}
+    </Panel>
+  );
 }
 
 function WardenPanel({ open, tab, state, scene, onClose, onNavigate }: { open: boolean; tab: WardenTab; state: TowerState; scene: TowerScene | null; onClose: () => void; onNavigate: (sel: PanelSel) => void }) {

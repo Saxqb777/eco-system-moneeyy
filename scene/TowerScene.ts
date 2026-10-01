@@ -10,10 +10,11 @@ import { OfficeLife } from "./life";
 import { Street } from "./street";
 import { NewsSign } from "./news";
 import { RunBanner } from "./banner";
+import { TradingFloor } from "./trading";
 import type { MonitorProp } from "./props";
 import type { RunReport } from "@/lib/run-summary";
 import { floorPlate, lockedLabel, RoofHud } from "./hud";
-import { BUILDING, DESK_SLOTS, GROUND_Y, LIFT_DOOR_X, PENTHOUSE, ROOF_Y, WORKSHOP, WORLD, floorY } from "./layout";
+import { BUILDING, DESK_SLOTS, GROUND_Y, LIFT_DOOR_X, PENTHOUSE, ROOF_Y, TRADING_SEATS, WORKSHOP, WORLD, floorY } from "./layout";
 import { C, FLOOR_ACCENT } from "./palette";
 import { Lift } from "./lift";
 import { namePlate, speakerSwitch } from "./props";
@@ -82,6 +83,7 @@ export class TowerScene {
   private readonly street = new Street();
   private readonly news = new NewsSign();
   private readonly banner = new RunBanner();
+  private readonly trading: TradingFloor;
   private screensAt = 0;
   private readonly screenLit = new Map<MonitorProp, boolean>();
   private clockAt = 0;
@@ -113,6 +115,19 @@ export class TowerScene {
       charLayer: this.charLayer,
       runner: this.runner,
     });
+    this.trading = new TradingFloor({
+      sprite: (slug) => this.spriteBySlug(slug),
+      restore: (sprite) => this.restoreSprite(sprite),
+      runner: this.runner,
+      effects: this.effects,
+      sound: this.sound,
+      lowEffects: () => this.lowEffects,
+    });
+  }
+
+  private spriteBySlug(slug: string): CharacterSprite | undefined {
+    for (const a of this.agentsById.values()) if (a.slug === slug) return this.sprites.get(a.id);
+    return undefined;
   }
 
   static async create(host: HTMLElement, opts: SceneOptions = {}): Promise<TowerScene> {
@@ -401,6 +416,7 @@ export class TowerScene {
       if (f.status === "locked" && f.unlockRule) this.platesLayer.addChild(lockedLabel(f.unlockRule, f.level));
     }
     this.ambient.setFloors([...this.floorBuilds.values()]);
+    this.trading.attach(this.floorBuilds.get("trading")?.trading);
     // desk lamps follow the current blocked state
     for (const a of this.agentsById.values()) this.setDeskLamp(a);
   }
@@ -413,6 +429,7 @@ export class TowerScene {
   private homeX(a: AgentState, floorSlug: string): number {
     if (a.kind === "warden") return PENTHOUSE.deskX - 200;
     if (a.role === "builder") return WORKSHOP.benchX + 34;
+    if (floorSlug === "trading" && TRADING_SEATS[a.slug] !== undefined) return TRADING_SEATS[a.slug]!;
     const floor = this.floorsBySlug.get(floorSlug);
     const slots = DESK_SLOTS[floorSlug] ?? [];
     const workers = (floor?.agents ?? []).filter((x) => x.kind !== "warden" && x.role !== "builder");
@@ -495,6 +512,8 @@ export class TowerScene {
         }
       }
     }
+    // Wall Street's show follows its own feed (D075)
+    this.trading.setView(state.trading);
     // lift indicator blinks for a floor with a blocked worker
     const blocked = state.floors.find((f) => f.agents.some((a) => a.status === "blocked"));
     this.lift.setHighlight(blocked && !this.wardenIsHelping(state) ? blocked.level : null);
@@ -563,6 +582,9 @@ export class TowerScene {
       default:
         pose = capHit ? "feet_up" : "sit_idle";
     }
+    // Lazy Larry holds the index and sleeps through everything; the Strategist stands in the pit by the big screen
+    if (a.slug === "trading_larry" && pose !== "dim") pose = "asleep";
+    if (a.slug === "trading_strategist") pose = "stand";
     sprite.position.set(pose === "raise" ? home + 58 : home, floorY(a.locationLevel));
     sprite.setFacing(1);
     sprite.setPose(pose);
@@ -693,6 +715,7 @@ export class TowerScene {
     this.updateClocks(now);
     this.news.update(dt);
     this.banner.update(dt);
+    this.trading.update(dt);
     if (!this.lowEffects) {
       const hour = dubaiHour(new Date());
       this.street.update(dt, { day: hour >= 7 && hour < 17.5, night: (this.night ?? false) });

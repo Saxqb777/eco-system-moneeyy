@@ -194,6 +194,16 @@ export async function weeklyActual(db: Db, floor: typeof floors.$inferSelect, si
         .where(and(eq(leads.simulated, simulated), eq(leads.status, "client"), gte(leads.updatedAt, weekStart)));
       return { value: Number(r?.n ?? 0), measure: "Paying customers this week" };
     }
+    case "trading": {
+      // Wall Street (D075): how far the best desk is ahead of Lazy Larry, in percent points. Paper money.
+      const { tradingDesks } = await import("@/db/schema");
+      const desks = await db.select().from(tradingDesks);
+      const pct = (d: (typeof desks)[number]) => ((Number(d.equityUsd) - Number(d.startUsd)) / Number(d.startUsd)) * 100;
+      const larry = desks.find((d) => d.slug === "index");
+      const best = desks.filter((d) => d.slug !== "index").sort((a, b) => pct(b) - pct(a))[0];
+      if (!best || !larry) return { value: 0, measure: "Best desk against Lazy Larry, percent points (paper money)" };
+      return { value: Math.round((pct(best) - pct(larry)) * 100) / 100, measure: `${best.name} against Lazy Larry, percent points (paper money)` };
+    }
     case "penthouse":
     case "lobby": {
       const [rev] = await db

@@ -67,7 +67,7 @@ describe("The cap pause lifts itself", () => {
     await setSetting(db, "daily_cap_usd", 2);
     const after = await guardSpend(db, NOW);
     expect(after.capHit).toBe(false);
-    expect(after.resumedFloors).toEqual(["docledger"]);
+    expect(after.resumedFloors.sort()).toEqual(["docledger", "trading"]);
     expect((await floorBySlug("docledger")).status).toBe("live");
     expect((await floorBySlug("docledger")).pausedReason).toBeNull();
     expect((await floorBySlug("growth")).status).toBe("paused");
@@ -80,7 +80,7 @@ describe("The cap pause lifts itself", () => {
     const nextDay = new Date("2026-10-06T20:30:00Z"); // 00:30 Dubai on the 7th
     const res = await guardSpend(db, nextDay);
     expect(res.todayUsd).toBe(0);
-    expect(res.resumedFloors.sort()).toEqual(["docledger", "growth"]);
+    expect(res.resumedFloors.sort()).toEqual(["docledger", "growth", "trading"]);
   });
 });
 

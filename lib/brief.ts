@@ -2,12 +2,13 @@
 // Phase 3 shows it in the Warden panel. Phase 4 sends the same lines to Telegram at 08:00 Dubai.
 import { and, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
-import { agents, approvals, budgetLedger, floors, revenue, setupItems, tasks, wardenRuns } from "@/db/schema";
+import { agents, approvals, budgetLedger, floors, revenue, setupItems, tasks, tradingDesks, wardenRuns } from "@/db/schema";
 import { FLOOR_REQUIREMENTS } from "@/config/tower";
 import { salesFunnel } from "@/agents/docledger-autonomy";
 import { channelHealthFrom } from "@/lib/channel";
 import { asBool, getSettings } from "@/lib/settings";
 import { dubaiDayStartUtc, dubaiParts } from "@/lib/time";
+import { boardRows, signedPct } from "@/trading/report";
 
 export interface Brief {
   dayKey: string;
@@ -98,6 +99,7 @@ export async function buildBrief(db: Db, now = new Date()): Promise<Brief> {
   const botName = (settingsMap.telegram_bot as { username?: string } | null)?.username;
   if (!simulated && channel.botCanPost === false) needs.push(`The bot${botName ? ` @${botName}` : ""} cannot post in the deals channel: make it an admin with Post messages`);
 
+  const tradingBoard = floorRows.some((f) => f.slug === "trading") ? boardRows(await db.select().from(tradingDesks)) : [];
   const floorLines = floorRows.map((f) => {
     const crew = agentRows.filter((a) => a.floorId === f.id && a.kind !== "warden");
     let line: string;
@@ -123,6 +125,7 @@ export async function buildBrief(db: Db, now = new Date()): Promise<Brief> {
         const week = channel.growthWeek;
         bits.unshift(`channel ${channel.members} members${week !== null ? ` (${week >= 0 ? "+" : ""}${week} this week)` : ""}`);
       }
+      if (f.slug === "trading" && tradingBoard.length) bits.unshift(tradingBoard.map((d) => `${d.name} ${signedPct(d.pnlPct)}`).join(", ") + " (paper money)");
       if (f.strategyNote) bits.push(`note: ${f.strategyNote}`);
       line = bits.join(", ");
     }

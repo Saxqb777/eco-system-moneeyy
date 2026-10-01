@@ -6,6 +6,7 @@ import { getSpendSummary } from "@/lib/budget";
 import { asBool, asNumber, getSettings } from "@/lib/settings";
 import { visibleSetupRows } from "@/lib/clipboard";
 import { dubaiParts, isNightInDubai } from "@/lib/time";
+import { tradingState, type TradingStateView } from "@/trading/view";
 
 export interface TowerState {
   now: string;
@@ -54,6 +55,8 @@ export interface TowerState {
   recentEvents: Array<{ id: number; type: string; message: string; agentId: string | null; floorId: string | null; createdAt: string }>;
   lastTicks: Array<{ id: string; trigger: string; status: string; startedAt: string; finishedAt: string | null; error: string | null }>;
   setup: Array<{ key: string; label: string; status: string; hint: string | null; requiredFor: string[] }>;
+  // Wall Street (D075): the leaderboard, the ticker tape and the floor's latest moves for the animations.
+  trading?: TradingStateView | null;
 }
 
 export async function getTowerState(db: Db, now = new Date()): Promise<TowerState> {
@@ -73,6 +76,7 @@ export async function getTowerState(db: Db, now = new Date()): Promise<TowerStat
   const waitingByAgent = new Map<string, number>();
   for (const a of pending) if (a.agentId && a.type === "decision") waitingByAgent.set(a.agentId, (waitingByAgent.get(a.agentId) ?? 0) + 1);
   const board = floorRows.some((f) => f.slug === "growth") ? await companyBoard(db, now, simulationMode) : undefined;
+  const trading = floorRows.some((f) => f.slug === "trading") ? await tradingState(db).catch(() => null) : null;
 
   const taskIds = agentRows.map((a) => a.currentTaskId).filter((x): x is string => !!x);
   const taskRows = taskIds.length ? await db.select().from(tasks).where(and(inArray(tasks.id, taskIds))) : [];
@@ -143,6 +147,7 @@ export async function getTowerState(db: Db, now = new Date()): Promise<TowerStat
     recentEvents: events.map((e) => ({ id: e.id, type: e.type, message: e.message, agentId: e.agentId, floorId: e.floorId, createdAt: e.createdAt.toISOString() })),
     lastTicks: tickRows.map((t) => ({ id: t.id, trigger: t.trigger, status: t.status, startedAt: t.startedAt.toISOString(), finishedAt: t.finishedAt?.toISOString() ?? null, error: t.error })),
     setup: setupRows.map((s) => ({ key: s.key, label: s.label, status: s.status, hint: s.hint, requiredFor: s.requiredFor })),
+    trading,
   };
 }
 

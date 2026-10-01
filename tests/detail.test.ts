@@ -68,7 +68,7 @@ describe("panel data on a real schema", () => {
     expect(d!.measure).toMatch(/Demos booked/);
     expect(d!.money.spendWeekUsd).toBeGreaterThanOrEqual(d!.money.spendTodayUsd);
     expect(d!.missingSetup.map((m) => m.key)).toContain("calendar_link");
-    const locked = await getFloorDetail(db, "content", NOON);
+    const locked = await getFloorDetail(db, "service", NOON);
     expect(locked!.status).toBe("locked");
     expect(locked!.activeTasks).toEqual([]);
     expect(await getFloorDetail(db, "nowhere", NOON)).toBeNull();
@@ -90,15 +90,15 @@ describe("panel data on a real schema", () => {
     for (const a of woke) expect(a.status === "paused").toBe(false);
     for (const a of woke) if (a.currentTaskId && a.status !== "blocked") expect(a.status).toBe("working");
 
-    expect(await setFloorPaused(db, "content", true, NOON)).toMatchObject({ ok: false });
+    expect(await setFloorPaused(db, "service", true, NOON)).toMatchObject({ ok: false });
   });
 
   it("builds the brief from data, one line per floor", async () => {
     const b = await buildBrief(db, NOON);
     expect(b.dayKey).toBe("2026-09-29");
     expect(b.simulated).toBe(true);
-    expect(b.floors.map((f) => f.slug)).toEqual(["penthouse", "docledger", "growth", "content", "service", "lobby"]);
-    expect(b.floors.find((f) => f.slug === "content")!.line).toMatch(/Unlocks/);
+    expect(b.floors.map((f) => f.slug)).toEqual(["penthouse", "docledger", "growth", "trading", "service", "lobby"]);
+    expect(b.floors.find((f) => f.slug === "service")!.line).toMatch(/Unlocks/);
     expect(b.needs.some((n) => /Anthropic API key/.test(n))).toBe(true);
     expect(b.moneyOutTodayUsd).toBeGreaterThan(0);
     expect(b.netTodayUsd).toBeCloseTo(b.moneyInTodayUsd - b.moneyOutTodayUsd, 6);
@@ -111,6 +111,6 @@ describe("panel data on a real schema", () => {
     expect(w.budget.level).toBe(1);
     expect(w.budget.spendTodayUsd).toBeCloseTo(w.budget.todayByFloor.reduce((a, f) => a + f.usd, 0), 6);
     expect(w.missingSetup.length).toBeGreaterThan(0);
-    expect(w.brief.floors).toHaveLength(6);
+    expect(w.brief.floors.map((f) => f.slug)).toEqual(["penthouse", "docledger", "growth", "trading", "service", "lobby"]);
   });
 });

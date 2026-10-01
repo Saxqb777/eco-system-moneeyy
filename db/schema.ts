@@ -457,3 +457,122 @@ export const ticks = pgTable("ticks", {
   startedAt: ts("started_at").defaultNow().notNull(),
   finishedAt: ts("finished_at"),
 });
+
+// Wall Street (D075): paper trading. Four desks, each with its own 100 USD of virtual money. No row here
+// ever moves real money: fills are worked out from real prices by the floor's own Executor.
+
+const price = (name: string) => numeric(name, { precision: 20, scale: 8 });
+
+export const tradingDesks = pgTable("trading_desks", {
+  id: id(),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  market: text("market").notNull(),
+  style: text("style").notNull(),
+  startUsd: money("start_usd").notNull(),
+  cashUsd: money("cash_usd").notNull(),
+  equityUsd: money("equity_usd").notNull(),
+  peakUsd: money("peak_usd").notNull(),
+  dayStartUsd: money("day_start_usd").notNull(),
+  dayKey: text("day_key"),
+  feesUsd: money("fees_usd").notNull().default("0"),
+  // live, benched (daily loss limit, back on the next Dubai day) or frozen (drawdown, the owner decides)
+  status: text("status").notNull().default("live"),
+  statusReason: text("status_reason"),
+  benchedUntil: ts("benched_until"),
+  startedAt: ts("started_at"),
+  simulated: simulated(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export const tradingPositions = pgTable(
+  "trading_positions",
+  {
+    id: id(),
+    deskId: uuid("desk_id").notNull(),
+    symbol: text("symbol").notNull(),
+    market: text("market").notNull(),
+    status: text("status").notNull().default("open"),
+    qty: price("qty").notNull(),
+    entryPrice: price("entry_price").notNull(),
+    stopPrice: price("stop_price"),
+    targetPrice: price("target_price"),
+    initialStop: price("initial_stop"),
+    highWater: price("high_water"),
+    costUsd: money("cost_usd").notNull(),
+    entryFeeUsd: money("entry_fee_usd").notNull().default("0"),
+    exitPrice: price("exit_price"),
+    exitFeeUsd: money("exit_fee_usd").notNull().default("0"),
+    exitReason: text("exit_reason"),
+    proceedsUsd: money("proceeds_usd"),
+    pnlUsd: money("pnl_usd"),
+    pnlPct: numeric("pnl_pct", { precision: 12, scale: 4 }),
+    // stock sale money is usable from this moment (T+1 in a cash account)
+    settlesAt: ts("settles_at"),
+    thesis: text("thesis"),
+    signalId: uuid("signal_id"),
+    meeting: jsonb("meeting"),
+    lesson: text("lesson"),
+    lastCheckedAt: ts("last_checked_at"),
+    openedAt: ts("opened_at").notNull(),
+    closedAt: ts("closed_at"),
+    simulated: simulated(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("trading_positions_desk_idx").on(t.deskId, t.status), index("trading_positions_closed_idx").on(t.closedAt)],
+);
+
+export const tradingSignals = pgTable(
+  "trading_signals",
+  {
+    id: id(),
+    symbol: text("symbol").notNull(),
+    market: text("market").notNull(),
+    kind: text("kind").notNull(),
+    score: integer("score").notNull(),
+    price: price("price").notNull(),
+    detail: jsonb("detail").notNull().default(sql`'{}'::jsonb`),
+    // new, taken, passed, vetoed, skipped (no room, no money, no budget), expired
+    status: text("status").notNull().default("new"),
+    deskSlug: text("desk_slug"),
+    meeting: jsonb("meeting"),
+    decidedAt: ts("decided_at"),
+    simulated: simulated(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("trading_signals_created_idx").on(t.createdAt), index("trading_signals_symbol_idx").on(t.symbol, t.createdAt)],
+);
+
+export const tradingNews = pgTable(
+  "trading_news",
+  {
+    id: id(),
+    sourceId: text("source_id").notNull().unique(),
+    headline: text("headline").notNull(),
+    summary: text("summary"),
+    url: text("url"),
+    source: text("source"),
+    symbols: text("symbols").array().notNull().default(sql`'{}'::text[]`),
+    // bullish, bearish or neutral once the News Hound has read it
+    sentiment: text("sentiment"),
+    impact: integer("impact"),
+    publishedAt: ts("published_at").notNull(),
+    taggedAt: ts("tagged_at"),
+    simulated: simulated(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("trading_news_published_idx").on(t.publishedAt)],
+);
+
+export const tradingEquity = pgTable(
+  "trading_equity",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    deskId: uuid("desk_id").notNull(),
+    equityUsd: money("equity_usd").notNull(),
+    at: ts("at").notNull(),
+    simulated: simulated(),
+  },
+  (t) => [index("trading_equity_desk_idx").on(t.deskId, t.at)],
+);

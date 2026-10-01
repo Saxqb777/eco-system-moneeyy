@@ -122,6 +122,11 @@ async function executeApproval(db: Db, a: typeof approvals.$inferSelect, now: Da
         await setAutoPost(db, true, now);
         return { socialAutoPost: true };
       }
+      // Wall Street: the owner lets a frozen desk trade again (D075). Paper money only.
+      if (typeof content.tradingUnfreeze === "string") {
+        const { unfreezeDesk } = await import("@/trading/engine");
+        return { tradingUnfreeze: content.tradingUnfreeze, done: await unfreezeDesk(db, content.tradingUnfreeze, now) };
+      }
       // A floor rule: Warden asked to auto approve a floor's public posts (Deals Engine after 14 days).
       if (typeof content.autoApproveFloor === "string") {
         await db.update(floors).set({ autoApprove: true, autoApproveSince: now, updatedAt: now }).where(eq(floors.slug, content.autoApproveFloor));

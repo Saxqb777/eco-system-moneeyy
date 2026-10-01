@@ -7,8 +7,9 @@ import { settings, ticks } from "@/db/schema";
 
 // A lock older than this belongs to a dead tick: Vercel stops a function after 300 seconds.
 export const TICK_LOCK_MS = 6 * 60 * 1000;
-// Scheduled ticks closer together than this are skipped. The main clock knocks every 15 minutes.
-export const HEARTBEAT_GAP_MS = 10 * 60 * 1000;
+// Scheduled ticks closer together than this are skipped. The main clock knocks every 5 minutes since Wall Street
+// (D075): the trading pulse runs on every knock, a tick on every third.
+export const HEARTBEAT_GAP_MS = 13 * 60 * 1000;
 export const TICK_LOCK_KEY = "tick_lock";
 
 // Who knocked. Anything else is recorded as "other".

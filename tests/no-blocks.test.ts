@@ -89,7 +89,8 @@ describe("The heartbeat never double runs", () => {
     const last = await lastScheduledTickAt(db);
     expect(last?.toISOString()).toBe(NOW.toISOString());
     expect(heartbeatDue(last, new Date(NOW.getTime() + 5 * 60_000))).toBe(false);
-    expect(heartbeatDue(last, new Date(NOW.getTime() + 11 * 60_000))).toBe(true);
+    expect(heartbeatDue(last, new Date(NOW.getTime() + 11 * 60_000))).toBe(false);
+    expect(heartbeatDue(last, new Date(NOW.getTime() + 14 * 60_000))).toBe(true);
     expect(heartbeatSource("neon")).toBe("neon");
     expect(heartbeatSource("<script>")).toBe("other");
   });

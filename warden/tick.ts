@@ -134,6 +134,15 @@ async function tickBody(db: ReturnType<typeof getDb>, trigger: TickTrigger, now:
       }
     }
 
+    // 6b. Wall Street (D075): the trading floor's pulse. It keeps its own gap and lock; paper money only.
+    try {
+      const { runTradingPulse } = await import("@/trading/pulse");
+      const pulse = await runTradingPulse(db, now);
+      steps.trading = { status: pulse.status, ...(pulse.steps.errors ? { errors: pulse.steps.errors } : {}) };
+    } catch (err) {
+      steps.trading = { status: "failed", error: err instanceof Error ? err.message : String(err) };
+    }
+
     // 7. Deliver: the morning brief once a day from 08:00 Dubai, then the outbound queue.
     const briefHour = asNumber(settingsMap.brief_hour_local, 8);
     const briefSent = settingsMap.brief_sent_day as string | null;

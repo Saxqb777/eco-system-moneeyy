@@ -3,6 +3,7 @@ import { AGENTS, FLOORS, SETUP_ITEMS } from "@/config/tower";
 import type { MailMessage, MailThread, MailThreadDetail } from "@/lib/mailbox";
 import type { TowerState } from "@/lib/state";
 import type { AgentDetail, FloorDetail, WardenSummary } from "@/lib/detail";
+import type { TradingDetail, TradingStateView } from "@/trading/view";
 
 export function mockState(now = new Date()): TowerState {
   const floors = FLOORS.filter((f) => f.status !== "archived").map((f) => ({
@@ -24,7 +25,7 @@ export function mockState(now = new Date()): TowerState {
     isBusiness: f.isBusiness,
     ...(f.slug === "growth" ? { board: ["Leads 11", "Emails 4", "Replies 1", "Partners 2", "In trial 0", "Customers 0"] } : {}),
     agents: AGENTS.filter((a) => a.floorSlug === f.slug).map((a, i) => {
-      const status = a.kind === "warden" ? "idle" : a.slug === "docledger_chaser" ? "blocked" : a.slug === "growth_finance" ? "idle" : i % 2 === 0 ? "working" : "idle";
+      const status = a.kind === "warden" ? "idle" : a.slug === "docledger_chaser" ? "blocked" : a.slug === "growth_finance" || a.slug === "trading_larry" ? "idle" : a.floorSlug === "trading" ? "working" : i % 2 === 0 ? "working" : "idle";
       const titles: Record<string, string> = {
         docledger_scout: "Find freight forwarders",
         docledger_writer: "Draft outreach email",
@@ -46,7 +47,7 @@ export function mockState(now = new Date()): TowerState {
         status,
         locationLevel: f.level,
         sprite: a.sprite,
-        currentTask: status === "idle" ? null : { id: `task_${a.slug}`, title: titles[a.slug] ?? "Chase warm reply", kind: "x", status: status === "blocked" ? "blocked" : "running", startedAt: now.toISOString(), dueAt: null, blockedReason: status === "blocked" ? "Need the calendar link to book the demo" : null },
+        currentTask: status === "idle" || a.floorSlug === "trading" ? null : { id: `task_${a.slug}`, title: titles[a.slug] ?? "Chase warm reply", kind: "x", status: status === "blocked" ? "blocked" : "running", startedAt: now.toISOString(), dueAt: null, blockedReason: status === "blocked" ? "Need the calendar link to book the demo" : null },
         stats: { tasksDone: 12 + i * 3, tasksFailed: 1, successRate: 92, avgReviewScore: 8.1 },
         waitingOnOwner: a.slug === "growth_lead" ? 2 : 0,
       };
@@ -66,6 +67,7 @@ export function mockState(now = new Date()): TowerState {
     recentEvents: [],
     lastTicks: [],
     setup: SETUP_ITEMS.map((s) => ({ key: s.key, label: s.label, status: "missing", hint: null, requiredFor: s.requiredFor })),
+    trading: mockTradingState(now),
   };
 }
 
@@ -367,5 +369,67 @@ export function mockCompany(now = new Date()): import("@/lib/company").CompanyVi
         { id: "sp2", text: "Bills in dollars, euros and yuan? Doc Ledger converts each one into dirhams at the rate of the day.", status: "draft", postedAt: null, imageUrl: "https://docledger.site/landing/records.jpg", stats: null },
       ],
     },
+  };
+}
+
+// Wall Street fixtures (D075): a busy evening on the floor for screenshots.
+export function mockTradingState(now = new Date()): TradingStateView {
+  const at = (m: number) => new Date(now.getTime() - m * 60000).toISOString();
+  return {
+    desks: [
+      { slug: "ai_crypto", name: "Night Desk", market: "crypto", style: "ai", equityUsd: 103.42, pnlPct: 3.42, status: "live", open: 2 },
+      { slug: "index", name: "Lazy Larry", market: "stocks", style: "hold", equityUsd: 101.88, pnlPct: 1.88, status: "live", open: 1 },
+      { slug: "ai_stocks", name: "AI Desk", market: "stocks", style: "ai", equityUsd: 100.61, pnlPct: 0.61, status: "live", open: 3 },
+      { slug: "quant", name: "Quant Bot", market: "stocks", style: "quant", equityUsd: 98.73, pnlPct: -1.27, status: "benched", open: 0 },
+    ],
+    tape: [
+      { s: "SPY", p: 571.24, chg: 0.42, m: "stocks" },
+      { s: "QQQ", p: 492.1, chg: 0.77, m: "stocks" },
+      { s: "NVDA", p: 124.31, chg: 2.31, m: "stocks" },
+      { s: "AAPL", p: 229.8, chg: -0.35, m: "stocks" },
+      { s: "TSLA", p: 251.6, chg: -1.92, m: "stocks" },
+      { s: "META", p: 566.4, chg: 1.04, m: "stocks" },
+      { s: "BTC", p: 64210, chg: 1.6, m: "crypto" },
+      { s: "ETH", p: 2612.5, chg: -0.8, m: "crypto" },
+      { s: "SOL", p: 152.31, chg: 3.4, m: "crypto" },
+    ],
+    status: { at: at(2), stocksOpen: true, cryptoLive: true, stocksLive: true, hasKeys: true, source: "sim", nextOpen: at(-900), nextClose: at(-240), errors: [], aiLeftUsd: 0.21, aiSpentUsd: 0.14, aiLimitUsd: 0.35 },
+    btcPct: 1.6,
+    brief: { mood: "bullish", headline: "Chips lead, Fed speakers later" },
+    events: [
+      { id: 9, kind: "meeting", message: "Meeting on NVDA: the Chief says BUY. Trend, volume and news agree.", agentSlug: "trading_chief", data: { kind: "meeting", desk: "ai_stocks", symbol: "NVDA", bull: "Clean breakout on twice the usual volume, chips lead today.", bear: "RSI is 71 and Fed speakers come later. It can fade.", decision: "buy", reason: "Trend, volume and news agree. Small size." }, at: at(1) },
+      { id: 8, kind: "signal", message: "Quant: NVDA breakout, score 74", agentSlug: "trading_quant", data: { kind: "signal", symbol: "NVDA", signal: "breakout", score: 74 }, at: at(2) },
+      { id: 7, kind: "close_win", message: "Night Desk sold SOL: hit the target, won 0.84 USD", agentSlug: "trading_runner", data: { kind: "close_win", desk: "ai_crypto", symbol: "SOL/USD", pnlUsd: 0.84 }, at: at(6) },
+    ],
+  };
+}
+
+export function mockTradingDetail(now = new Date()): TradingDetail {
+  const base = mockTradingState(now);
+  const at = (m: number) => new Date(now.getTime() - m * 60000).toISOString();
+  const curve = (slug: string, end: number, wobble: number) => Array.from({ length: 60 }, (_, i) => ({ at: at((60 - i) * 120), v: Number((100 + ((end - 100) * i) / 59 + Math.sin(i / 3 + slug.length) * wobble).toFixed(2)) }));
+  return {
+    ...base,
+    curves: [
+      { slug: "ai_stocks", name: "AI Desk", points: curve("ai_stocks", 100.61, 0.6) },
+      { slug: "ai_crypto", name: "Night Desk", points: curve("ai_crypto", 103.42, 1.2) },
+      { slug: "quant", name: "Quant Bot", points: curve("quant", 98.73, 0.5) },
+      { slug: "index", name: "Lazy Larry", points: curve("index", 101.88, 0.3) },
+    ],
+    positions: [
+      { id: "p1", desk: "ai_stocks", symbol: "NVDA", market: "stocks", sizeUsd: 22.5, entry: 123.9, stop: 121.4, target: 127.6, last: 124.31, pnlUsd: 0.07, pnlPct: 0.33, openedAt: at(1), thesis: "Trend, volume and news agree. Small size.", meeting: base.events[0]!.data },
+      { id: "p2", desk: "ai_crypto", symbol: "BTC/USD", market: "crypto", sizeUsd: 24, entry: 63650, stop: 62400, target: 65500, last: 64210, pnlUsd: 0.21, pnlPct: 0.88, openedAt: at(300), thesis: "Higher lows all day, funding calm.", meeting: null },
+      { id: "p3", desk: "index", symbol: "SPY", market: "stocks", sizeUsd: 100, entry: 560.7, stop: null, target: null, last: 571.24, pnlUsd: 1.88, pnlPct: 1.88, openedAt: at(9000), thesis: "Buy the whole market and hold it.", meeting: null },
+    ],
+    trades: [
+      { id: "c1", desk: "ai_crypto", symbol: "SOL/USD", sizeUsd: 20, entry: 147.2, exit: 153.6, reason: "target", pnlUsd: 0.84, pnlPct: 4.2, openedAt: at(600), closedAt: at(6), thesis: "Pullback in an uptrend, volume back.", meeting: { bull: "Uptrend intact, buyers stepped in at the 50 day line.", bear: "Crypto fees eat small moves.", decision: "buy", reason: "Room to the target is three times the fee." }, lesson: "Waiting for the pullback paid: entry near support, exit at the plan." },
+      { id: "c2", desk: "quant", symbol: "TSLA", sizeUsd: 25, entry: 258.1, exit: 252.9, reason: "stop", pnlUsd: -0.5, pnlPct: -2.0, openedAt: at(400), closedAt: at(90), thesis: "Quant rule: breakout, score 71.", meeting: null, lesson: null },
+    ],
+    meetings: [{ id: "s1", symbol: "NVDA", desk: "ai_stocks", status: "taken", score: 74, kind: "breakout", meeting: base.events[0]!.data, at: at(1) }],
+    lessons: ["Trade with the daily trend, never against it.", "Skip crypto moves smaller than three times the fee."],
+    briefFull: { dayKey: "2026-10-01", mood: "bullish", headline: "Chips lead, Fed speakers later", watch: ["NVDA", "AMD", "SOL/USD"], avoid: ["TSLA"], notes: "Futures firm on chip strength. Two Fed speakers after lunch in New York could move rates.", at: at(120) },
+    aiCost: { todayUsd: 0.14, totalUsd: 1.92 },
+    startUsd: 100,
+    stats: { signalsToday: 17, meetingsToday: 5, tradesTotal: 12, winRate: 58 },
   };
 }

@@ -29,8 +29,8 @@ describe("simulation mode on a real schema", () => {
   it("seeds the building", async () => {
     const f = await db.select().from(floors);
     const a = await db.select().from(agents);
-    expect(f.map((x) => x.slug).sort()).toEqual(["content", "deals", "docledger", "growth", "lobby", "penthouse", "service"]);
-    expect(a).toHaveLength(16);
+    expect(f.map((x) => x.slug).sort()).toEqual(["content", "deals", "docledger", "growth", "lobby", "penthouse", "service", "trading"]);
+    expect(a).toHaveLength(25);
     expect(a.find((x) => x.slug === "warden")?.locationLevel).toBe(5);
   });
 

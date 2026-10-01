@@ -19,6 +19,7 @@ export async function clipboardValue(db: Db, key: string): Promise<string | null
 // The saved values stay; bringing the floor back brings them back.
 export const FLOOR_ONLY_SETUP: Record<string, string[]> = {
   deals: ["affiliate_amazon_ae", "affiliate_noon", "affiliate_other", "deals_channel", "x_credentials", "facebook_page"],
+  trading: ["alpaca_keys"],
 };
 
 export async function hiddenSetupKeys(db: Db): Promise<Set<string>> {

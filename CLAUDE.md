@@ -19,6 +19,7 @@ Read this file first in every session. It is the cross chat memory for this repo
 
 ## Working agreement with Saaqib
 - Chat replies: dead simple, bullets. Explain heavily only when asked or when it really matters.
+- Setups he must do himself (2026-10-01, "just ask for my help where you need me"): do everything possible on our side, then ask him one small step at a time, only for what only he can do (logins, codes, consent clicks, pasting secrets in the Setup tab). No long walls of steps. Facebook guide page: https://claude.ai/artifact/Vj8ZFf48MRkB14V53heXks
 - Never implement or change anything without a full final confirmation. Propose first, then wait.
 - One phase at a time. After each phase: deploy, give the URL, a 5 line summary and what is needed from him. Then stop.
 - Development branch: claude/relaxed-ritchie-kwg8g6. Never push anywhere else without permission. Merging a green pull request from it into main on The Tower repo is allowed (D055); pushing to main directly is not.

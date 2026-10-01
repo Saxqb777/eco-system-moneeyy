@@ -78,6 +78,7 @@ class FakeMarket implements MarketData {
 }
 
 let market: FakeMarket;
+let reviewAction = "tighten";
 
 beforeAll(async () => {
   process.env.SECRETS_KEY = testSecretsKey();
@@ -87,7 +88,16 @@ beforeAll(async () => {
   setTelegramApi(fakeTelegram().api);
   fake = fakeAnthropic((params) => {
     const system = JSON.stringify(params.system ?? "");
-    if (system.includes("desk meeting")) return { bull: "Volume is five times normal and the trend is up.", bear: "One bar is not a trend. It can fade.", decision: "buy", confidence: 4, stop: 99, target: 103, sizeUsd: 20, reason: "Trend and volume agree. Small size." };
+    if (system.includes("POSITION REVIEW. CHIEF")) return { action: reviewAction, stop: 100.4, reason: "Up nicely: lock in a free trade.", decidedBy: "Risk Officer" };
+    if (system.includes("POSITION REVIEW")) return { say: "Still healthy.", vote: "buy", confidence: 3 };
+    if (system.includes("MORNING MEETING. You are the CHIEF")) return { mode: "careful", focus: ["NVDA", "FAKE"], avoid: ["AMD"], plan: "Small size, only the cleanest setups." };
+    if (system.includes("MORNING MEETING")) return {};
+    if (system.includes("END OF DAY")) return {};
+    if (system.includes("CHIEF (you read every voice")) return { decision: "buy", sizeUsd: 20, stop: 99, target: 103, reason: "The Bull answered the Bear: volume backs it.", decidedBy: "Bull" };
+    if (system.includes("RISK OFFICER (you read everything)")) return { say: "Twelve USD fits. Stop at 99.5.", vote: "buy", confidence: 3, maxSizeUsd: 12, stop: 99.5 };
+    if (system.includes("QUANT, chart analyst")) return { say: "Clean spike on five times volume.", vote: "buy", confidence: 4, stop: 99.2 };
+    if (system.includes("BEAR (you read")) return { say: "One bar is not a trend. It can fade.", vote: "pass", confidence: 3 };
+    if (system.includes("HOUND, news") || system.includes("STRATEGIST, market") || system.includes("BULL (you read")) return { say: "Volume is five times normal and the trend is up.", vote: "buy", confidence: 3 };
     if (system.includes("morning brief")) return { mood: "bullish", headline: "Chips lead", watch: ["NVDA", "FAKE"], avoid: [], notes: "Calm futures." };
     if (system.includes("Coach")) return { lessons: [{ n: 1, lesson: "The stop did its job." }], rule: "Wait for the second bar." };
     if (system.includes("News Hound")) return { items: [] };
@@ -249,24 +259,42 @@ describe("The pulse", () => {
     expect(res.status).toBe("ran");
     const desks = await db.select().from(tradingDesks);
     expect(desks.every((d) => !d.simulated)).toBe(true);
-    const meetings = fake.calls.slice(calls).filter((c) => JSON.stringify(c.system).includes("desk meeting"));
-    expect(meetings.length).toBeGreaterThanOrEqual(1);
+    // the room: seven voices per meeting, the Chief on the strongest model
+    const room = fake.calls.slice(calls).filter((c) => /HOUSE RULES/.test(JSON.stringify(c.system)) && !/POSITION REVIEW/.test(JSON.stringify(c.system)));
+    expect(room.length % 7).toBe(0);
+    expect(room.length).toBeGreaterThanOrEqual(7);
+    const chiefCall = room.find((c) => JSON.stringify(c.system).includes("CHIEF (you read every voice"))!;
+    expect(chiefCall.model).toBe("claude-opus-5-5");
+    // the three analysts each see only their own piece
+    const houndCall = room.find((c) => JSON.stringify(c.system).includes("HOUND, news"))!;
+    expect(JSON.stringify(houndCall.messages)).not.toMatch(/RSI/);
     const ai = (await deskBySlug(db, "ai_stocks"))!;
     const [nvda] = await db.select().from(tradingPositions).where(and(eq(tradingPositions.deskId, ai.id), eq(tradingPositions.symbol, "NVDA")));
     expect(nvda).toBeTruthy();
-    expect(Number(nvda!.costUsd)).toBeLessThanOrEqual(25);
-    expect(Number(nvda!.stopPrice)).toBeLessThan(Number(nvda!.entryPrice));
+    // the Risk Officer's 12 USD is a ceiling the Chief's 20 cannot pass
+    expect(Number(nvda!.costUsd)).toBeLessThanOrEqual(12);
+    expect(Number(nvda!.stopPrice)).toBeCloseTo(99.5, 4);
+    const meeting = nvda!.meeting as { voices: Array<{ who: string }>; decidedBy: string; votes: { buy: number; pass: number } };
+    expect(meeting.voices.map((v) => v.who)).toEqual(["Hound", "Quant", "Strategist", "Bull", "Bear", "Risk Officer", "Chief"]);
+    expect(meeting.decidedBy).toBe("Bull");
+    expect(meeting.votes).toEqual({ buy: 5, pass: 1 });
     const [sig] = await db.select().from(tradingSignals).where(eq(tradingSignals.symbol, "NVDA")).orderBy(desc(tradingSignals.createdAt)).limit(1);
     expect(sig!.status).toBe("taken");
     const kinds = (await db.select().from(taskEvents).where(eq(taskEvents.type, "trading"))).map((e) => (e.data as { kind: string }).kind);
-    expect(kinds).toEqual(expect.arrayContaining(["bell", "signal", "meeting", "open", "larry_buy", "brief"]));
+    expect(kinds).toEqual(expect.arrayContaining(["bell", "signal", "meeting", "open", "larry_buy", "brief", "morning"]));
+    const plan = await getSetting<{ mode: string; focus: string[]; avoid: string[] } | null>(db, "trading_plan", null);
+    expect(plan).toMatchObject({ mode: "careful", focus: ["NVDA"], avoid: ["AMD"] });
     // the AI money went on the trading floor's own line
     const ledger = await db.select().from(budgetLedger);
     expect(ledger.length).toBeGreaterThan(0);
     // the one time ask to lift the cap
     const asks = await db.select().from(approvals).where(eq(approvals.type, "spend_increase"));
     expect(asks).toHaveLength(1);
-    expect((asks[0]!.content as { proposedCapUsd: number }).proposedCapUsd).toBe(2.4);
+    const ask = asks[0]!.content as { proposedCapUsd: number; floorShare: Record<string, number> };
+    // 1.70 for the rest of the Tower plus 2.00 for Wall Street, the other floors' USD limits unchanged
+    expect(ask.proposedCapUsd).toBe(3.7);
+    expect(ask.floorShare.docledger! * 3.7).toBeCloseTo(0.55 * 1.7, 2);
+    expect(ask.floorShare.trading! * 3.7).toBeCloseTo(2, 2);
     // the crew is at work while a market trades, Larry naps
     const crew = await db.select().from(agents).where(eq(agents.slug, "trading_larry"));
     expect(crew[0]!.status).toBe("idle");
@@ -291,6 +319,28 @@ describe("The pulse", () => {
     const taught = await db.select().from(tradingPositions).where(eq(tradingPositions.lesson, "The stop did its job."));
     expect(taught).toHaveLength(1);
     expect(await getSetting<string[]>(db, "trading_lessons", [])).toContain("Wait for the second bar.");
+  });
+
+  it("reviews an open trade after two hours and tightens the stop, or closes it", async () => {
+    const ai = (await deskBySlug(db, "ai_stocks"))!;
+    const reviewAt = new Date(NOW.getTime() + 3 * 3600_000);
+    market.prices.MU = 101;
+    const q: Quote = { bid: 100, ask: 100, last: 100, prevClose: null, t: NOW.toISOString() };
+    const opened = await openPosition(db, ai, { symbol: "MU", market: "stocks", stop: 98.5, target: 106, sizeUsd: 10, thesis: "test", signalId: null }, q, NOW);
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    await setSetting(db, "trading_pulse_at", null);
+    await runTradingPulse(db, reviewAt);
+    const [p] = await db.select().from(tradingPositions).where(eq(tradingPositions.id, opened.position.id));
+    expect(Number(p!.stopPrice)).toBeCloseTo(100.4, 4);
+    expect((p!.reviews as unknown[]).length).toBe(1);
+    reviewAction = "close";
+    await setSetting(db, "trading_pulse_at", null);
+    await runTradingPulse(db, new Date(reviewAt.getTime() + 2.5 * 3600_000));
+    const [after] = await db.select().from(tradingPositions).where(eq(tradingPositions.id, opened.position.id));
+    expect(after!.status).toBe("closed");
+    expect(after!.exitReason).toBe("review");
+    reviewAction = "tighten";
   });
 
   it("goes quiet when the AI money is used up and keeps the code crew going", async () => {
@@ -326,7 +376,7 @@ describe("The pulse", () => {
     const state = await getTowerState(db, NOW);
     expect(state.trading?.desks).toHaveLength(4);
     expect(state.trading?.tape.length).toBeGreaterThan(0);
-    expect(state.floors.find((f) => f.slug === "trading")?.agents).toHaveLength(9);
+    expect(state.floors.find((f) => f.slug === "trading")?.agents).toHaveLength(10);
     expect(state.floors.some((f) => f.slug === "content")).toBe(false);
     const detail = await tradingDetail(db, NOW);
     expect(detail?.curves).toHaveLength(4);

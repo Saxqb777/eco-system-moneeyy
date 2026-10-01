@@ -99,6 +99,8 @@ export interface RaceRow {
 export interface RaceBoard {
   container: Container;
   set(rows: RaceRow[], footer: string): void;
+  // a line in amber over the footer for a while: the room's vote
+  note(text: string, ms: number): void;
   flash(): void;
   update(dt: number): void;
 }
@@ -121,8 +123,21 @@ export function raceBoard(x: number, y: number, w: number, h: number): RaceBoard
   container.addChild(glow);
   let last = "";
   let flashT = 0;
+  let noteT = 0;
+  const noteBox = new Container();
+  container.addChild(noteBox);
   return {
     container,
+    note(text, ms) {
+      noteBox.removeChildren().forEach((c) => c.destroy());
+      const bg = new Graphics().rect(x + 1, y + h - 13, w - 2, 12).fill(LED.bg);
+      const t = label(`VOTE ${text}`, { fontSize: 9, fill: LED.amber, spacing: 1 });
+      t.position.set(x + 5, y + h - 13);
+      noteBox.addChild(bg, t);
+      noteBox.visible = true;
+      noteT = ms;
+      flashT = 900;
+    },
     set(rows, footer) {
       const k = rows.map((r) => `${r.name}${r.pnlPct.toFixed(2)}${r.status}`).join("|") + footer;
       if (k === last) return;
@@ -153,6 +168,10 @@ export function raceBoard(x: number, y: number, w: number, h: number): RaceBoard
       flashT = 900;
     },
     update(dt) {
+      if (noteT > 0) {
+        noteT = Math.max(0, noteT - dt);
+        if (noteT === 0) noteBox.visible = false;
+      }
       if (flashT <= 0) return;
       flashT = Math.max(0, flashT - dt);
       glow.alpha = Math.sin((flashT / 900) * Math.PI) * 0.35;

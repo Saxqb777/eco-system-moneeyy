@@ -54,25 +54,26 @@ function Curves({ curves, start }: { curves: TradingDetail["curves"]; start: num
   );
 }
 
+// The trading room's transcript: every voice with its vote, then the Chief and whose argument decided it.
 function Meeting({ m }: { m: unknown }) {
-  const v = (m ?? {}) as { bull?: string; bear?: string; decision?: string; reason?: string };
-  if (!v.bull && !v.bear) return null;
+  const v = (m ?? {}) as { voices?: Array<{ who: string; say: string; vote: string }>; votes?: { buy: number; pass: number }; decision?: string; reason?: string; decidedBy?: string };
+  const voices = (v.voices ?? []).filter((x) => x.who !== "Chief");
+  if (!voices.length && !v.decision) return null;
   return (
     <div className="meeting">
-      {v.bull ? (
-        <div>
-          <b className="bull">Bull</b> {v.bull}
+      {voices.map((x) => (
+        <div key={x.who}>
+          <b className={x.vote === "buy" ? "bull" : "bear"}>
+            {x.who} {x.vote === "buy" ? "\u25B2" : "\u25BC"}
+          </b>{" "}
+          {x.say}
         </div>
-      ) : null}
-      {v.bear ? (
-        <div>
-          <b className="bear">Bear</b> {v.bear}
-        </div>
-      ) : null}
+      ))}
       {v.decision ? (
-        <div>
+        <div className="chief-line">
           <b>Chief</b> {v.decision === "buy" ? "BUY" : "PASS"}
           {v.reason ? `: ${v.reason}` : ""}
+          {v.decidedBy ? <span className="muted"> Decided by {v.decidedBy}{v.votes ? `, room ${v.votes.buy} buy ${v.votes.pass} pass` : ""}.</span> : null}
         </div>
       ) : null}
     </div>
@@ -162,6 +163,16 @@ export function TradingTab() {
         </div>
       </Sheet>
 
+      {t.plan ? (
+        <Sheet title={`Morning meeting: a ${t.plan.mode} day`}>
+          <b>{t.plan.plan}</b>
+          <div className="muted">
+            Focus {t.plan.focus.map((x) => x.replace("/USD", "")).join(", ") || "nothing special"}. Avoid {t.plan.avoid.map((x) => x.replace("/USD", "")).join(", ") || "nothing special"}.
+          </div>
+          {t.plan.strategist ? <div className="thesis">Strategist: {t.plan.strategist}</div> : null}
+        </Sheet>
+      ) : null}
+
       {t.briefFull ? (
         <Sheet title={`Morning brief: ${t.briefFull.mood}`}>
           <b>{t.briefFull.headline}</b>
@@ -188,6 +199,11 @@ export function TradingTab() {
               {p.target !== null ? `, target ${price(p.target)}` : ""}, {since(p.openedAt)}
             </div>
             {p.thesis ? <div className="thesis">{p.thesis}</div> : null}
+            {p.reviews.map((r) => (
+              <div key={r.at} className="muted">
+                Review {since(r.at)}: {r.action === "tighten" ? "tightened the stop" : r.action === "close" ? "closed it" : "hold"}. {r.reason} ({r.decidedBy})
+              </div>
+            ))}
           </div>
         ))}
       </Sheet>

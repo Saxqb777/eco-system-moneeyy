@@ -4,7 +4,7 @@ import { CRYPTO_BENCHMARK, DESKS, START_USD } from "@/config/trading";
 import type { Db } from "@/db/client";
 import { agents, budgetLedger, floors, taskEvents, tradingDesks, tradingEquity, tradingPositions, tradingSignals } from "@/db/schema";
 import { getSetting, getSettings } from "@/lib/settings";
-import type { MorningBrief } from "./crew";
+import type { DeskPlan, MorningBrief } from "./crew";
 import { shortSymbol } from "./engine";
 import type { TapeItem } from "./pulse";
 import { boardRows, type BoardRow } from "./report";
@@ -85,7 +85,8 @@ export async function tradingState(db: Db): Promise<TradingStateView | null> {
 
 export interface TradingDetail extends TradingStateView {
   curves: Array<{ slug: string; name: string; points: Array<{ at: string; v: number }> }>;
-  positions: Array<{ id: string; desk: string; symbol: string; market: string; sizeUsd: number; entry: number; stop: number | null; target: number | null; last: number | null; pnlUsd: number | null; pnlPct: number | null; openedAt: string; thesis: string | null; meeting: unknown }>;
+  positions: Array<{ id: string; desk: string; symbol: string; market: string; sizeUsd: number; entry: number; stop: number | null; target: number | null; last: number | null; pnlUsd: number | null; pnlPct: number | null; openedAt: string; thesis: string | null; meeting: unknown; reviews: Array<{ at: string; action: string; reason: string; decidedBy: string }> }>;
+  plan: DeskPlan | null;
   trades: Array<{ id: string; desk: string; symbol: string; sizeUsd: number; entry: number; exit: number; reason: string | null; pnlUsd: number; pnlPct: number; openedAt: string; closedAt: string; thesis: string | null; meeting: unknown; lesson: string | null }>;
   meetings: Array<{ id: string; symbol: string; desk: string | null; status: string; score: number; kind: string; meeting: unknown; at: string }>;
   lessons: string[];
@@ -130,6 +131,7 @@ export async function tradingDetail(db: Db, now = new Date()): Promise<TradingDe
       openedAt: p.openedAt.toISOString(),
       thesis: p.thesis,
       meeting: p.meeting,
+      reviews: ((p.reviews ?? []) as Array<{ at: string; action: string; reason: string; decidedBy: string }>).slice(-3).map((r) => ({ at: r.at, action: r.action, reason: r.reason, decidedBy: r.decidedBy })),
     };
   });
   const closed = await db.select().from(tradingPositions).where(eq(tradingPositions.status, "closed")).orderBy(desc(tradingPositions.closedAt)).limit(40);
@@ -165,6 +167,7 @@ export async function tradingDetail(db: Db, now = new Date()): Promise<TradingDe
     meetings: meetRows.map((m) => ({ id: m.id, symbol: m.symbol, desk: m.deskSlug, status: m.status, score: m.score, kind: m.kind, meeting: m.meeting, at: (m.decidedAt ?? m.createdAt).toISOString() })),
     lessons: await getSetting<string[]>(db, "trading_lessons", []),
     briefFull: await getSetting<MorningBrief | null>(db, "trading_brief", null),
+    plan: await getSetting<DeskPlan | null>(db, "trading_plan", null),
     aiCost: { todayUsd: base.status?.aiSpentUsd ?? 0, totalUsd: Number(cost?.s ?? 0) },
     startUsd: START_USD,
     stats: { signalsToday: Number(sig?.c ?? 0), meetingsToday: Number(met?.c ?? 0), tradesTotal: total, winRate: total ? Math.round((Number(all?.w ?? 0) / total) * 100) : null },

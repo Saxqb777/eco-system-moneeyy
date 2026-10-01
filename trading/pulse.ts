@@ -4,19 +4,19 @@
 // floor's own daily money. Paper money only: no step can reach a broker.
 import { randomUUID } from "node:crypto";
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
-import { CRYPTO_BENCHMARK, CRYPTO_WATCHLIST, DESKS, PULSE_GAP_MS, PULSE_LOCK_MS, RISK, SCAN, STOCK_WATCHLIST, type Market } from "@/config/trading";
+import { CRYPTO_BENCHMARK, CRYPTO_WATCHLIST, DESKS, FIRM, PULSE_GAP_MS, TRADING_DAILY_USD, PULSE_LOCK_MS, RISK, SCAN, STOCK_WATCHLIST, type Market } from "@/config/trading";
 import type { Db } from "@/db/client";
-import { agents, approvals, budgetLedger, floors, settings, tradingSignals } from "@/db/schema";
+import { agents, approvals, budgetLedger, floors, settings, tradingDesks, tradingPositions, tradingSignals } from "@/db/schema";
 import { raiseApproval } from "@/lib/approvals";
 import { getSpendSummary } from "@/lib/budget";
 import { getMarket, MarketError, usSessionClock, nyParts, type Bar, type MarketClock, type MarketData, type Quote } from "@/lib/market";
 import { asBool, asNumber, getSetting, getSettings, setSetting } from "@/lib/settings";
 import { enqueueMessage, getTelegramConfig } from "@/lib/telegram";
 import { dubaiDayStartUtc, dubaiParts, dubaiWeekStartUtc } from "@/lib/time";
-import { aiBudget, coachLessons, deskMeeting, fetchNews, houndTags, morningBrief } from "./crew";
-import { availableCash, deskBySlug, ensureDesks, fmtPrice, larryBuys, markDesks, openPosition, openPositions, runExecutor, shortSymbol, snapshotEquity, tradingEvent } from "./engine";
+import { aiBudget, coachLessons, deskMeeting, deskNotes, fetchNews, houndTags, morningBrief, morningMeeting, positionReview, todaysPlan } from "./crew";
+import { availableCash, closePosition, deskBySlug, ensureDesks, fmtPrice, larryBuys, markDesks, openPosition, openPositions, runExecutor, sellPrice, shortSymbol, snapshotEquity, tradingEvent } from "./engine";
 import { sma } from "./indicators";
-import { btcHoldPct, closeReport } from "./report";
+import { boardRows, btcHoldPct, closeReport, signedPct } from "./report";
 import { defaultPlan, scanSymbol, SIGNAL_WORDS, type SignalIdea } from "./scanner";
 
 const LOCK_KEY = "trading_lock";
@@ -43,14 +43,15 @@ export interface PulseResult {
 }
 
 // Runs one pulse when the last one is older than the gap. Safe to knock often from any clock.
-export async function runTradingPulse(db: Db, now = new Date(), opts: { force?: boolean } = {}): Promise<PulseResult> {
+// maxMeetings: the tick runs the pulse inside its own 5 minute window, so it holds at most one meeting there.
+export async function runTradingPulse(db: Db, now = new Date(), opts: { force?: boolean; maxMeetings?: number } = {}): Promise<PulseResult> {
   const last = await getSetting<string | null>(db, "trading_pulse_at", null);
   if (!opts.force && last && now.getTime() - new Date(last).getTime() < PULSE_GAP_MS) return { status: "fresh", at: now.toISOString(), steps: {} };
   const holder = randomUUID();
   if (!(await acquire(db, holder, now))) return { status: "busy", at: now.toISOString(), steps: {} };
   try {
     await setSetting(db, "trading_pulse_at", now.toISOString());
-    return await pulseBody(db, now);
+    return await pulseBody(db, now, opts);
   } finally {
     await release(db, holder).catch(() => undefined);
   }
@@ -63,7 +64,7 @@ export interface TapeItem {
   m: Market;
 }
 
-async function pulseBody(db: Db, now: Date): Promise<PulseResult> {
+async function pulseBody(db: Db, now: Date, opts: { maxMeetings?: number }): Promise<PulseResult> {
   const steps: Record<string, unknown> = {};
   const errors: string[] = [];
   const s = await getSettings(db);
@@ -164,6 +165,15 @@ async function pulseBody(db: Db, now: Date): Promise<PulseResult> {
   }
   steps.equity = { ...marks.equity, snapshot: await snapshotEquity(db, now) };
 
+  // 3b. The desk reviews its open trades every couple of hours: hold, tighten the stop or close early
+  if (!ownerPaused) {
+    try {
+      steps.reviews = await reviews(db, quotes, { stocks: stocksOpen, crypto: live.crypto }, simulation, now, opts.maxMeetings === undefined ? FIRM.maxReviewsPerPulse : Math.min(1, opts.maxMeetings));
+    } catch (err) {
+      errors.push(`reviews: ${msg(err)}`);
+    }
+  }
+
   // 4. The scanner, then the desks
   const ideas: SignalIdea[] = [];
   for (const m of ["stocks", "crypto"] as const) {
@@ -183,7 +193,7 @@ async function pulseBody(db: Db, now: Date): Promise<PulseResult> {
 
   if (!ownerPaused) {
     steps.quant = stocksOpen ? await quantBot(db, fresh, quotes, now) : { status: "market closed" };
-    steps.meetings = await meetings(db, fresh, quotes, { stocks: stocksOpen, crypto: live.crypto }, simulation, now);
+    steps.meetings = await meetings(db, fresh, quotes, { stocks: stocksOpen, crypto: live.crypto }, simulation, now, opts.maxMeetings ?? SCAN.maxMeetingsPerPulse);
   } else steps.desks = { status: "floor paused by the owner: no new trades, open trades keep their stops" };
 
   // 5. The AI side jobs, each inside the floor's daily money
@@ -194,6 +204,8 @@ async function pulseBody(db: Db, now: Date): Promise<PulseResult> {
   }
   try {
     steps.brief = await morningBrief(db, now, simulation);
+    const boards = boardRows(await db.select().from(tradingDesks)).map((d) => `${d.name} ${signedPct(d.pnlPct)}`);
+    steps.morning = await morningMeeting(db, now, simulation, { tape: tapeOf(quotes).filter((t) => ["SPY", "QQQ", "IWM", "XLE", "XLF", "BTC", "ETH"].includes(t.s)), desks: boards });
   } catch (err) {
     errors.push(`brief: ${msg(err)}`);
   }
@@ -311,13 +323,25 @@ async function quantBot(db: Db, fresh: FreshSignal[], quotes: Record<string, Quo
   return { status: "bought", symbol: pick.idea.symbol };
 }
 
+function tapeOf(quotes: Record<string, Quote>): Array<{ s: string; chg: number | null }> {
+  return Object.entries(quotes).map(([sym, q]) => ({ s: shortSymbol(sym), chg: q.prevClose ? ((q.last - q.prevClose) / q.prevClose) * 100 : null }));
+}
+
 // The AI desks' meetings: the strongest fresh signals of each open market, a few per pulse.
-async function meetings(db: Db, fresh: FreshSignal[], quotes: Record<string, Quote>, open: Record<Market, boolean>, simulation: boolean, now: Date) {
+async function meetings(db: Db, fresh: FreshSignal[], quotes: Record<string, Quote>, open: Record<Market, boolean>, simulation: boolean, now: Date, maxMeetings: number) {
   const out: Array<Record<string, unknown>> = [];
   let held = 0;
-  const candidates = fresh.filter((f) => f.idea.score >= SCAN.meetingMin && open[f.idea.market]).sort((a, b) => b.idea.score - a.idea.score);
+  // the morning meeting's plan: skip what it said to avoid, look first at its focus, a higher bar on careful days
+  const plan = await todaysPlan(db, now);
+  const bar = SCAN.meetingMin + (plan ? FIRM.meetingBar[plan.mode] ?? 0 : 0);
+  const weight = (f: FreshSignal) => f.idea.score + (plan?.focus.includes(f.idea.symbol) ? FIRM.focusBonus : 0);
+  for (const f of fresh.filter((x) => plan?.avoid.includes(x.idea.symbol))) {
+    await db.update(tradingSignals).set({ status: "skipped", decidedAt: now }).where(eq(tradingSignals.id, f.id));
+  }
+  const candidates = fresh.filter((f) => !plan?.avoid.includes(f.idea.symbol) && weight(f) >= bar && open[f.idea.market]).sort((a, b) => weight(b) - weight(a));
+  const sizeFactor = plan ? FIRM.sizeFactor[plan.mode] ?? 1 : 1;
   for (const f of candidates) {
-    if (held >= SCAN.maxMeetingsPerPulse) break;
+    if (held >= maxMeetings) break;
     const slug = f.idea.market === "stocks" ? "ai_stocks" : "ai_crypto";
     const desk = await deskBySlug(db, slug);
     if (!desk || desk.status !== "live") continue;
@@ -336,7 +360,7 @@ async function meetings(db: Db, fresh: FreshSignal[], quotes: Record<string, Quo
     held += 1;
     let result;
     try {
-      result = await deskMeeting(db, { desk, signal: f.idea, plan, open: mine, cashAvailable: cash }, now, simulation);
+      result = await deskMeeting(db, { desk, signal: f.idea, plan, open: mine, cashAvailable: cash, tape: tapeOf(quotes) }, now, simulation);
     } catch (err) {
       out.push({ symbol: f.idea.symbol, status: "failed", error: msg(err) });
       continue;
@@ -346,11 +370,11 @@ async function meetings(db: Db, fresh: FreshSignal[], quotes: Record<string, Quo
       out.push({ symbol: f.idea.symbol, status: "no AI money left today" });
       break;
     }
-    const meeting = { bull: result.bull, bear: result.bear, decision: result.decision, confidence: result.confidence, reason: result.reason, stop: result.stop, target: result.target, sizeUsd: result.sizeUsd, costUsd: result.costUsd };
+    const meeting = { voices: result.voices, votes: result.votes, decision: result.decision, reason: result.reason, decidedBy: result.decidedBy, stop: result.stop, target: result.target, sizeUsd: result.sizeUsd, riskMaxUsd: result.riskMaxUsd, costUsd: result.costUsd };
     await tradingEvent(db, {
       agentSlug: "trading_chief",
-      message: `Meeting on ${shortSymbol(f.idea.symbol)}: the Chief says ${result.decision === "buy" ? "BUY" : "PASS"}. ${result.reason}`,
-      data: { kind: "meeting", desk: slug, symbol: f.idea.symbol, bull: result.bull, bear: result.bear, decision: result.decision, reason: result.reason },
+      message: `Meeting on ${shortSymbol(f.idea.symbol)}: ${result.votes.buy} buy, ${result.votes.pass} pass. The Chief says ${result.decision === "buy" ? "BUY" : "PASS"}, decided by ${result.decidedBy}. ${result.reason}`,
+      data: { kind: "meeting", desk: slug, symbol: f.idea.symbol, voices: result.voices.map((v) => ({ who: v.who, say: v.say, vote: v.vote })), votes: result.votes, decision: result.decision, reason: result.reason, decidedBy: result.decidedBy },
       at: now,
     });
     if (result.decision === "pass") {
@@ -358,7 +382,7 @@ async function meetings(db: Db, fresh: FreshSignal[], quotes: Record<string, Quo
       out.push({ symbol: f.idea.symbol, status: "passed" });
       continue;
     }
-    const res = await openPosition(db, desk, { symbol: f.idea.symbol, market: f.idea.market, stop: result.stop, target: result.target, sizeUsd: result.sizeUsd, thesis: result.reason || `${SIGNAL_WORDS[f.idea.kind]} with score ${f.idea.score}`, signalId: f.id, meeting }, q, now);
+    const res = await openPosition(db, desk, { symbol: f.idea.symbol, market: f.idea.market, stop: result.stop, target: result.target, sizeUsd: result.sizeUsd * sizeFactor, thesis: result.reason || `${SIGNAL_WORDS[f.idea.kind]} with score ${f.idea.score}`, signalId: f.id, meeting }, q, now);
     if (!res.ok) {
       await db.update(tradingSignals).set({ deskSlug: slug, status: "vetoed", meeting, decidedAt: now }).where(eq(tradingSignals.id, f.id));
       await tradingEvent(db, { agentSlug: "trading_risk", message: `Risk VETO on ${shortSymbol(f.idea.symbol)}: ${res.reason}`, data: { kind: "veto", desk: slug, symbol: f.idea.symbol, reason: res.reason }, at: now });
@@ -376,6 +400,41 @@ async function meetings(db: Db, fresh: FreshSignal[], quotes: Record<string, Quo
     out.push({ symbol: f.idea.symbol, status: "bought" });
   }
   return { held, results: out };
+}
+
+// The desk's reviews: each AI desk's open trade is looked at again every couple of hours.
+async function reviews(db: Db, quotes: Record<string, Quote>, open: Record<Market, boolean>, simulation: boolean, now: Date, max: number) {
+  const out: Array<Record<string, unknown>> = [];
+  if (max <= 0) return { reviewed: 0, results: out };
+  const desks = (await db.select().from(tradingDesks)).filter((d) => d.style === "ai");
+  const due = new Date(now.getTime() - FIRM.reviewEveryMinutes * 60_000);
+  const todo = (await openPositions(db))
+    .filter((p) => desks.some((d) => d.id === p.deskId) && open[p.market as Market] && quotes[p.symbol] && (p.reviewedAt ?? p.openedAt) <= due)
+    .sort((a, b) => (a.reviewedAt ?? a.openedAt).getTime() - (b.reviewedAt ?? b.openedAt).getTime())
+    .slice(0, max);
+  for (const p of todo) {
+    const desk = desks.find((d) => d.id === p.deskId)!;
+    const q = quotes[p.symbol]!;
+    const res = await positionReview(db, { position: p, deskName: desk.name, last: q.last, equity: Number(desk.equityUsd) }, now, simulation);
+    if (!res) {
+      out.push({ symbol: p.symbol, status: "no AI money left today" });
+      break;
+    }
+    const entry = { at: now.toISOString(), action: res.action, stop: res.stop, reason: res.reason, decidedBy: res.decidedBy, voices: res.voices.map((v) => ({ who: v.who, say: v.say, vote: v.vote })) };
+    await db
+      .update(tradingPositions)
+      .set({ reviewedAt: now, reviews: sql`${tradingPositions.reviews} || ${JSON.stringify([entry])}::jsonb`, ...(res.action === "tighten" && res.stop !== null ? { stopPrice: res.stop.toFixed(8) } : {}) })
+      .where(eq(tradingPositions.id, p.id));
+    const words = res.action === "close" ? "close it now" : res.action === "tighten" ? `tighten the stop to ${fmtPrice(res.stop ?? 0)}` : "hold";
+    await tradingEvent(db, { agentSlug: "trading_chief", message: `Review of ${shortSymbol(p.symbol)} on ${desk.name}: ${words}. ${res.reason}`, data: { kind: "review", desk: desk.slug, symbol: p.symbol, action: res.action, reason: res.reason, decidedBy: res.decidedBy, voices: entry.voices }, at: now });
+    if (res.action === "close") {
+      const r = await closePosition(db, p, sellPrice(q, p.market as Market), "review", now);
+      const win = r.pnlUsd > 0;
+      await tradingEvent(db, { agentSlug: "trading_runner", message: `${desk.name} sold ${shortSymbol(p.symbol)} after the review, ${win ? "won" : "lost"} ${Math.abs(r.pnlUsd).toFixed(2)} USD`, data: { kind: win ? "close_win" : "close_loss", desk: desk.slug, symbol: p.symbol, reason: "review", pnlUsd: Number(r.pnlUsd.toFixed(4)), pnlPct: Number(r.pnlPct.toFixed(2)) }, at: now });
+    }
+    out.push({ symbol: p.symbol, action: res.action });
+  }
+  return { reviewed: out.length, results: out };
 }
 
 const CODE_CREW = new Set(["trading_quant", "trading_risk", "trading_runner"]);
@@ -408,7 +467,8 @@ async function reports(db: Db, input: { stocksOpen: boolean; wasOpen: boolean; l
     await setSetting(db, "trading_report_day", input.nyDay);
     const spend = await getSpendSummary(db, false, now);
     const body = await closeReport(db, { title: `Wall Street close, ${dubaiParts(now).dayKey}`, from: dubaiDayStartUtc(now), to: now, btcPct: await btcHoldPct(db, btc), aiCostUsd: floor ? spend.todayByFloor[floor.id] ?? 0 : 0 });
-    await enqueueMessage(db, { kind: "trading_close", body, now });
+    const notes = await deskNotes(db, body, now, false).catch(() => null);
+    await enqueueMessage(db, { kind: "trading_close", body: notes ? `${body}\n\nDesk notes from the Coach: ${notes}` : body, now });
     out.close = "queued";
   }
   const p = dubaiParts(now);
@@ -426,20 +486,37 @@ async function reports(db: Db, input: { stocksOpen: boolean; wasOpen: boolean; l
   return out;
 }
 
-// The floor's AI needs about 0.35 USD a day: the Tower asks the owner once to lift the cap to 2.40.
+// The owner gave Wall Street up to 2 USD of AI a day (2026-10-01). The Tower asks once to lift the cap by that
+// much, and keeps every other floor's own limit in USD exactly where it was.
+export function capPlan(s: Record<string, unknown>): { capUsd: number; newCapUsd: number; shares: Record<string, number> } {
+  const capUsd = asNumber(s.daily_cap_usd, 1.7);
+  const tradingUsd = asNumber(s.trading_daily_usd, TRADING_DAILY_USD);
+  const newCapUsd = Math.round((capUsd + tradingUsd) * 100) / 100;
+  const old = (s.floor_share ?? {}) as Record<string, unknown>;
+  const shares: Record<string, number> = {};
+  for (const [slug, v] of Object.entries(old)) if (slug !== "trading" && Number(v) > 0) shares[slug] = Math.round(((Number(v) * capUsd) / newCapUsd) * 1000) / 1000;
+  shares.trading = Math.round((tradingUsd / newCapUsd) * 1000) / 1000;
+  return { capUsd, newCapUsd, shares };
+}
+
 async function askCap(db: Db, floorId: string, now: Date) {
   await setSetting(db, "trading_cap_asked", now.toISOString());
   const s = await getSettings(db);
-  const cap = asNumber(s.daily_cap_usd, 1.7);
-  if (cap >= 2.4) return { status: "cap already fits" };
+  const plan = capPlan(s);
   const [pending] = await db.select({ id: approvals.id }).from(approvals).where(and(eq(approvals.type, "spend_increase"), eq(approvals.status, "pending"))).limit(1);
   if (pending) return { status: "a spend item already waits" };
+  const tradingUsd = asNumber(s.trading_daily_usd, TRADING_DAILY_USD);
   await raiseApproval(db, {
     type: "spend_increase",
-    summary: `Raise the daily cap from ${cap.toFixed(2)} to 2.40 USD for Wall Street`,
-    content: { proposedCapUsd: 2.4, proposedCeilingUsd: Math.max(asNumber(s.hard_ceiling_usd, 5), 2.4), text: `Wall Street's AI crew (meetings, news, brief, coach) needs about 0.35 USD a day. Without the raise it shares DocLedger's ${cap.toFixed(2)} USD and the sales floors get less. The Quant, Risk and the Runner cost nothing and run either way.` },
-    riskNote: "Real API spend of up to 0.40 USD more a day. Trading itself is paper money.",
+    summary: `Raise the daily cap from ${plan.capUsd.toFixed(2)} to ${plan.newCapUsd.toFixed(2)} USD: ${tradingUsd.toFixed(2)} a day for Wall Street`,
+    content: {
+      proposedCapUsd: plan.newCapUsd,
+      proposedCeilingUsd: Math.max(asNumber(s.hard_ceiling_usd, 5), plan.newCapUsd),
+      floorShare: plan.shares,
+      text: `You gave Wall Street up to ${tradingUsd.toFixed(2)} USD of AI a day: the seven voice trading room, news, the brief and the Coach. This adds exactly that to the cap. DocLedger's floors keep the same limits in USD as today. The Quant, Risk checks in code and the Runner cost nothing and run either way.`,
+    },
+    riskNote: `Real API spend of up to ${tradingUsd.toFixed(2)} USD more a day. Trading itself is paper money.`,
     floorId,
   }, now);
-  return { status: "asked" };
+  return { status: "asked", ...plan };
 }

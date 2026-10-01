@@ -68,5 +68,7 @@ export const TRADING_SEATS: Record<string, number> = {
   trading_risk: 913,
   trading_runner: 979,
   trading_coach: 1045,
+  // the Strategist stands in the pit under the market wall
+  trading_strategist: 780,
 };
 export const TRADING_PIT = { x: 780, w: 66 };

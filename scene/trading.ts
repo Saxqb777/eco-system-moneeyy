@@ -38,6 +38,7 @@ const CHATTER: Record<string, string[]> = {
   trading_bull: ["This market wants higher", "Buy the breakout", "Trend is your friend"],
   trading_bear: ["Something feels off", "Too far, too fast", "Cash is a position too"],
   trading_chief: ["Show me a clean setup", "We beat Larry or we go home"],
+  trading_strategist: ["Mood first, trades second", "What is the market telling us?", "Watching how the leaders trade", "Reading the tape"],
 };
 
 export class TradingFloor {
@@ -204,6 +205,28 @@ export class TradingFloor {
     switch (e.kind) {
       case "meeting":
         return this.meeting(e, now);
+      case "morning":
+        return this.morning(e, now);
+      case "review": {
+        const chief = h.sprite("trading_chief");
+        const risk = h.sprite("trading_risk");
+        const act = String(d.action ?? "hold");
+        const words = act === "close" ? "close it" : act === "tighten" ? "tighten the stop" : "hold";
+        const v = (Array.isArray(d.voices) ? d.voices : []) as Array<{ who: string; say: string }>;
+        const riskSay = v.find((x) => x.who === "Risk Officer")?.say;
+        if (risk && riskSay) this.say(risk, clip(riskSay, 70), 3000, now, "chat");
+        if (chief) h.runner.add(sequence([() => wait(riskSay ? 2600 : 0)], () => this.say(chief, `Review ${short(d.symbol)}: ${words}. ${clip(d.reason, 40)}`, 3600, this.t, "chat")));
+        if (act !== "hold") this.stamp(act === "close" ? "CLOSE" : "TIGHTEN", act === "close" ? LED.red : LED.amber, TRADING_PIT.x, stampY);
+        return 6400;
+      }
+      case "wrap": {
+        const coach = h.sprite("trading_coach");
+        if (coach) {
+          this.say(coach, `Desk notes: ${clip(d.notes, 56)}`, 5000, now, "chat");
+          coach.setPose("point");
+        }
+        return 5200;
+      }
       case "signal": {
         const q = h.sprite("trading_quant");
         if (q) {
@@ -273,7 +296,7 @@ export class TradingFloor {
         const hound = h.sprite("trading_news");
         if (hound) {
           const tag = d.sentiment === "bullish" ? "Bullish" : d.sentiment === "bearish" ? "Bearish" : "News";
-          this.say(hound, `${tag}: ${clip(d.headline ?? e.message, 54)}`, 4000, now, "task");
+          this.say(hound, `${tag}: ${clip(d.headline ?? e.message, 54)}`, 4000, now, "chat");
           hound.setPose("phone");
         }
         return 4200;
@@ -315,70 +338,111 @@ export class TradingFloor {
     }
   }
 
-  // Bull and Bear walk into the pit and argue in their own words; the Chief walks in and decides.
+  // The trading room: the three analysts report from their desks and the pit, Bull and Bear walk into the pit
+  // and fight it out, Risk sizes it, the Chief stands and decides, the votes light the race board.
   private meeting(e: TradingEvent, now: number): number {
     const h = this.host;
     const d = e.data;
-    const bull = h.sprite("trading_bull");
-    const bear = h.sprite("trading_bear");
-    const chief = h.sprite("trading_chief");
     const buy = d.decision === "buy";
     const sym = short(d.symbol);
     const stampY = this.props!.floorY - 84;
-    if (!bull || !bear || !chief || bull.away || bear.away || chief.away || h.lowEffects()) {
-      if (chief) this.say(chief, `${buy ? "BUY" : "PASS"} ${sym}: ${clip(d.reason, 40)}`, 4000, now, "task");
+    const voices = (Array.isArray(d.voices) ? d.voices : []) as Array<{ who: string; say: string; vote: string }>;
+    const said = (who: string) => voices.find((v) => v.who === who);
+    const crew = { hound: h.sprite("trading_news"), quant: h.sprite("trading_quant"), strat: h.sprite("trading_strategist"), bull: h.sprite("trading_bull"), bear: h.sprite("trading_bear"), risk: h.sprite("trading_risk"), chief: h.sprite("trading_chief") };
+    const votes = d.votes as { buy?: number; pass?: number } | undefined;
+    const tally = votes ? `${votes.buy ?? 0} BUY ${votes.pass ?? 0} PASS` : "";
+    const all = Object.values(crew);
+    if (all.some((s) => !s || s.away) || h.lowEffects()) {
+      if (crew.chief) this.say(crew.chief, `${buy ? "BUY" : "PASS"} ${sym}: ${clip(d.reason, 60)}`, 4000, now, "task");
       this.stamp(buy ? "BUY" : "PASS", buy ? LED.green : 0xb8c0c8, TRADING_PIT.x, stampY);
+      if (tally) this.props!.board.note(tally, 6000);
       return 4500;
     }
-    const total = 15500;
-    const toks = [bull, bear, chief].map((s) => {
+    const { hound, quant, strat, bull, bear, risk, chief } = crew as Record<keyof typeof crew, CharacterSprite>;
+    const total = 30000;
+    const people = [hound, quant, strat, bull, bear, risk, chief];
+    const toks = people.map((s) => {
       s.setBubble(null);
       return this.hold(s, total);
     });
     const pit = TRADING_PIT.x;
-    h.runner.add(this.walk(bull, pit - 28));
-    h.runner.add(this.walk(bear, pit + 28));
-    const talk = (s: CharacterSprite, face: number, pose: "chat" | "point", text: string, ms: number) => () => {
+    const line = (who: string, fallback: string) => {
+      const v = said(who);
+      if (!v) return fallback;
+      return `${v.vote === "buy" ? "Buy" : "Pass"}: ${clip(v.say, 66)}`;
+    };
+    const talk = (s: CharacterSprite, pose: "chat" | "point" | "phone" | "raise" | "stand", text: string, ms: number, face = 1) => () => {
       s.setFacing(face);
       s.setPose(pose);
       s.setBubble(text, "chat");
-      return tween(ms, () => {}, ease.linear, () => {
-        s.setBubble(null);
-        s.setPose("stand");
-      });
+      return tween(ms, () => {}, ease.linear, () => s.setBubble(null));
     };
     h.runner.add(
       sequence(
         [
-          () => wait(1500),
-          talk(bull, 1, "chat", `Bull: ${clip(d.bull, 64)}`, 3400),
-          talk(bear, -1, "point", `Bear: ${clip(d.bear, 64)}`, 3400),
-          () => this.walk(chief, pit),
+          // the analysts: news, chart, mood
+          talk(hound, "phone", line("Hound", `News on ${sym}: nothing new`), 2900),
+          talk(quant, "raise", line("Quant", `${sym} chart looks clean`), 2900),
+          talk(strat, "point", line("Strategist", "The tide is mixed today"), 2900),
           () => {
-            chief.setFacing(1);
+            hound.setPose("sit_type");
+            quant.setPose("sit_type");
+            strat.setPose("stand");
+            h.runner.add(this.walk(bull, pit - 34));
+            return this.walk(bear, pit + 34);
+          },
+          // the fight
+          talk(bull, "chat", line("Bull", `Buy ${sym} now`), 3400, 1),
+          talk(bear, "point", line("Bear", `This can fail`), 3400, -1),
+          talk(risk, "stand", line("Risk Officer", "Size small, stop tight"), 3000),
+          () => {
             chief.setPose(buy ? "point" : "stand");
-            chief.setBubble(`${buy ? "BUY" : "PASS"} ${sym}. ${clip(d.reason, 46)}`, "task");
+            chief.setBubble(`${buy ? "BUY" : "PASS"} ${sym}: ${clip(d.reason, 44)}${d.decidedBy ? ` (${String(d.decidedBy)})` : ""}`, "chat");
             this.stamp(buy ? "BUY" : "PASS", buy ? LED.green : 0xb8c0c8, pit, stampY);
+            if (tally) this.props!.board.note(tally, 7000);
             if (buy) h.sound.fanfare();
-            const winner = buy ? bull : bear;
-            winner.setPose("cheer");
-            return wait(2600);
+            (buy ? bull : bear).setPose("cheer");
+            risk.setPose("sit_idle");
+            return wait(3200);
           },
           () => {
             chief.setBubble(null);
-            return wait(200);
-          },
-          () => {
             h.runner.add(this.walk(bull, this.home("trading_bull")));
-            h.runner.add(this.walk(bear, this.home("trading_bear")));
-            return this.walk(chief, this.home("trading_chief"));
+            return this.walk(bear, this.home("trading_bear"));
           },
-          () => wait(900),
+          () => wait(700),
         ],
-        () => [bull, bear, chief].forEach((s, i) => this.release(s, toks[i]!)),
+        () => people.forEach((s, i) => this.release(s, toks[i]!)),
       ),
     );
     return total;
+  }
+
+  // The morning meeting: everyone stands, the Strategist reads the day, the Chief sets the plan.
+  private morning(e: TradingEvent, now: number): number {
+    const h = this.host;
+    const d = e.data;
+    const stampY = this.props!.floorY - 84;
+    this.stamp("MORNING MEETING", LED.amber, TRADING_PIT.x, stampY);
+    h.sound.bell();
+    const strat = h.sprite("trading_strategist");
+    const chief = h.sprite("trading_chief");
+    for (const slug of Object.keys(TRADING_SEATS)) {
+      if (slug === "trading_larry") continue;
+      const s = h.sprite(slug);
+      if (!s || s.away) continue;
+      const tok = this.hold(s, 9000);
+      s.setPose("stand");
+      h.runner.add(sequence([() => wait(9000)], () => this.release(s, tok)));
+    }
+    if (strat) h.runner.add(sequence([() => wait(900)], () => strat.setBubble(clip(d.strategist, 70), "chat")));
+    if (chief) {
+      h.runner.add(sequence([() => wait(4200)], () => {
+        strat?.setBubble(null);
+        chief.setBubble(`A ${String(d.mode ?? "normal")} day. ${clip(d.plan, 56)}`, "chat");
+      }));
+    }
+    return 9500;
   }
 
   private chatter(now: number) {

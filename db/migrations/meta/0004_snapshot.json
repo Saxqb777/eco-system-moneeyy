@@ -1,5 +1,5 @@
 {
-  "id": "eb348f27-4c88-4405-8aae-f63e814d4422",
+  "id": "69f4f486-ba34-4869-9995-f3caa802bb28",
   "prevId": "b3e5aa3e-dc43-4b1c-bda7-c7483ad21d6a",
   "version": "7",
   "dialect": "postgresql",
@@ -3055,6 +3055,19 @@
         "lesson": {
           "name": "lesson",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviews": {
+          "name": "reviews",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },

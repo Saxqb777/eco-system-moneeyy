@@ -441,3 +441,12 @@ One row per heartbeat so the status page and Warden can see the pulse.
 - revenue.source "docledger_subscription": the first month a customer paid, entered by the owner with /won.
 - approvals.content.growthIdea (an idea from Growth) and approvals.content.ticketId (a Build decision).
 - New task kinds: growth_ideas, find_partners, product_review, marketing_pack (direct lane), success_email (direct lane), founder_report (Finance, no model, written done).
+
+### D075 notes (Wall Street, paper trading)
+- trading_desks: one row per desk (ai_stocks, ai_crypto, quant, index) with start, cash, equity, peak and day start in USD, fees paid, status live, benched (until benched_until) or frozen, and simulated. Switching between simulation and real prices deletes the race and starts over.
+- trading_positions: one row per trade. qty, entry, stop, initial stop, target, high water, cost with the entry fee, then exit price, exit fee, exit reason (stop, breakeven, trail, target, time, review), proceeds, P and L in USD and percent, settles_at for stock sales (T+1), thesis, signal_id, meeting (the room's transcript and votes), lesson (the Coach), reviews (jsonb list of hold, tighten or close with the voices), reviewed_at, last_checked_at (the Executor's minute replay).
+- trading_signals: every setup the scanner kept (kind, score, price, chart numbers in detail), its status (new, taken, passed, vetoed, skipped, expired), the desk and the meeting.
+- trading_news: headlines from the market data feed, once each by source id, with the Hound's sentiment and impact.
+- trading_equity: one point per desk every 15 minutes for the charts.
+- Events for the game are task_events rows of type "trading" on the trading floor; data.kind says which animation plays (bell, signal, meeting, morning, review, open, close_win, close_loss, veto, bench, freeze, back, unfreeze, news, brief, lesson, wrap, quiet, larry_buy).
+- Settings: trading_daily_usd, trading_plan, trading_brief, trading_lessons, trading_tape, trading_status, trading_btc_start, trading_pulse_at, trading_lock, trading_trend_stocks and trading_trend_crypto (daily caches), bell, report and quiet day marks, trading_cap_asked.

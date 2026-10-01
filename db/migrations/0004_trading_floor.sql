@@ -71,6 +71,8 @@ CREATE TABLE "trading_positions" (
 	"signal_id" uuid,
 	"meeting" jsonb,
 	"lesson" text,
+	"reviews" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"reviewed_at" timestamp with time zone,
 	"last_checked_at" timestamp with time zone,
 	"opened_at" timestamp with time zone NOT NULL,
 	"closed_at" timestamp with time zone,

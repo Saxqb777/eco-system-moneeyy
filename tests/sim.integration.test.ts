@@ -30,7 +30,7 @@ describe("simulation mode on a real schema", () => {
     const f = await db.select().from(floors);
     const a = await db.select().from(agents);
     expect(f.map((x) => x.slug).sort()).toEqual(["content", "deals", "docledger", "growth", "lobby", "penthouse", "service", "trading"]);
-    expect(a).toHaveLength(25);
+    expect(a).toHaveLength(26);
     expect(a.find((x) => x.slug === "warden")?.locationLevel).toBe(5);
   });
 

@@ -373,6 +373,14 @@ export function mockCompany(now = new Date()): import("@/lib/company").CompanyVi
 }
 
 // Wall Street fixtures (D075): a busy evening on the floor for screenshots.
+const MOCK_VOICES = [
+  { who: "Hound", say: "Two chip supply deals this morning, not fully priced in. No earnings until next month.", vote: "buy" },
+  { who: "Quant", say: "Clean breakout over 123.50 on twice normal volume, RSI 68. Stop under 121.40, the morning low.", vote: "buy" },
+  { who: "Strategist", say: "Chips lead a firm tape, SPY up 0.4 percent. Fed speakers after lunch are the one risk.", vote: "buy" },
+  { who: "Bull", say: "News, chart and tide agree. The Fed risk is a reason for half size, not for sitting out.", vote: "buy" },
+  { who: "Bear", say: "RSI near 70 into a Fed speech. Breakouts that late in the day often fade. I would wait.", vote: "pass" },
+  { who: "Risk Officer", say: "12 USD fits with the stop at 121.40. A gap through it costs about 0.30 more.", vote: "buy" },
+];
 export function mockTradingState(now = new Date()): TradingStateView {
   const at = (m: number) => new Date(now.getTime() - m * 60000).toISOString();
   return {
@@ -393,11 +401,11 @@ export function mockTradingState(now = new Date()): TradingStateView {
       { s: "ETH", p: 2612.5, chg: -0.8, m: "crypto" },
       { s: "SOL", p: 152.31, chg: 3.4, m: "crypto" },
     ],
-    status: { at: at(2), stocksOpen: true, cryptoLive: true, stocksLive: true, hasKeys: true, source: "sim", nextOpen: at(-900), nextClose: at(-240), errors: [], aiLeftUsd: 0.21, aiSpentUsd: 0.14, aiLimitUsd: 0.35 },
+    status: { at: at(2), stocksOpen: true, cryptoLive: true, stocksLive: true, hasKeys: true, source: "sim", nextOpen: at(-900), nextClose: at(-240), errors: [], aiLeftUsd: 1.62, aiSpentUsd: 0.38, aiLimitUsd: 2 },
     btcPct: 1.6,
     brief: { mood: "bullish", headline: "Chips lead, Fed speakers later" },
     events: [
-      { id: 9, kind: "meeting", message: "Meeting on NVDA: the Chief says BUY. Trend, volume and news agree.", agentSlug: "trading_chief", data: { kind: "meeting", desk: "ai_stocks", symbol: "NVDA", bull: "Clean breakout on twice the usual volume, chips lead today.", bear: "RSI is 71 and Fed speakers come later. It can fade.", decision: "buy", reason: "Trend, volume and news agree. Small size." }, at: at(1) },
+      { id: 9, kind: "meeting", message: "Meeting on NVDA: 5 buy, 1 pass. The Chief says BUY, decided by Bull.", agentSlug: "trading_chief", data: { kind: "meeting", desk: "ai_stocks", symbol: "NVDA", voices: MOCK_VOICES, votes: { buy: 5, pass: 1 }, decision: "buy", reason: "The Bull answered the Bear: chip demand news backs the volume. Half size into the Fed.", decidedBy: "Bull" }, at: at(1) },
       { id: 8, kind: "signal", message: "Quant: NVDA breakout, score 74", agentSlug: "trading_quant", data: { kind: "signal", symbol: "NVDA", signal: "breakout", score: 74 }, at: at(2) },
       { id: 7, kind: "close_win", message: "Night Desk sold SOL: hit the target, won 0.84 USD", agentSlug: "trading_runner", data: { kind: "close_win", desk: "ai_crypto", symbol: "SOL/USD", pnlUsd: 0.84 }, at: at(6) },
     ],
@@ -417,16 +425,17 @@ export function mockTradingDetail(now = new Date()): TradingDetail {
       { slug: "index", name: "Lazy Larry", points: curve("index", 101.88, 0.3) },
     ],
     positions: [
-      { id: "p1", desk: "ai_stocks", symbol: "NVDA", market: "stocks", sizeUsd: 22.5, entry: 123.9, stop: 121.4, target: 127.6, last: 124.31, pnlUsd: 0.07, pnlPct: 0.33, openedAt: at(1), thesis: "Trend, volume and news agree. Small size.", meeting: base.events[0]!.data },
-      { id: "p2", desk: "ai_crypto", symbol: "BTC/USD", market: "crypto", sizeUsd: 24, entry: 63650, stop: 62400, target: 65500, last: 64210, pnlUsd: 0.21, pnlPct: 0.88, openedAt: at(300), thesis: "Higher lows all day, funding calm.", meeting: null },
-      { id: "p3", desk: "index", symbol: "SPY", market: "stocks", sizeUsd: 100, entry: 560.7, stop: null, target: null, last: 571.24, pnlUsd: 1.88, pnlPct: 1.88, openedAt: at(9000), thesis: "Buy the whole market and hold it.", meeting: null },
+      { id: "p1", desk: "ai_stocks", symbol: "NVDA", market: "stocks", sizeUsd: 12, entry: 123.9, stop: 121.4, target: 127.6, last: 124.31, pnlUsd: 0.04, pnlPct: 0.33, openedAt: at(1), thesis: "The Bull answered the Bear: chip demand news backs the volume. Half size into the Fed.", meeting: base.events[0]!.data, reviews: [] },
+      { id: "p2", desk: "ai_crypto", symbol: "BTC/USD", market: "crypto", sizeUsd: 24, entry: 63650, stop: 63650, target: 65500, last: 64210, pnlUsd: 0.21, pnlPct: 0.88, openedAt: at(300), thesis: "Higher lows all day, funding calm.", meeting: null, reviews: [{ at: at(60), action: "tighten", reason: "Up 1R: stop to the entry, a free trade now.", decidedBy: "Risk Officer" }] },
+      { id: "p3", desk: "index", symbol: "SPY", market: "stocks", sizeUsd: 100, entry: 560.7, stop: null, target: null, last: 571.24, pnlUsd: 1.88, pnlPct: 1.88, openedAt: at(9000), thesis: "Buy the whole market and hold it.", meeting: null, reviews: [] },
     ],
     trades: [
-      { id: "c1", desk: "ai_crypto", symbol: "SOL/USD", sizeUsd: 20, entry: 147.2, exit: 153.6, reason: "target", pnlUsd: 0.84, pnlPct: 4.2, openedAt: at(600), closedAt: at(6), thesis: "Pullback in an uptrend, volume back.", meeting: { bull: "Uptrend intact, buyers stepped in at the 50 day line.", bear: "Crypto fees eat small moves.", decision: "buy", reason: "Room to the target is three times the fee." }, lesson: "Waiting for the pullback paid: entry near support, exit at the plan." },
+      { id: "c1", desk: "ai_crypto", symbol: "SOL/USD", sizeUsd: 20, entry: 147.2, exit: 153.6, reason: "target", pnlUsd: 0.84, pnlPct: 4.2, openedAt: at(600), closedAt: at(6), thesis: "Pullback in an uptrend, volume back.", meeting: { voices: [{ who: "Bull", say: "Uptrend intact, buyers stepped in at the 50 day line.", vote: "buy" }, { who: "Bear", say: "Crypto fees eat small moves.", vote: "pass" }], decision: "buy", reason: "Room to the target is three times the fee.", decidedBy: "Quant" }, lesson: "Waiting for the pullback paid: entry near support, exit at the plan." },
       { id: "c2", desk: "quant", symbol: "TSLA", sizeUsd: 25, entry: 258.1, exit: 252.9, reason: "stop", pnlUsd: -0.5, pnlPct: -2.0, openedAt: at(400), closedAt: at(90), thesis: "Quant rule: breakout, score 71.", meeting: null, lesson: null },
     ],
     meetings: [{ id: "s1", symbol: "NVDA", desk: "ai_stocks", status: "taken", score: 74, kind: "breakout", meeting: base.events[0]!.data, at: at(1) }],
     lessons: ["Trade with the daily trend, never against it.", "Skip crypto moves smaller than three times the fee."],
+    plan: { dayKey: "2026-10-01", mode: "normal", focus: ["NVDA", "AMD", "SOL/USD"], avoid: ["TSLA"], plan: "Trade the chip leaders with the trend, half size into the Fed. Cut anything that loses its morning low.", strategist: "A firm tape led by chips. The edge is in leaders, not laggards. Fed speakers after lunch can turn it.", at: at(180) },
     briefFull: { dayKey: "2026-10-01", mood: "bullish", headline: "Chips lead, Fed speakers later", watch: ["NVDA", "AMD", "SOL/USD"], avoid: ["TSLA"], notes: "Futures firm on chip strength. Two Fed speakers after lunch in New York could move rates.", at: at(120) },
     aiCost: { todayUsd: 0.14, totalUsd: 1.92 },
     startUsd: 100,

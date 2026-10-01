@@ -137,7 +137,7 @@ async function tickBody(db: ReturnType<typeof getDb>, trigger: TickTrigger, now:
     // 6b. Wall Street (D075): the trading floor's pulse. It keeps its own gap and lock; paper money only.
     try {
       const { runTradingPulse } = await import("@/trading/pulse");
-      const pulse = await runTradingPulse(db, now);
+      const pulse = await runTradingPulse(db, now, { maxMeetings: 1 });
       steps.trading = { status: pulse.status, ...(pulse.steps.errors ? { errors: pulse.steps.errors } : {}) };
     } catch (err) {
       steps.trading = { status: "failed", error: err instanceof Error ? err.message : String(err) };

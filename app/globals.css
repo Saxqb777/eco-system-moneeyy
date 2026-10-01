@@ -333,3 +333,4 @@ textarea.field { resize: vertical; }
 .trade-row.vetoed { border-left-color: var(--bad); }
 .trade-row.passed, .trade-row.skipped { border-left-color: var(--paper-shade); }
 .row-keys { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.meeting .chief-line { margin-top: 3px; padding-top: 3px; border-top: 1px dashed var(--paper-shade); }

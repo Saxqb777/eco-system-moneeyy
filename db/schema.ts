@@ -514,6 +514,9 @@ export const tradingPositions = pgTable(
     signalId: uuid("signal_id"),
     meeting: jsonb("meeting"),
     lesson: text("lesson"),
+    // the desk's reviews of the open trade: hold, tighten the stop or close early
+    reviews: jsonb("reviews").notNull().default(sql`'[]'::jsonb`),
+    reviewedAt: ts("reviewed_at"),
     lastCheckedAt: ts("last_checked_at"),
     openedAt: ts("opened_at").notNull(),
     closedAt: ts("closed_at"),

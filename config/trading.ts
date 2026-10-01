@@ -81,15 +81,30 @@ export const SCAN = {
   quantMin: 70,
   // the same symbol does not raise a new signal for this long
   cooldownMinutes: 90,
-  maxMeetingsPerPulse: 2,
-  maxMeetingsPerDayPerDesk: 8,
+  maxMeetingsPerPulse: 3,
+  maxMeetingsPerDayPerDesk: 25,
 };
 
-// What the AI crew may spend a day, in USD, on top of every other floor's work and always inside the cap.
-export const TRADING_DAILY_USD = 0.35;
+// What the AI crew may spend a day, in USD, always inside the Tower's cap. The owner's number (2026-10-01:
+// "let it cost me even 2 dollars a day for this floor"). settings.trading_daily_usd overrides it.
+export const TRADING_DAILY_USD = 2;
 
-// Rough cost of each AI job, used before a call to check it fits the day's money.
-export const AI_COST_USD = { meeting: 0.02, news: 0.02, brief: 0.1, coach: 0.03 };
+// Rough cost of each AI job, used before a call to check it fits the day's money. A meeting is seven voices:
+// six on the worker model, the Chief on the strongest one.
+export const AI_COST_USD = { meeting: 0.06, news: 0.02, brief: 0.1, coach: 0.03, morning: 0.05, review: 0.04, wrap: 0.03 };
+
+// How a firm runs its day: a morning meeting sets the plan, open trades are reviewed every couple of hours,
+// and the day ends with desk notes. The plan's mood changes how picky and how big the desk is, never past RISK.
+export const FIRM = {
+  // the morning meeting from this Dubai hour, once a day (the US opens at 17:30 or 18:30 Dubai)
+  morningHourDubai: 16,
+  reviewEveryMinutes: 120,
+  maxReviewsPerPulse: 2,
+  // careful days take smaller trades and only stronger signals; bold days look at a few more
+  sizeFactor: { careful: 0.6, normal: 1, bold: 1 } as Record<string, number>,
+  meetingBar: { careful: 8, normal: 0, bold: -4 } as Record<string, number>,
+  focusBonus: 5,
+};
 
 // The pulse: how often the floor looks at the market. Price bars are replayed minute by minute, so a missed
 // pulse still sees the stop or the target that was touched in between.

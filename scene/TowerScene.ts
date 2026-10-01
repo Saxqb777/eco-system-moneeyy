@@ -582,8 +582,9 @@ export class TowerScene {
       default:
         pose = capHit ? "feet_up" : "sit_idle";
     }
-    // Lazy Larry holds the index and sleeps through everything
+    // Lazy Larry holds the index and sleeps through everything; the Strategist stands in the pit by the big screen
     if (a.slug === "trading_larry" && pose !== "dim") pose = "asleep";
+    if (a.slug === "trading_strategist") pose = "stand";
     sprite.position.set(pose === "raise" ? home + 58 : home, floorY(a.locationLevel));
     sprite.setFacing(1);
     sprite.setPose(pose);

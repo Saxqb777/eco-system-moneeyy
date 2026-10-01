@@ -30,7 +30,8 @@ export function levelTop(level: number): number {
 export const ROOF_Y = floorY(LEVEL_COUNT); // 160
 
 // Level 3 was the Deals Engine until 2026-09-30; DocLedger Growth moved in (D065).
-export const LEVEL_SLUGS = ["lobby", "service", "content", "growth", "docledger", "penthouse"] as const;
+// Level 2 was the locked Content Farm until 2026-10-01; Wall Street moved in (D075).
+export const LEVEL_SLUGS = ["lobby", "service", "trading", "growth", "docledger", "penthouse"] as const;
 export type LevelSlug = (typeof LEVEL_SLUGS)[number];
 
 export function levelOf(slug: string): number {
@@ -45,6 +46,8 @@ export const DESK_SLOTS: Record<string, number[]> = {
   growth: [480, 578, 676, 774, 872, 970, 1068],
   deals: [520, 720, 920],
   content: [500, 660, 820, 980],
+  // eight trading desks, four each side of the meeting pit in the middle
+  trading: [515, 581, 647, 713, 847, 913, 979, 1045],
   service: [500, 660, 820, 980],
   penthouse: [],
   lobby: [],
@@ -53,3 +56,17 @@ export const DESK_SLOTS: Record<string, number[]> = {
 export const WORKSHOP = { x: 1010, benchX: 1120 };
 export const PENTHOUSE = { deskX: 1060, paceMin: 480, paceMax: 940, windowX: 600, window2X: 800 };
 export const LIFT_DOOR_X = BUILDING.interiorX + 22; // where riders stand before boarding
+
+// Wall Street (D075): who sits where. Larry naps in his recliner by the lift, the pit is between Chief and Bear.
+export const TRADING_SEATS: Record<string, number> = {
+  trading_larry: 452,
+  trading_news: 515,
+  trading_quant: 581,
+  trading_bull: 647,
+  trading_chief: 713,
+  trading_bear: 847,
+  trading_risk: 913,
+  trading_runner: 979,
+  trading_coach: 1045,
+};
+export const TRADING_PIT = { x: 780, w: 66 };

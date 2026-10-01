@@ -4,6 +4,7 @@ import { BUILDING, DESK_SLOTS, LEVEL_H, PENTHOUSE, SLAB, WORKSHOP, floorY } from
 import { C, FLOOR_ACCENT, mix, shade } from "./palette";
 import { label, plane, twoTone } from "./draw";
 import * as P from "./props";
+import * as T from "./trading-props";
 import { CharacterSprite } from "./character";
 
 export interface FloorInfo {
@@ -35,6 +36,17 @@ export interface FloorBuild {
   // Where people stand for the little things of office life: the window, the printer, the board, the door.
   spots: { window?: number; printer?: number; board?: number; door?: number; counter?: number };
   clocks: P.WallClock[];
+  // Wall Street's moving parts (D075), driven by scene/trading.ts
+  trading?: TradingProps;
+}
+
+export interface TradingProps {
+  tape: T.TickerTape;
+  board: T.RaceBoard;
+  wall: T.MarketWall;
+  bell: T.Bell;
+  floorY: number;
+  top: number;
 }
 
 const IX = BUILDING.interiorX;
@@ -86,7 +98,7 @@ export function buildFloor(info: FloorInfo, night: boolean): FloorBuild {
     return build;
   }
 
-  if (info.slug !== "lobby") {
+  if (info.slug !== "lobby" && info.slug !== "trading") {
     const lights = new Graphics();
     const xs = info.slug === "penthouse" ? [700, 1000] : [560, 800, 1040];
     for (const lx of xs) {
@@ -150,6 +162,8 @@ export function buildFloor(info: FloorInfo, night: boolean): FloorBuild {
     // the team's whiteboard on its stand at the end of the room, clear of the desks
     build.board = whiteboard(c, IR - 116, top + 12, y);
     build.spots = { window: 925, board: IR - 132 };
+  } else if (info.slug === "trading") {
+    buildTrading(c, build, slots, y, top, on);
   } else if (info.slug === "deals") {
     addPlant(IX + 26, 0.9);
     c.addChild(P.wallArt(620, top + 34, 34, 24));
@@ -223,6 +237,43 @@ export function buildFloor(info: FloorInfo, night: boolean): FloorBuild {
   build.tint.rect(IX, top, IW, h).fill({ color: 0xf08a24, alpha: 1 });
   build.tint.alpha = 0;
   return build;
+}
+
+// Wall Street (D075): a dark glass trading floor. LED tape under the ceiling, the market wall over the pit,
+// the race board over the bronze bull, the opening bell by the lift and Larry's recliner beside it.
+function buildTrading(c: Container, build: FloorBuild, slots: number[], y: number, top: number, on: boolean) {
+  const glass = new Graphics();
+  glass.rect(IX, top + 14, IW, 30).fill({ color: 0x07140f, alpha: 0.55 });
+  for (let gx = IX + 40; gx < IR; gx += 80) glass.rect(gx, top + 14, 2, 30).fill({ color: 0x1fa35b, alpha: 0.08 });
+  glass.rect(IX, top + 44, IW, 2).fill({ color: 0x1fa35b, alpha: 0.35 });
+  c.addChild(glass);
+  const tape = T.tickerTape(IX, top + 2, IW, 11);
+  c.addChild(tape.container);
+  const wall = T.marketWall(600, top + 17, 340, 22);
+  c.addChild(wall.container);
+  const board = T.raceBoard(1092, top + 17, 132, 62);
+  c.addChild(board.container);
+  const bell = T.brassBell(487, top + 18);
+  c.addChild(bell.container);
+  c.addChild(T.pitRug(780, y, 66));
+  c.addChild(T.bullStatue(1160, y - 1));
+  const chair = T.recliner(452, y - 1);
+  c.addChild(chair.back);
+  build.front.addChild(chair.front);
+  for (const sx of slots) c.addChild(P.chair(sx, y - 2, 0x2b3a33));
+  for (const sx of slots) {
+    const m = T.tradingScreens(sx + 17, y - 40, on);
+    c.addChild(m.container);
+    build.monitors.push(m);
+    build.monitorAt.set(sx, m);
+    build.front.addChild(P.desk(sx, y - 1, 60, 0x3a3f4a));
+    build.front.addChild(P.keyboard(sx, y - 37));
+  }
+  const clock = P.wallClock(560, top + 28, 10);
+  c.addChild(clock.container);
+  build.clocks.push(clock);
+  build.spots = { window: 780 };
+  build.trading = { tape, board, wall, bell, floorY: y, top };
 }
 
 // A whiteboard on a stand at the end of the Growth floor, with the company's numbers in marker.

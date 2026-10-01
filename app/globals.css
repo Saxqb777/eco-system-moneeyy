@@ -313,3 +313,23 @@ textarea.field { resize: vertical; }
 .post-card pre, pre.report { white-space: pre-wrap; font: inherit; font-size: 13px; margin: 6px 0 0; }
 @media (max-width: 480px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
+
+/* Wall Street (D075): the race, the trades and the meetings */
+.race-row, .trade-row { border-left: 4px solid var(--paper-shade); padding: 5px 8px; margin-bottom: 6px; background: rgba(255, 250, 240, 0.5); }
+.race-row.benched, .race-row.frozen { opacity: 0.75; border-left-style: dashed; }
+.race-pct { font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 16px; color: var(--muted); white-space: nowrap; }
+.race-pct.up { color: #1a8a4a; }
+.race-pct.down { color: #b8322a; }
+.trade-chart { width: 100%; height: auto; margin-top: 8px; background: #07100c; border: 2px solid var(--brass-dark); }
+.trade-chart .start-line { stroke: #6e6455; stroke-width: 1; stroke-dasharray: 2 3; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; margin-top: 4px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 3px; vertical-align: middle; margin-right: 3px; }
+.thesis { font-size: 12px; margin-top: 3px; font-style: italic; }
+.meeting { font-size: 12px; margin-top: 4px; line-height: 1.45; }
+.meeting b { font-family: "Barlow Condensed", sans-serif; letter-spacing: 0.06em; text-transform: uppercase; margin-right: 4px; }
+.meeting b.bull { color: #1a8a4a; }
+.meeting b.bear { color: #b8322a; }
+.trade-row.taken { border-left-color: var(--ok); }
+.trade-row.vetoed { border-left-color: var(--bad); }
+.trade-row.passed, .trade-row.skipped { border-left-color: var(--paper-shade); }
+.row-keys { display: flex; align-items: center; gap: 8px; margin-top: 8px; }

@@ -3,6 +3,7 @@
 import { Container, Graphics } from "pixi.js";
 import { C, shade } from "./palette";
 import { label } from "./draw";
+import { BUILDING } from "./layout";
 
 export interface Look {
   hair: number;
@@ -248,16 +249,27 @@ export class CharacterSprite extends Container {
     }
     const alert = style === "alert";
     const t = label(text, { fontSize: style === "chat" ? 12 : 14, fill: alert ? C.red : C.ink, family: "panel", weight: "600" });
-    const w = Math.min(190, t.width + 20);
-    const h = 28;
+    // a long line wraps onto a second one instead of running past the paper (Wall Street's debates, D075)
+    const maxW = 250;
+    if (t.width + 20 > maxW) {
+      t.style.wordWrap = true;
+      t.style.wordWrapWidth = maxW - 20;
+      t.style.breakWords = true;
+    }
+    const w = Math.min(maxW, t.width + 20);
+    const h = Math.max(28, Math.ceil(t.height) + 10);
+    // keep the paper inside the building: a worker by the lift gets the bubble shifted in, the pointer stays put
+    const left = this.position.x - w / 2;
+    const right = this.position.x + w / 2;
+    const dx = left < BUILDING.interiorX + 4 ? BUILDING.interiorX + 4 - left : right > BUILDING.interiorRight - 4 ? BUILDING.interiorRight - 4 - right : 0;
     const g = new Graphics();
-    g.roundRect(-w / 2 + 2, -h + 2, w, h, 2).fill(C.paperShade);
-    g.roundRect(-w / 2, -h, w, h, 2).fill(C.paper);
-    g.rect(-w / 2, -h, w, 3).fill(alert ? C.red : shade(C.paper, -0.08));
-    if (alert) g.roundRect(-w / 2, -h, w, h, 2).stroke({ width: 1.5, color: C.red });
-    g.circle(-w / 2 + 8, -h + 8, 2).fill(alert ? C.red : C.brassDark);
+    g.roundRect(-w / 2 + 2 + dx, -h + 2, w, h, 2).fill(C.paperShade);
+    g.roundRect(-w / 2 + dx, -h, w, h, 2).fill(C.paper);
+    g.rect(-w / 2 + dx, -h, w, 3).fill(alert ? C.red : shade(C.paper, -0.08));
+    if (alert) g.roundRect(-w / 2 + dx, -h, w, h, 2).stroke({ width: 1.5, color: C.red });
+    g.circle(-w / 2 + 8 + dx, -h + 8, 2).fill(alert ? C.red : C.brassDark);
     g.poly([-5, 0, 5, 0, 0, 6]).fill(C.paper);
-    t.position.set(-w / 2 + 10, -h + 5);
+    t.position.set(-w / 2 + 10 + dx, -h + 5);
     this.bubble.addChild(g, t);
     this.bubbleLift = lift;
     this.bubble.position.set(0, -this.bodyHeight - 12 - lift);

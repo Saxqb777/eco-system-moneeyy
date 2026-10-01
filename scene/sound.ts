@@ -115,6 +115,24 @@ export class SoundPack {
     this.tone(523, 620, 0.09, "triangle", 0.28);
   }
 
+  // Wall Street (D075): a soft scanner blip, a two tone alarm for a stop loss, a till for a win.
+  blip() {
+    this.tone(1320, 70, 0.05, "square");
+    this.tone(1760, 70, 0.04, "square", 0.09);
+  }
+
+  alarm() {
+    for (let i = 0; i < 3; i++) {
+      this.tone(880, 160, 0.06, "sawtooth", i * 0.34);
+      this.tone(660, 160, 0.06, "sawtooth", i * 0.34 + 0.17);
+    }
+  }
+
+  till() {
+    this.tone(1046, 90, 0.07, "triangle");
+    this.tone(1568, 260, 0.08, "triangle", 0.1);
+  }
+
   fanfare() {
     this.tone(523, 180, 0.08, "triangle");
     this.tone(659, 180, 0.08, "triangle", 0.16);

@@ -7,6 +7,8 @@ import { raiseApproval } from "@/lib/approvals";
 import { getSpendSummary } from "@/lib/budget";
 import { asNumber, getSettings, setSetting } from "@/lib/settings";
 import { dubaiDayStartUtc, dubaiParts } from "@/lib/time";
+import { FOLLOW_UP_LADDER } from "@/config/docledger";
+import { maybeSendCallSheet } from "@/lib/callsheet";
 import { clearSnooze, maybeRaiseAutoSend, snoozedUntil } from "./docledger-autonomy";
 import { openTasksOfKind } from "./playbooks";
 
@@ -79,14 +81,8 @@ async function advanceDocLedger(db: Db, now: Date, created: Record<string, numbe
       await queueTask(db, floor.id, analyst.id, "qualify_lead", `Qualify ${lead.company}`, { leadId: lead.id }, 5, now);
       created.qualify_lead = (created.qualify_lead ?? 0) + 1;
     }
-    // A good fit with no email found gets one second look, with the website and contact page this time.
-    const noContact = await db.select().from(leads).where(and(eq(leads.simulated, false), eq(leads.status, "no_contact"), sql`coalesce(${leads.decisionMaker} ->> 'retried', '') <> 'true'`)).orderBy(desc(leads.score)).limit(3);
-    for (const lead of noContact) {
-      // The first look may still sit in review; only a look that is still running blocks the second one.
-      if (await hasOpenTaskFor(db, "qualify_lead", "leadId", lead.id, ["queued", "running"])) continue;
-      await queueTask(db, floor.id, analyst.id, "qualify_lead", `Find an email at ${lead.company}`, { leadId: lead.id, retry: true }, 5, now);
-      created.qualify_lead = (created.qualify_lead ?? 0) + 1;
-    }
+    // D079: no second look. The Tower read the site itself before the first look; a good fit with no address
+    // and a phone number goes on the owner's call sheet instead.
   }
 
   if (writer) {
@@ -139,14 +135,19 @@ async function advanceDocLedger(db: Db, now: Date, created: Record<string, numbe
       await queueTask(db, floor.id, chaser.id, "follow_up", `Nudge ${lead.company} after their demo visit`, { outreachId: last.id, mode: "nudge" }, 2, now);
       created.follow_up = (created.follow_up ?? 0) + 1;
     }
+    // D079: the ladder. Day 3, then 4, 7 and 7 more, one angle each, the fifth email the last.
+    const maxStep = Math.max(...FOLLOW_UP_LADDER.map((r) => r.step));
+    const minWait = Math.min(...FOLLOW_UP_LADDER.map((r) => r.afterDays));
     const stale = await db
       .select()
       .from(outreach)
-      .where(and(eq(outreach.simulated, false), eq(outreach.status, "sent"), lt(outreach.step, 3), lt(outreach.sentAt, new Date(now.getTime() - 3 * DAY_MS)), isNull(outreach.replyText)))
+      .where(and(eq(outreach.simulated, false), eq(outreach.status, "sent"), lt(outreach.step, maxStep), lt(outreach.sentAt, new Date(now.getTime() - minWait * DAY_MS)), isNull(outreach.replyText)))
       .orderBy(asc(outreach.sentAt))
-      .limit(3);
+      .limit(6);
     for (const o of stale) {
       if (!o.leadId) continue;
+      const rung = FOLLOW_UP_LADDER.find((r) => r.step === o.step + 1);
+      if (!rung || !o.sentAt || now.getTime() - o.sentAt.getTime() < rung.afterDays * DAY_MS) continue;
       const [later] = await db.select({ id: outreach.id }).from(outreach).where(and(eq(outreach.leadId, o.leadId), sql`${outreach.step} > ${o.step}`)).limit(1);
       if (later) continue;
       const [lead] = await db.select().from(leads).where(eq(leads.id, o.leadId)).limit(1);
@@ -155,10 +156,20 @@ async function advanceDocLedger(db: Db, now: Date, created: Record<string, numbe
       const until = snoozedUntil(lead);
       if (until && until.getTime() > now.getTime()) continue;
       if (await hasOpenTaskFor(db, "follow_up", "outreachId", o.id)) continue;
-      await queueTask(db, floor.id, chaser.id, "follow_up", "Send follow up", { outreachId: o.id, mode: "follow_up" }, 4, now);
+      await queueTask(db, floor.id, chaser.id, "follow_up", rung.last ? `Last email to ${lead.company}` : `Send follow up ${rung.step}`, { outreachId: o.id, mode: "follow_up" }, 4, now);
+      created.follow_up = (created.follow_up ?? 0) + 1;
+    }
+    // D079: the owner called and they were interested: the Chaser writes the email after the call, for him to approve.
+    const hotCalls = await db.select().from(leads).where(and(eq(leads.simulated, false), sql`(${leads.decisionMaker} ->> 'hotFromCall') is not null`)).limit(3);
+    for (const lead of hotCalls) {
+      if (await hasOpenTaskFor(db, "follow_up", "leadId", lead.id, ["queued", "running", "review"])) continue;
+      const [last] = await db.select({ id: outreach.id }).from(outreach).where(and(eq(outreach.leadId, lead.id), eq(outreach.simulated, false))).orderBy(desc(outreach.step)).limit(1);
+      await queueTask(db, floor.id, chaser.id, "follow_up", `Email ${lead.company} after the call`, { leadId: lead.id, outreachId: last?.id ?? "", mode: "after_call" }, 1, now);
       created.follow_up = (created.follow_up ?? 0) + 1;
     }
   }
+  // D079: the owner's call sheet, once a day at 10:00 Dubai.
+  if (await maybeSendCallSheet(db, now)) created.call_sheet = 1;
 }
 
 // Approved items whose side effect could not run yet (for example Resend not on the clipboard) get another go.

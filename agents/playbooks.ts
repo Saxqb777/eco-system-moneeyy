@@ -6,7 +6,10 @@ import { leads, outreach, tasks } from "@/db/schema";
 import { raiseApproval } from "@/lib/approvals";
 import { shortCode } from "@/lib/affiliate";
 import { clipboardValue } from "@/lib/clipboard";
-import { DOCLEDGER, docledgerKnowledge } from "@/config/docledger";
+import { DIRECTORIES, DOCLEDGER, FOLLOW_UP_LADDER, FRONT_DESK_RULES, HOME_REGION, docledgerKnowledge } from "@/config/docledger";
+import { contactLine, emailKind, findContacts } from "@/lib/contact-finder";
+import { getSetting, setSetting } from "@/lib/settings";
+import { dubaiParts } from "@/lib/time";
 import { normaliseCountry, regionFor, skippedCountries } from "@/lib/markets";
 import { DEALS_PLAYBOOKS } from "./deals-playbooks";
 import { GROWTH_PLAYBOOKS } from "./growth-playbooks";
@@ -52,11 +55,12 @@ const findLeads: Playbook = {
   kind: "find_leads",
   effort: RESEARCH_EFFORT,
   webSearchMaxUses: 5,
+  webFetchMaxUses: 3,
   maxTokens: 2500,
   system: `You are Scout on the DocLedger Sales floor of The Tower.
 ${docledgerKnowledge()}
 Your job: find real companies, anywhere in the world, whose finance team keys shipping bills, fuel receipts and petty cash by hand: freight forwarders and customs brokers first, then food and beverage distributors, trading companies with their own fleets, and small third party logistics firms (3PL). Doc Ledger is software, so any country where business is done in English works. Search the region you are given.
-Use web search, at most a few queries, and read what the results say. Return up to 12 companies you actually saw named on a page, each with the page you saw it on, its country as a two letter code (GB, US, AU, SG, AE and so on), and one line on why their paperwork fits. Skip anything in the exclusion list and any country in the skip list. Prefer small and medium firms, not the global giants.
+Use web search, at most a few queries, and read what the results say. When a member directory page is given, open it first with the fetch tool and take the companies from it (that is where the small firms with no press live); if it cannot be opened, say so in the note and search instead. Return up to 12 companies you actually saw named on a page, each with the page you saw it on, its country as a two letter code (GB, US, AU, SG, AE and so on), and one line on why their paperwork fits. Skip anything in the exclusion list and any country in the skip list. Prefer small and medium firms, not the global giants.
 ${STYLE}`,
   schema: {
     type: "object",
@@ -87,10 +91,16 @@ ${STYLE}`,
   async prepare(task, ctx) {
     const recent = await ctx.db.select({ company: leads.company }).from(leads).where(eq(leads.simulated, false)).orderBy(desc(leads.createdAt)).limit(200);
     const exclude = recent.map((r) => r.company).join("; ") || "none yet";
-    const focus = str(input(task).instructions) || `Freight forwarders and customs brokers in ${regionFor(ctx.now)}.`;
+    // D079: the home market five days in seven, the world rotation on the other two; a directory page to work through.
+    const home = isHomeDay(ctx.now);
+    const focus = str(input(task).instructions) || `Freight forwarders and customs brokers in ${home ? HOME_REGION : regionFor(ctx.now)}.`;
+    const directory = home ? await directoryOfTheDay(ctx.db) : null;
     const skip = await skippedCountries(ctx.db);
     const skipLine = Object.entries(skip).map(([c, why]) => `${c} (${why})`).join("; ") || "none";
-    return { user: `Focus from Warden: ${focus}\n${await experimentLines(ctx.db, ctx.now, "scout")}Today: ${ctx.now.toISOString().slice(0, 10)}\nSkip these countries: ${skipLine}\nExclusion list (already known): ${exclude}\n\nSearch the web before you answer. An answer without a search is not accepted. Find the leads and return the JSON object.` };
+    return {
+      user: `Focus from Warden: ${focus}\n${directory ? `Directory to work through first: ${directory.name}, ${directory.url}${directory.page > 1 ? ` (page ${directory.page}, the earlier pages are done)` : ""}. Open it with the fetch tool and list the member companies on it, each with its own website.\n` : ""}${await experimentLines(ctx.db, ctx.now, "scout")}Today: ${ctx.now.toISOString().slice(0, 10)}\nSkip these countries: ${skipLine}\nExclusion list (already known): ${exclude}\n\nSearch the web before you answer. An answer without a search or a directory read is not accepted. Find the leads and return the JSON object.`,
+      webFetchMaxUses: directory ? 3 : 0,
+    };
   },
   async absorb(task, output, ctx) {
     const rows = Array.isArray(output.leads) ? output.leads : [];
@@ -117,9 +127,33 @@ ${STYLE}`,
       if (ins) inserted += 1;
       else dupes += 1;
     }
+    // the directory cursor moves on: same page again only when it still gave five or more new names
+    if (isHomeDay(ctx.now)) await advanceDirectory(ctx.db, inserted >= 5);
     return { summary: `Found ${inserted} new lead${inserted === 1 ? "" : "s"}${dupes ? `, ${dupes} already known` : ""}${skipped ? `, ${skipped} in a country we skip` : ""}`, extra: { found: inserted, duplicates: dupes, skippedCountry: skipped, note: str(output.note, 300) } };
   },
 };
+
+// D079: Sunday and Wednesday follow the world rotation; every other day is the home market.
+export function isHomeDay(now: Date): boolean {
+  const w = dubaiParts(now).weekday;
+  return w !== 0 && w !== 3;
+}
+
+export async function directoryOfTheDay(db: Db): Promise<{ name: string; url: string; page: number } | null> {
+  if (!DIRECTORIES.length) return null;
+  const cur = await getSetting<{ i?: number; page?: number } | null>(db, "docledger_directory_cursor", null);
+  const i = Math.min(DIRECTORIES.length - 1, Math.max(0, Number(cur?.i ?? 0)));
+  const d = DIRECTORIES[i]!;
+  return { name: d.name, url: d.url, page: Math.max(1, Number(cur?.page ?? 1)) };
+}
+
+export async function advanceDirectory(db: Db, samePageAgain: boolean): Promise<void> {
+  const cur = await getSetting<{ i?: number; page?: number } | null>(db, "docledger_directory_cursor", null);
+  const i = Math.max(0, Number(cur?.i ?? 0));
+  const page = Math.max(1, Number(cur?.page ?? 1));
+  if (samePageAgain && page < 20) await setSetting(db, "docledger_directory_cursor", { i, page: page + 1 });
+  else await setSetting(db, "docledger_directory_cursor", { i: (i + 1) % Math.max(1, DIRECTORIES.length), page: 1 });
+}
 
 // Analyst: score the fit, find the decision maker.
 const qualifyLead: Playbook = {
@@ -131,7 +165,7 @@ const qualifyLead: Playbook = {
   system: `You are Analyst on the DocLedger Sales floor of The Tower.
 ${docledgerKnowledge()}
 For one company: judge how well Doc Ledger fits (1 to 10), find the person who would buy it (finance manager, accounts manager, operations manager, managing director or owner), and do a little research so Writer can open with something true about them: what they move or sell, their fleet or routes, how many branches, anything recent. Two or three facts, each one sentence, each one seen on a page. Then pick the angle: which pain is theirs most (shipping bills, fuel receipts, petty cash, foreign currency, duplicates, their own document types). Last, think like their salesperson and write the approach: which true fact to open with, which of their documents to show in the demo company made for them, and why it matters to them now. The owner reads it before he approves the email.
-Find the email: open the company website with the fetch tool (search for it first if you do not have it), then its contact, about or team page. A named person's work email is best; a general company address on the site such as info@, accounts@, finance@, sales@ or operations@ is fine when no named one is public. Copy it exactly as written on the page. If there is none, leave it empty and say so, never guess one. Return the website you used.
+The email: the Tower has already read their website and lists every address it found. Pick from that list only: a named person's box first, else a shared one such as info@ or accounts@. When the list is empty you may open the contact page yourself once with the fetch tool and copy an address exactly as written; if there is still none, leave it empty and say so, never guess one. Return the website you used.
 A score of 6 or more means qualified. Finance teams handling freight invoices and fleets score high. Couriers, airlines and shipping lines score low.
 ${STYLE}`,
   schema: {
@@ -162,7 +196,17 @@ ${STYLE}`,
     const retry = input(task).retry === true;
     if (lead.status !== "new" && !(retry && lead.status === "no_contact")) return { skip: `Lead ${lead.company} is already ${lead.status}` };
     const f = await facts(ctx.db);
-    return { user: `Product facts:\n${f}\n\n${await experimentLines(ctx.db, ctx.now, "analyst")}${retry ? "Second try: the first look found no email. Open the website and its contact page this time.\n" : ""}Company: ${lead.company}\nCountry: ${lead.country}\nWebsite: ${lead.website ?? "unknown, search for it"}\nSegment: ${lead.segment ?? "unknown"}\nCity: ${lead.city ?? "unknown"}\nSeen at: ${lead.sourceUrl ?? "unknown"}\nScout's note: ${lead.scoreReason ?? ""}\n\nOpen the website and its contact or about page${lead.website ? "" : " (search for it first)"}, and search for the finance or operations lead. Qualify this company and return the JSON object.` };
+    // D079: the code reads the site first; the model picks, it does not hunt.
+    const found = await findContacts(lead.website);
+    const dmNow = (lead.decisionMaker ?? {}) as Record<string, unknown>;
+    await ctx.db
+      .update(leads)
+      .set({ decisionMaker: { ...dmNow, siteEmails: found.emails.map((e) => e.email), sitePhones: found.phones, siteNote: found.note }, ...(lead.phone || !found.phones[0] ? {} : { phone: found.phones[0] }), ...(lead.website || !found.website ? {} : { website: found.website }), updatedAt: ctx.now })
+      .where(eq(leads.id, lead.id));
+    return {
+      user: `Product facts:\n${f}\n\n${await experimentLines(ctx.db, ctx.now, "analyst")}${retry ? "Second try: the first look found no email.\n" : ""}Company: ${lead.company}\nCountry: ${lead.country}\nWebsite: ${lead.website ?? found.website ?? "unknown, search for it"}\nSegment: ${lead.segment ?? "unknown"}\nCity: ${lead.city ?? "unknown"}\nSeen at: ${lead.sourceUrl ?? "unknown"}\nScout's note: ${lead.scoreReason ?? ""}\n${contactLine(found)}\n\nRead the about or team page for the facts and the person${found.emails.length ? "; the addresses are above, do not search for more" : ", and open the contact page once for an address"}. Qualify this company and return the JSON object.`,
+      webFetchMaxUses: found.emails.length ? 2 : 4,
+    };
   },
   async absorb(task, output, ctx) {
     const leadId = str(input(task).leadId);
@@ -170,7 +214,13 @@ ${STYLE}`,
     const email = str(dmRaw.email, 120).toLowerCase();
     const research = Array.isArray(output.research) ? output.research.filter((r): r is string => typeof r === "string" && r.trim().length > 0).map((r) => r.trim().slice(0, 240)).slice(0, 4) : [];
     const retried = input(task).retry === true;
-    const dm = { name: str(dmRaw.name, 80), title: str(dmRaw.title, 80), email: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? email : "", linkedin: str(dmRaw.linkedin, 200), confidence: Math.min(1, Math.max(0, num(dmRaw.confidence, 0))), research, angle: str(output.angle, 80), approach: plainDashes(str(output.approach, 400)), ...(retried ? { retried: true } : {}) };
+    // D079: the Tower's own reading of the site wins over an address the model found elsewhere.
+    const [current] = await ctx.db.select({ dm: leads.decisionMaker }).from(leads).where(eq(leads.id, leadId)).limit(1);
+    const known = (current?.dm ?? {}) as Record<string, unknown>;
+    const siteEmails = Array.isArray(known.siteEmails) ? (known.siteEmails as string[]) : [];
+    let picked = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? email : "";
+    if (siteEmails.length && !siteEmails.includes(picked)) picked = siteEmails.find((e) => emailKind(e) === "personal") ?? siteEmails[0]!;
+    const dm = { name: str(dmRaw.name, 80), title: str(dmRaw.title, 80), email: picked, linkedin: str(dmRaw.linkedin, 200), confidence: Math.min(1, Math.max(0, num(dmRaw.confidence, 0))), research, angle: str(output.angle, 80), approach: plainDashes(str(output.approach, 400)), siteEmails, sitePhones: Array.isArray(known.sitePhones) ? known.sitePhones : [], siteNote: typeof known.siteNote === "string" ? known.siteNote : null, ...(retried ? { retried: true } : {}) };
     const score = Math.min(10, Math.max(1, Math.round(num(output.score, 1))));
     const qualified = output.qualified === true && score >= 6;
     const status = !qualified ? "disqualified" : dm.email ? "qualified" : "no_contact";
@@ -239,8 +289,10 @@ ${STYLE}`,
     const research = Array.isArray(dm.research) ? (dm.research as string[]) : [];
     const feedback = str(input(task).feedback);
     const f = await facts(ctx.db);
+    // D079: a shared inbox gets the front desk email, a named person the personal one.
+    const frontDesk = !(typeof dm.name === "string" && dm.name.trim()) || emailKind(email) === "generic";
     return {
-      user: `${f}\n\n${await experimentLines(ctx.db, ctx.now, "writer")}Company: ${lead.company} (${lead.segment ?? "company"}, ${[lead.city, lead.country].filter(Boolean).join(", ")})\nWrite for a reader in ${lead.country}: their spelling, their currency in any example, no Gulf place names unless they are in the Gulf.\nWebsite: ${lead.website ?? "unknown"}\nWhy they fit: ${lead.scoreReason ?? ""}\nAngle: ${typeof dm.angle === "string" && dm.angle ? dm.angle : "shipping bills and petty cash"}\n${typeof dm.approach === "string" && dm.approach ? `Analyst's approach: ${dm.approach}\n` : ""}Research:\n${research.length ? research.map((r) => `- ${r}`).join("\n") : "- nothing yet, one web search allowed"}\nDecision maker: ${typeof dm.name === "string" && dm.name ? dm.name : "unknown"}, ${typeof dm.title === "string" && dm.title ? dm.title : "unknown title"}\n${feedback ? `Warden's feedback on the last draft: ${feedback}\n` : ""}\nWrite the email and return the JSON object.`,
+      user: `${f}\n\n${await experimentLines(ctx.db, ctx.now, "writer")}${frontDesk ? `Lane: front desk (shared inbox ${email}).\n${FRONT_DESK_RULES.map((r) => `- ${r}`).join("\n")}\n` : `Lane: named person (${typeof dm.name === "string" ? dm.name : ""}, ${email}).\n`}Company: ${lead.company} (${lead.segment ?? "company"}, ${[lead.city, lead.country].filter(Boolean).join(", ")})\nWrite for a reader in ${lead.country}: their spelling, their currency in any example, no Gulf place names unless they are in the Gulf.\nWebsite: ${lead.website ?? "unknown"}\nWhy they fit: ${lead.scoreReason ?? ""}\nAngle: ${typeof dm.angle === "string" && dm.angle ? dm.angle : "shipping bills and petty cash"}\n${typeof dm.approach === "string" && dm.approach ? `Analyst's approach: ${dm.approach}\n` : ""}Research:\n${research.length ? research.map((r) => `- ${r}`).join("\n") : "- nothing yet, one web search allowed"}\nDecision maker: ${typeof dm.name === "string" && dm.name ? dm.name : "unknown"}, ${typeof dm.title === "string" && dm.title ? dm.title : "unknown title"}\n${feedback ? `Warden's feedback on the last draft: ${feedback}\n` : ""}\nWrite the email and return the JSON object.`,
       webSearchMaxUses: research.length >= 2 ? 0 : 2,
     };
   },
@@ -265,10 +317,11 @@ ${STYLE}`,
     const words = body.split(/\s+/).filter(Boolean).length;
     const [row] = await ctx.db.insert(outreach).values({ leadId: lead.id, step: 1, channel: "email", subject, bodyText: body, status: "draft", simulated: false, createdAt: ctx.now, updatedAt: ctx.now }).returning({ id: outreach.id });
     const auto = await autoSendAllowed(ctx.db, ctx.floorId, ctx.now);
+    const frontDesk = !dm.name || emailKind(dm.email ?? "") === "generic";
     const { id: approvalId } = await raiseApproval(ctx.db, {
       type: "outreach_email",
-      summary: `Send first outreach email to ${dm.name || "the decision maker"} at ${lead.company}`,
-      content: { to: dm.email, toName: dm.name, company: lead.company, subject, body, outreachId: row?.id ?? null, previewUrl },
+      summary: `Send first outreach email to ${frontDesk ? `the front desk (${dm.email})` : dm.name} at ${lead.company}`,
+      content: { to: dm.email, toName: dm.name, company: lead.company, subject, body, outreachId: row?.id ?? null, previewUrl, lane: frontDesk ? "front_desk" : "named" },
       previewUrl,
       riskNote: `Cold email to a business address. One plain opt out line included. The link opens a demo company named after them.${typeof dm.approach === "string" && dm.approach ? ` Approach: ${dm.approach}` : ""}`,
       taskId: task.id,
@@ -329,10 +382,18 @@ ${STYLE}`,
   },
   async prepare(task, ctx) {
     const outreachId = str(input(task).outreachId);
-    const [o] = outreachId ? await ctx.db.select().from(outreach).where(eq(outreach.id, outreachId)).limit(1) : [];
+    const afterCall = input(task).mode === "after_call";
+    let [o] = outreachId ? await ctx.db.select().from(outreach).where(eq(outreach.id, outreachId)).limit(1) : [];
+    // D079: the email after the owner's call may be the first email the company ever gets
+    if (!o && afterCall && str(input(task).leadId)) {
+      [o] = await ctx.db.select().from(outreach).where(and(eq(outreach.leadId, str(input(task).leadId)), eq(outreach.simulated, false))).orderBy(desc(outreach.step)).limit(1);
+      if (!o) o = { id: "", leadId: str(input(task).leadId), step: 0, status: "none", subject: null, bodyText: null, replyText: null, replyAt: null, sentAt: null } as typeof outreach.$inferSelect;
+    }
     if (!o || !o.leadId) return { skip: "No thread attached to this task" };
     // D077: the webhook named their reply but the text is not in yet. The pipeline queues a fresh task once it is.
     if (o.status === "reply_pending" || (o.replyText ?? "").startsWith("(no text in the webhook")) return { skip: "Waiting for the reply text from Resend" };
+    const rung = FOLLOW_UP_LADDER.find((r) => r.step === o!.step + 1);
+    if (input(task).mode === "follow_up" && !rung) return { skip: "The follow up ladder is finished for this thread" };
     const [lead] = await ctx.db.select().from(leads).where(eq(leads.id, o.leadId)).limit(1);
     if (!lead) return { skip: "Lead vanished" };
     if (lead.status === "lost" || lead.status === "client") return { skip: `${lead.company} is ${lead.status}` };
@@ -349,18 +410,29 @@ ${STYLE}`,
     const checkIn = input(task).mode === "check_in";
     const nudge = input(task).mode === "nudge";
     const visitedOn = lead.demoVisitedAt ? lead.demoVisitedAt.toISOString().slice(0, 10) : "recently";
-    const mode = nudge
-      ? `They opened the demo company we made for them on ${visitedOn} and have not replied. Write nudge step ${o.step + 1}, under 60 words: assume they had a look, name one thing worth trying in it (their own document type, one of their bills), and keep the same small ask (reply and the first month is free). No pressure, no new claims, never ask whether they saw it.`
-      : checkIn
-        ? `They asked for time or were away. It is time to check back in: write a short, friendly follow up step ${o.step + 1} that picks up from their last message.`
-        : o.replyText
-          ? "They replied. Handle the reply."
-          : `No reply after step ${o.step}. Write follow up step ${o.step + 1}.`;
+    const calls = Array.isArray((lead.decisionMaker as Record<string, unknown> | null)?.calls) ? ((lead.decisionMaker as Record<string, unknown>).calls as Array<{ note?: string }>) : [];
+    const callNote = calls.at(-1)?.note ?? "";
+    const mode = afterCall
+      ? `The owner spoke to them on the phone today and they were interested${callNote ? ` (his note: ${callNote})` : ""}. Write the email after the call, under 90 words: thank them for the time, one line that picks up what was discussed, the demo company made for them (the preview line stays), and offer a 15 minute walkthrough with the calendar link. Intent interested, action propose_times.`
+      : nudge
+        ? `They opened the demo company we made for them on ${visitedOn} and have not replied. Write nudge step ${o.step + 1}, under 60 words: assume they had a look, name one thing worth trying in it (their own document type, one of their bills), and keep the same small ask (reply and the first month is free). No pressure, no new claims, never ask whether they saw it.`
+        : checkIn
+          ? `They asked for time or were away. It is time to check back in: write a short, friendly follow up step ${o.step + 1} that picks up from their last message.`
+          : o.replyText
+            ? "They replied. Handle the reply."
+            : rung?.last
+              ? `No reply after step ${o.step}. Write the last email, step ${o.step + 1}, under 50 words: ${rung.angle} No question, no ask, warm, final.`
+              : `No reply after step ${o.step}. Write follow up step ${o.step + 1}, under 70 words, with this one angle and nothing else new: ${rung?.angle ?? DOCLEDGER.followUpAngles[0]} Then the same small ask.`;
     return { user: `Product facts and signature:\n${f}\n\n${await experimentLines(ctx.db, ctx.now, "chaser")}${who}Calendar link: ${calendar || "not pasted yet, ask them for two times instead"}\nCompany: ${lead.company}, contact ${(lead.decisionMaker as Record<string, string> | null)?.name ?? "unknown"}\nToday: ${ctx.now.toISOString().slice(0, 10)}\n\nThread:\n${lines.join("\n\n")}\n\n${mode}\nReturn the JSON object.` };
   },
   async absorb(task, output, ctx) {
     const outreachId = str(input(task).outreachId);
-    const [o] = await ctx.db.select().from(outreach).where(eq(outreach.id, outreachId)).limit(1);
+    const afterCall = input(task).mode === "after_call";
+    let [o] = outreachId ? await ctx.db.select().from(outreach).where(eq(outreach.id, outreachId)).limit(1) : [];
+    if (!o && afterCall && str(input(task).leadId)) {
+      [o] = await ctx.db.select().from(outreach).where(and(eq(outreach.leadId, str(input(task).leadId)), eq(outreach.simulated, false))).orderBy(desc(outreach.step)).limit(1);
+      if (!o) o = { id: "", leadId: str(input(task).leadId), step: 0, status: "none", subject: "Doc Ledger, after our call", replyText: null } as typeof outreach.$inferSelect;
+    }
     if (!o || !o.leadId) return { summary: "Thread vanished" };
     const [lead] = await ctx.db.select().from(leads).where(eq(leads.id, o.leadId)).limit(1);
     if (!lead) return { summary: "Lead vanished" };
@@ -369,7 +441,9 @@ ${STYLE}`,
     const ownerLine = str(output.summary, 300);
     const dm = (lead.decisionMaker ?? {}) as Record<string, string>;
     // The reply is handled now: "answered" keeps the pipeline from picking the same reply up again.
-    if (o.status === "handling" || o.status === "replied") await ctx.db.update(outreach).set({ status: "answered", updatedAt: ctx.now }).where(eq(outreach.id, o.id));
+    if (o.id && (o.status === "handling" || o.status === "replied")) await ctx.db.update(outreach).set({ status: "answered", updatedAt: ctx.now }).where(eq(outreach.id, o.id));
+    // D079: the call is answered by this email; the lead leaves the call sheet's hot list
+    if (afterCall) await ctx.db.update(leads).set({ decisionMaker: { ...(lead.decisionMaker as Record<string, unknown>), hotFromCall: null, calledEmailAt: ctx.now.toISOString() }, updatedAt: ctx.now }).where(eq(leads.id, lead.id));
     if (intent === "out_of_office") {
       await snoozeLead(ctx.db, lead.id, 7, ctx.now);
       return { summary: `${lead.company} is away, checking back in a week`, extra: { action: "snooze", intent, company: lead.company } };
@@ -384,7 +458,7 @@ ${STYLE}`,
     const subject = plainDashes(str(output.subject, 120)) || `Re: ${o.subject ?? "DocLedger"}`;
     const body = plainDashes(str(output.body, 4000));
     const [row] = await ctx.db.insert(outreach).values({ leadId: lead.id, step, channel: "email", subject, bodyText: body, status: "draft", simulated: false, createdAt: ctx.now, updatedAt: ctx.now }).returning({ id: outreach.id });
-    const label = hot ? "Hot lead: answer" : action === "propose_times" ? "Propose demo times to" : action === "book_confirm" ? "Confirm the demo with" : `Send follow up ${step} to`;
+    const label = afterCall ? "After the call: email" : hot ? "Hot lead: answer" : action === "propose_times" ? "Propose demo times to" : action === "book_confirm" ? "Confirm the demo with" : `Send follow up ${step} to`;
     const auto = !hot && (await autoSendAllowed(ctx.db, ctx.floorId, ctx.now));
     const { id: approvalId } = await raiseApproval(ctx.db, {
       type: "outreach_email",

@@ -35,6 +35,8 @@ const HELP = [
   "/trial <company>: they started the free month, Success takes over",
   "/won <company> <USD a month>: a paying customer",
   "/lost <company>: close a company, nobody writes again",
+  "/calls: today's call sheet, five companies worth a phone call",
+  "/called <company>: interested, no answer, not now or no (a note after another colon)",
   "Anything else you write becomes an idea in Warden's mail slot.",
 ].join("\n");
 
@@ -182,6 +184,31 @@ export async function processTelegramUpdate(db: Db, u: TelegramUpdate, now = new
         const r = await ownerSend(db, m[1]!, m[2]!, now);
         await sendNow(cfg.token, chatId, r.message);
         return { handled: r.ok ? "owner sent" : "owner send failed" };
+      }
+      case "calls": {
+        // D079: today's call sheet on demand
+        const { callSheetCard } = await import("@/lib/callsheet");
+        const card = await callSheetCard(db, now);
+        await sendNow(cfg.token, chatId, card ?? "Nobody to call today: no home market company with a phone number is waiting.");
+        return { handled: "calls" };
+      }
+      case "called": {
+        // D079: /called <company>: interested | no answer | not now | no, with an optional note after a second colon
+        const m = arg.match(/^([^:]+):\s*(interested|no answer|no_answer|not now|not_now|no)\b\s*:?\s*([\s\S]*)$/i);
+        if (!m) {
+          await sendNow(cfg.token, chatId, "Format: /called <company>: interested, no answer, not now or no. Add a note after another colon.");
+          return { handled: "called without outcome" };
+        }
+        const { findOnSheet, recordCall } = await import("@/lib/callsheet");
+        const row = await findOnSheet(db, m[1]!, now);
+        if (!row) {
+          await sendNow(cfg.token, chatId, `No company on today's sheet matches "${m[1]!.trim()}". /calls shows the sheet.`);
+          return { handled: "called unknown" };
+        }
+        const outcome = m[2]!.toLowerCase().replace(" ", "_") as "interested" | "no_answer" | "not_now" | "no";
+        const r = await recordCall(db, row.leadId, outcome, m[3]?.trim() || null, now);
+        await sendNow(cfg.token, chatId, r.message);
+        return { handled: r.ok ? "called" : "called failed", wantsTick: r.ok && outcome === "interested" ? "manual" : undefined };
       }
       case "trial":
       case "lost": {

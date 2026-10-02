@@ -20,6 +20,7 @@ const shots = [
   { name: "panel-mailbox", width: 1600, height: 900, panel: "warden:mailbox" },
   { name: "panel-mailbox-thread", width: 1600, height: 900, panel: "warden:mailbox", click: ".thread-row.hot" },
   { name: "panel-mailbox-phone", width: 430, height: 900, panel: "warden:mailbox", click: ".thread-row.hot" },
+  { name: "panel-callsheet", width: 1600, height: 900, panel: "warden:mailbox", click: ".mail-filters .key:nth-child(4)" },
   { name: "panel-trading", width: 1600, height: 900, panel: "floor:trading" },
   { name: "panel-trading-phone", width: 430, height: 900, panel: "floor:trading", clip: true },
   { name: "panel-terminal-stocks", width: 1600, height: 900, panel: "floor:trading", click: ".panel-tabs .tab:nth-child(2)" },

@@ -239,10 +239,16 @@ Indexes on (occurred_at) and (floor_id, occurred_at). The roof counters, the pet
 | decision_maker | jsonb | name, title, email, linkedin, confidence, research, angle, snoozeUntil (set on not now: 30 days, out of office: 7 days) |
 | score | int | 1 to 10 from Analyst |
 | score_reason | text | |
-| status | text | new, qualified, disqualified, drafted, contacted, replied, demo_booked, client, lost |
+| status | text | new, qualified, disqualified, no_contact, drafted, contacted, replied, bounced (D077: their address bounced), trial, demo_booked, client, lost |
 | next_action_at | timestamptz | for Chaser |
 | dedupe_key | text, unique | normalised company plus domain |
 | found_by_task_id | uuid | |
+| preview | jsonb | the Writer's preview for /for/<code> and the demo (D044, D070) |
+| preview_code | text, unique | the code in the demo link |
+| demo_visits | int | D077: times a person opened the demo company made for them (the app's preview lookup by code) |
+| demo_scans | int | D077: hits that looked like link checkers (within 3 minutes of the send, bot browser string, or a burst) |
+| demo_reads | int | D077: documents of their own they had read inside the demo |
+| demo_visited_at | timestamptz | D077: last visit; the Chaser nudges 20 hours after it if no reply came |
 | simulated | boolean | |
 
 ### outreach
@@ -256,10 +262,13 @@ Indexes on (occurred_at) and (floor_id, occurred_at). The roof counters, the pet
 | body_text | text | |
 | body_html | text | |
 | approval_id | uuid | required before sending |
-| status | text | draft, approved, sent, delivered, replied, handling, answered (Chaser handled the reply), bounced, rejected |
-| resend_id | text | |
+| status | text | draft, approved, sent, reply_pending (D077: a reply arrived, its text is read on the next heartbeat), replied, handling, answered (Chaser handled the reply), bounced, complained, duplicate (D077: a second first email, dropped), stopped (D077: address on the stop list, dropped), rejected |
+| resend_id | text | Resend's id of the email we sent; delivery events match on it |
 | sent_at | timestamptz | |
-| reply_text | text | |
+| reply_text | text | quoted history cut off (D077) |
+| reply_email_id | text | D077: Resend's id of their reply, for reading the body by id |
+| delivered_at | timestamptz | D077: from the email.delivered event |
+| bounce_reason | text | D077: from the email.bounced or email.failed event |
 | reply_at | timestamptz | |
 | simulated | boolean | |
 

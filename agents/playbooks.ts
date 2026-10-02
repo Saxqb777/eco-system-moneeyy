@@ -331,6 +331,8 @@ ${STYLE}`,
     const outreachId = str(input(task).outreachId);
     const [o] = outreachId ? await ctx.db.select().from(outreach).where(eq(outreach.id, outreachId)).limit(1) : [];
     if (!o || !o.leadId) return { skip: "No thread attached to this task" };
+    // D077: the webhook named their reply but the text is not in yet. The pipeline queues a fresh task once it is.
+    if (o.status === "reply_pending" || (o.replyText ?? "").startsWith("(no text in the webhook")) return { skip: "Waiting for the reply text from Resend" };
     const [lead] = await ctx.db.select().from(leads).where(eq(leads.id, o.leadId)).limit(1);
     if (!lead) return { skip: "Lead vanished" };
     if (lead.status === "lost" || lead.status === "client") return { skip: `${lead.company} is ${lead.status}` };
@@ -345,7 +347,15 @@ ${STYLE}`,
         : "";
     const lines = thread.map((t) => `Step ${t.step} (${t.status}${t.sentAt ? `, sent ${t.sentAt.toISOString().slice(0, 10)}` : ""}):\nSubject: ${t.subject ?? ""}\n${t.bodyText ?? ""}${t.replyText ? `\n\nTheir reply (${t.replyAt?.toISOString().slice(0, 10) ?? ""}):\n${t.replyText}` : ""}`);
     const checkIn = input(task).mode === "check_in";
-    const mode = checkIn ? `They asked for time or were away. It is time to check back in: write a short, friendly follow up step ${o.step + 1} that picks up from their last message.` : o.replyText ? "They replied. Handle the reply." : `No reply after step ${o.step}. Write follow up step ${o.step + 1}.`;
+    const nudge = input(task).mode === "nudge";
+    const visitedOn = lead.demoVisitedAt ? lead.demoVisitedAt.toISOString().slice(0, 10) : "recently";
+    const mode = nudge
+      ? `They opened the demo company we made for them on ${visitedOn} and have not replied. Write nudge step ${o.step + 1}, under 60 words: assume they had a look, name one thing worth trying in it (their own document type, one of their bills), and keep the same small ask (reply and the first month is free). No pressure, no new claims, never ask whether they saw it.`
+      : checkIn
+        ? `They asked for time or were away. It is time to check back in: write a short, friendly follow up step ${o.step + 1} that picks up from their last message.`
+        : o.replyText
+          ? "They replied. Handle the reply."
+          : `No reply after step ${o.step}. Write follow up step ${o.step + 1}.`;
     return { user: `Product facts and signature:\n${f}\n\n${await experimentLines(ctx.db, ctx.now, "chaser")}${who}Calendar link: ${calendar || "not pasted yet, ask them for two times instead"}\nCompany: ${lead.company}, contact ${(lead.decisionMaker as Record<string, string> | null)?.name ?? "unknown"}\nToday: ${ctx.now.toISOString().slice(0, 10)}\n\nThread:\n${lines.join("\n\n")}\n\n${mode}\nReturn the JSON object.` };
   },
   async absorb(task, output, ctx) {

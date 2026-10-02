@@ -46,6 +46,9 @@ export interface FounderNumbers {
   leads: number;
   partners: number;
   emailsSent: number;
+  delivered: number;
+  bounced: number;
+  demoOpens: number;
   replies: number;
   demos: number;
   trials: number;
@@ -79,6 +82,9 @@ export async function founderNumbers(db: Db, now: Date, days = 7): Promise<Found
     leads: leadsWeek,
     partners: await n(db.select({ n: sql<string>`count(*)` }).from(leads).where(and(eq(leads.simulated, false), gte(leads.createdAt, from), sql`coalesce(${leads.segment}, '') like 'partner%'`))),
     emailsSent: await sentIn(from),
+    delivered: await n(db.select({ n: sql<string>`count(*)` }).from(outreach).where(and(eq(outreach.simulated, false), gte(outreach.deliveredAt, from)))),
+    bounced: await n(db.select({ n: sql<string>`count(*)` }).from(outreach).where(and(eq(outreach.simulated, false), eq(outreach.status, "bounced"), gte(outreach.updatedAt, from)))),
+    demoOpens: await n(db.select({ n: sql<string>`count(*)` }).from(leads).where(and(eq(leads.simulated, false), gte(leads.demoVisitedAt, from)))),
     replies: repliesWeek,
     demos: await n(db.select({ n: sql<string>`count(*)` }).from(leads).where(and(eq(leads.simulated, false), eq(leads.status, "demo_booked"), gte(leads.updatedAt, from)))),
     trials: await n(db.select({ n: sql<string>`count(*)` }).from(leads).where(and(eq(leads.simulated, false), eq(leads.status, "trial")))),
@@ -97,7 +103,7 @@ export function formatFounderReport(f: FounderNumbers): string {
   return [
     "Founder report from Finance, last 7 days",
     `Leads found: ${f.leads}, partners found: ${f.partners}`,
-    `Emails sent: ${f.emailsSent}, replies: ${f.replies}, demos: ${f.demos}`,
+    `Emails sent: ${f.emailsSent}, delivered: ${f.delivered}, bounced: ${f.bounced}, opened their demo: ${f.demoOpens}, replies: ${f.replies}, demos booked: ${f.demos}`,
     `Companies in their free month: ${f.trials}, paying customers: ${f.clients}, monthly revenue: ${money(f.mrrUsd)}`,
     `Money in: ${money(f.revenueUsd)}, AI spend: ${money(f.spendUsd)}`,
     `Cost per lead: ${f.costPerLeadUsd !== null ? money(f.costPerLeadUsd) : "no leads yet"}, cost per reply: ${f.costPerReplyUsd !== null ? money(f.costPerReplyUsd) : "no replies yet"}`,

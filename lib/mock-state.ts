@@ -326,7 +326,7 @@ export function mockCompany(now = new Date()): import("@/lib/company").CompanyVi
     doneWeek: 3 + i,
   }));
   return {
-    numbers: { from: ago(now, 7 * 1440), to: now.toISOString(), leads: 11, partners: 2, emailsSent: 4, replies: 1, demos: 0, trials: 0, clients: 0, mrrUsd: 0, revenueUsd: 0, spendUsd: 3.42, costPerLeadUsd: 0.31, costPerReplyUsd: 3.42, allTime: { leads: 11, emailsSent: 4, replies: 1, clients: 0, revenueUsd: 0, spendUsd: 3.42 } },
+    numbers: { from: ago(now, 7 * 1440), to: now.toISOString(), leads: 11, partners: 2, emailsSent: 4, delivered: 3, bounced: 0, demoOpens: 2, replies: 1, demos: 0, trials: 0, clients: 0, mrrUsd: 0, revenueUsd: 0, spendUsd: 3.42, costPerLeadUsd: 0.31, costPerReplyUsd: 3.42, allTime: { leads: 11, emailsSent: 4, replies: 1, clients: 0, revenueUsd: 0, spendUsd: 3.42 } },
     team,
     ideas: [
       { id: "ap3", title: "Partner with bookkeeping firms that serve Jebel Ali forwarders", owner: "partners", state: "waiting", why: "Three replies said their accountant keys the bills.", endsAt: null },

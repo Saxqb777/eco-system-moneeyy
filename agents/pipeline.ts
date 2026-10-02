@@ -1,12 +1,12 @@
 // Moves the live floors along every tick: the day's tasks, replies to chase, approved emails to send,
 // reviews that waited too long, and floor unlock rules.
-import { and, asc, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { agents, approvals, floors, leads, outreach, taskEvents, tasks } from "@/db/schema";
 import { raiseApproval } from "@/lib/approvals";
 import { getSpendSummary } from "@/lib/budget";
 import { asNumber, getSettings, setSetting } from "@/lib/settings";
-import { dubaiParts } from "@/lib/time";
+import { dubaiDayStartUtc, dubaiParts } from "@/lib/time";
 import { clearSnooze, maybeRaiseAutoSend, snoozedUntil } from "./docledger-autonomy";
 import { openTasksOfKind } from "./playbooks";
 
@@ -20,6 +20,12 @@ export interface AdvanceSummary {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+// D077: emails leave at most two per heartbeat and 25 a day (settings.docledger_daily_send_cap), so a day's sends
+// spread over the readers' working hours instead of leaving in one burst. The owner's own /send is never held.
+export const EMAILS_PER_TICK = 2;
+export const DAILY_SEND_CAP = 25;
+// A company that opened its demo and stayed quiet gets one nudge, after this long.
+const NUDGE_AFTER_MS = 20 * 3600_000;
 
 async function logEvent(db: Db, e: { taskId?: string | null; agentId?: string | null; floorId?: string | null; type: string; message: string; data?: unknown; at: Date }) {
   await db.insert(taskEvents).values({ taskId: e.taskId ?? null, agentId: e.agentId ?? null, floorId: e.floorId ?? null, type: e.type, message: e.message, data: e.data ?? null, createdAt: e.at });
@@ -42,6 +48,12 @@ async function hasOpenTaskFor(db: Db, kind: string, field: string, value: string
 async function advanceDocLedger(db: Db, now: Date, created: Record<string, number>) {
   const [floor] = await db.select().from(floors).where(eq(floors.slug, "docledger")).limit(1);
   if (!floor || floor.status !== "live") return;
+  // Replies whose text the webhook did not carry are read by id before the Chaser sees them (D077).
+  {
+    const { repairBlankReplies } = await import("@/lib/email");
+    const r = await repairBlankReplies(db, now);
+    if (r.repaired) created.replies_read = (created.replies_read ?? 0) + r.repaired;
+  }
   const crew = await db.select().from(agents).where(eq(agents.floorId, floor.id));
   const bySlug = new Map(crew.map((a) => [a.slug, a]));
   const scout = bySlug.get("docledger_scout");
@@ -112,6 +124,21 @@ async function advanceDocLedger(db: Db, now: Date, created: Record<string, numbe
       await queueTask(db, floor.id, chaser.id, "follow_up", `Check back in with ${lead.company}`, { outreachId: last.id, mode: "check_in" }, 3, now);
       created.follow_up = (created.follow_up ?? 0) + 1;
     }
+    // D077: a company that opened the demo made for them and stayed quiet gets one short nudge, a day later.
+    const visited = await db
+      .select()
+      .from(leads)
+      .where(and(eq(leads.simulated, false), eq(leads.status, "contacted"), isNotNull(leads.demoVisitedAt), lt(leads.demoVisitedAt, new Date(now.getTime() - NUDGE_AFTER_MS)), gt(leads.demoVisitedAt, new Date(now.getTime() - 5 * DAY_MS))))
+      .limit(3);
+    for (const lead of visited) {
+      const [last] = await db.select().from(outreach).where(and(eq(outreach.leadId, lead.id), eq(outreach.simulated, false), eq(outreach.status, "sent"))).orderBy(desc(outreach.step)).limit(1);
+      if (!last || last.step >= 3) continue;
+      const [later] = await db.select({ id: outreach.id }).from(outreach).where(and(eq(outreach.leadId, lead.id), sql`${outreach.step} > ${last.step}`)).limit(1);
+      if (later) continue;
+      if (await hasOpenTaskFor(db, "follow_up", "outreachId", last.id, ["queued", "running", "review", "done", "blocked"])) continue;
+      await queueTask(db, floor.id, chaser.id, "follow_up", `Nudge ${lead.company} after their demo visit`, { outreachId: last.id, mode: "nudge" }, 2, now);
+      created.follow_up = (created.follow_up ?? 0) + 1;
+    }
     const stale = await db
       .select()
       .from(outreach)
@@ -145,12 +172,27 @@ async function executeApproved(db: Db, now: Date): Promise<{ executed: number; d
     .limit(10);
   let executed = 0;
   const deferred: string[] = [];
+  const settingsMap = await getSettings(db);
+  const dailyCap = Math.max(0, Math.floor(asNumber(settingsMap.docledger_daily_send_cap, DAILY_SEND_CAP)));
+  const [sentRow] = await db.select({ n: sql<string>`count(*)` }).from(outreach).where(and(eq(outreach.simulated, false), gte(outreach.sentAt, dubaiDayStartUtc(now))));
+  let sentToday = Number(sentRow?.n ?? 0);
+  let sentThisTick = 0;
   for (const a of rows) {
-    let result: { ok: boolean; error?: string } = { ok: false, error: "no executor" };
+    let result: { ok: boolean; error?: string; skipped?: string } = { ok: false, error: "no executor" };
     if (a.type === "outreach_email") {
       const { sendOutreach } = await import("@/lib/email");
-      // The owner's own words go out at any hour; the workers' emails wait for the reader's working day.
-      result = await sendOutreach(db, a, now, { anyHour: (a.content as Record<string, unknown> | null)?.ownerSent === true });
+      // The owner's own words go out at any hour and are never held; the workers' emails wait for the reader's
+      // working day and leave a few at a time (D077).
+      const ownerSent = (a.content as Record<string, unknown> | null)?.ownerSent === true;
+      if (!ownerSent && sentToday >= dailyCap) result = { ok: false, error: `daily send cap of ${dailyCap} reached, the rest go tomorrow` };
+      else if (!ownerSent && sentThisTick >= EMAILS_PER_TICK) result = { ok: false, error: "spread over the day: the next heartbeat sends more" };
+      else {
+        result = await sendOutreach(db, a, now, { anyHour: ownerSent });
+        if (result.ok && !result.skipped && !ownerSent) {
+          sentToday += 1;
+          sentThisTick += 1;
+        }
+      }
     } else if (a.type === "public_post") {
       if ((a.content as Record<string, unknown> | null)?.social === "facebook") {
         const { publishSocial } = await import("@/agents/social");
@@ -161,8 +203,8 @@ async function executeApproved(db: Db, now: Date): Promise<{ executed: number; d
       }
     }
     if (result.ok) {
-      await db.update(approvals).set({ executedAt: now, executionResult: { ok: true }, updatedAt: now }).where(eq(approvals.id, a.id));
-      executed += 1;
+      await db.update(approvals).set({ executedAt: now, executionResult: result.skipped ? { ok: true, skipped: result.skipped } : { ok: true }, updatedAt: now }).where(eq(approvals.id, a.id));
+      if (!result.skipped) executed += 1;
     } else {
       await db.update(approvals).set({ executionResult: { deferred: result.error ?? "unknown" }, updatedAt: now }).where(eq(approvals.id, a.id));
       if (result.error && !deferred.includes(result.error)) deferred.push(result.error);

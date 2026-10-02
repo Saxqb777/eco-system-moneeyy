@@ -118,6 +118,8 @@ export async function buildBrief(db: Db, now = new Date()): Promise<Brief> {
       if (f.slug === "docledger" && !simulated && funnel) {
         const bitsSales = [`${funnel.leadsWeek} leads, ${funnel.sentWeek} sent, ${funnel.repliesWeek} replies this week`];
         if (funnel.demosWeek) bitsSales.push(`${funnel.demosWeek} demo${funnel.demosWeek === 1 ? "" : "s"} booked`);
+        if (funnel.demoVisitsWeek) bitsSales.push(`${funnel.demoVisitsWeek} opened their demo`);
+        if (funnel.bouncedWeek) bitsSales.push(`${funnel.bouncedWeek} bounced`);
         bitsSales.push(funnel.autoSend ? `${funnel.autoSentToday} sent on their own today` : `auto send after ${Math.max(0, 10 - funnel.trustApprovedInARow)} more approvals`);
         bits.unshift(...bitsSales);
       }

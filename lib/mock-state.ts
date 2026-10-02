@@ -1,6 +1,6 @@
 // Fixture state for local screenshots and tests. Never used on Vercel: only when TOWER_MOCK_STATE is 1.
 import { AGENTS, FLOORS, SETUP_ITEMS } from "@/config/tower";
-import type { CallRow } from "@/lib/callsheet";
+import type { CallRow, LinkedinRow } from "@/lib/callsheet";
 import type { MailMessage, MailThread, MailThreadDetail } from "@/lib/mailbox";
 import type { TowerState } from "@/lib/state";
 import type { AgentDetail, FloorDetail, WardenSummary } from "@/lib/detail";
@@ -327,7 +327,7 @@ export function mockCompany(now = new Date()): import("@/lib/company").CompanyVi
     doneWeek: 3 + i,
   }));
   return {
-    numbers: { from: ago(now, 7 * 1440), to: now.toISOString(), leads: 11, partners: 2, emailsSent: 4, delivered: 3, bounced: 0, demoOpens: 2, replies: 1, demos: 0, trials: 0, clients: 0, mrrUsd: 0, revenueUsd: 0, spendUsd: 3.42, costPerLeadUsd: 0.31, costPerReplyUsd: 3.42, allTime: { leads: 11, emailsSent: 4, replies: 1, clients: 0, revenueUsd: 0, spendUsd: 3.42 } },
+    numbers: { from: ago(now, 7 * 1440), to: now.toISOString(), leads: 11, partners: 2, emailable: 7, emailsSent: 4, delivered: 3, bounced: 0, demoOpens: 2, replies: 1, demos: 0, costPerEmailUsd: 0.86, costPerDemoOpenUsd: 1.71, trials: 0, clients: 0, mrrUsd: 0, revenueUsd: 0, spendUsd: 3.42, costPerLeadUsd: 0.31, costPerReplyUsd: 3.42, allTime: { leads: 11, emailsSent: 4, replies: 1, clients: 0, revenueUsd: 0, spendUsd: 3.42 } },
     team,
     ideas: [
       { id: "ap3", title: "Partner with bookkeeping firms that serve Jebel Ali forwarders", owner: "partners", state: "waiting", why: "Three replies said their accountant keys the bills.", endsAt: null },
@@ -484,11 +484,15 @@ export function mockTradingDetail(now = new Date()): TradingDetail {
 }
 
 // D079: the owner's call sheet in the mock game.
-export function mockCallSheet(now = new Date()): { dayKey: string; rows: CallRow[] } {
+export function mockCallSheet(now = new Date()): { dayKey: string; rows: CallRow[]; linkedin: LinkedinRow[] } {
   const rows: CallRow[] = [
     { leadId: "lead-qafila", company: "Qafila FZ LLC", contact: "Atif Rafiq", title: "Founder", phone: "+97145512345", city: "Dubai", country: "AE", why: "opened their demo and stayed quiet", opening: "Hi Atif, Saaqib from Doc Ledger in Abu Dhabi. Qafila runs FCL, LCL and air through one platform, so I set up a demo company for Qafila that reads your shipping line bills from a photo. Could I show you in ten minutes, or send the link on WhatsApp?", bill: "Shipping line bill, Maersk, Jebel Ali", demoUrl: "https://demo.docledger.site/?for=8cgghn", emailed: true, visited: true, attempts: 0, lastOutcome: null },
     { leadId: "lead-seaprince", company: "Sea Prince Shipping", contact: null, title: null, phone: "+97165551234", city: "Sharjah", country: "AE", why: "good fit, no public email", opening: "Hello, Saaqib from Doc Ledger in Abu Dhabi. Could I speak to whoever handles the shipping bills and receipts at month end? I set up a demo company for Sea Prince Shipping that reads your customs invoices from a photo.", bill: "Customs clearance invoice", demoUrl: "https://demo.docledger.site/?for=k2pq7m", emailed: false, visited: false, attempts: 1, lastOutcome: "no_answer" },
     { leadId: "lead-midtrans", company: "Mid Trans", contact: null, title: null, phone: "+97142223344", city: "Dubai", country: "AE", why: "emailed, no reply", opening: "Hello, Saaqib from Doc Ledger in Abu Dhabi. Could I speak to whoever handles the shipping bills and receipts at month end? I set up a demo company for Mid Trans that reads your shipping bills from a photo.", bill: "Shipping bill with charge lines", demoUrl: "https://demo.docledger.site/?for=ahygun", emailed: true, visited: false, attempts: 0, lastOutcome: null },
   ];
-  return { dayKey: now.toISOString().slice(0, 10), rows };
+  const linkedin: LinkedinRow[] = [
+    { leadId: "lead-qafila", company: "Qafila FZ LLC", name: "Atif Rafiq", title: "Founder", profileUrl: "https://www.linkedin.com/search/results/people/?keywords=Atif%20Rafiq%20Qafila%20FZ%20LLC", searched: true, message: "Hi Atif, I build Doc Ledger in Abu Dhabi: it reads shipping line bills from a photo, every charge line, so month end stops being retyping. I set up a demo company for Qafila FZ LLC, no signup: https://demo.docledger.site/?for=8cgghn Worth a look?", demoUrl: "https://demo.docledger.site/?for=8cgghn", visited: true },
+    { leadId: "lead-tlm", company: "TLM International Freight Services", name: "Rajesh Keshwani", title: "Finance Manager", profileUrl: "https://www.linkedin.com/search/results/people/?keywords=Rajesh%20Keshwani%20TLM%20International%20Freight%20Services", searched: true, message: "Hi Rajesh, I build Doc Ledger in Abu Dhabi: it reads freight invoices from a photo, every charge line, so month end stops being retyping. I set up a demo company for TLM International Freight Services, no signup: https://demo.docledger.site/?for=tlm9x2 Worth a look?", demoUrl: "https://demo.docledger.site/?for=tlm9x2", visited: false },
+  ];
+  return { dayKey: now.toISOString().slice(0, 10), rows, linkedin };
 }

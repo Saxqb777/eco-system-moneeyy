@@ -11,7 +11,7 @@ import { RESEARCH_EFFORT } from "@/config/models";
 import { raiseApproval } from "@/lib/approvals";
 import { clipboardValue } from "@/lib/clipboard";
 import { normaliseCountry, regionFor, skippedCountries } from "@/lib/markets";
-import { getSettings, setSetting } from "@/lib/settings";
+import { getSetting, getSettings, setSetting } from "@/lib/settings";
 import { enqueueMessage } from "@/lib/telegram";
 import { plainDashes } from "@/lib/text";
 import { siteLine } from "@/lib/site";
@@ -430,14 +430,16 @@ export const marketingPack: Playbook = {
   kind: "marketing_pack",
   webSearchMaxUses: 0,
   maxTokens: 3500,
-  system: `You are the Marketer at Doc Ledger. Every week you prepare what the founder publishes himself: two LinkedIn posts in his voice as the founder of a young company (one story about the problem, one about something the team learned this week, no hashtags wall, one question at the end), one listing for software directories (a tagline, a description of about eighty words, three categories), and the words for a simple Doc Ledger web page (a headline, a subheadline, three points, one call to action). Use real facts from the product and the week; never name a prospect or quote them by name.
+  system: `You are the Marketer at Doc Ledger. Every week you prepare what the founder publishes himself: two LinkedIn posts in his voice as the founder of a young company (one story about the problem, one about something the team learned this week, no hashtags wall, one question at the end; he posts one on the day and one three days later), one listing for software directories (a tagline, a description of about eighty words, three categories), and the words for a simple Doc Ledger web page (a headline, a subheadline, three points, one call to action). Use real facts from the product and the week; never name a prospect or quote them by name.
+When asked for quoteAsk: write the short WhatsApp message the founder sends to the finance manager of the UAE food and beverage group whose paperwork shaped the product (they use it for petty cash, fuel and shipping bills). Ask for two sentences on what changed for them and permission to show their name, title and company on the site; offer to draft it for them to edit. Warm, under 80 words, no pressure. Otherwise quoteAsk is an empty string.
 ${docledgerKnowledge()}
 ${STYLE}`,
   schema: {
     type: "object",
     additionalProperties: false,
-    required: ["linkedin", "listing", "page", "note"],
+    required: ["linkedin", "listing", "page", "quoteAsk", "note"],
     properties: {
+      quoteAsk: { type: "string", description: "the message to the food group asking for a quote, or an empty string when not asked" },
       linkedin: { type: "array", items: { type: "object", additionalProperties: false, required: ["hook", "body"], properties: { hook: { type: "string" }, body: { type: "string" } } } },
       listing: { type: "object", additionalProperties: false, required: ["tagline", "description", "categories"], properties: { tagline: { type: "string" }, description: { type: "string" }, categories: { type: "array", items: { type: "string" } } } },
       page: { type: "object", additionalProperties: false, required: ["headline", "subheadline", "points", "cta"], properties: { headline: { type: "string" }, subheadline: { type: "string" }, points: { type: "array", items: { type: "string" } }, cta: { type: "string" } } },
@@ -449,8 +451,10 @@ ${STYLE}`,
     const roadmap = (await currentRoadmap(ctx.db)).slice(0, 4);
     const replies = await recentReplies(ctx.db, ctx.now, 14, 6);
     const focus = str(input(task).instructions, 600);
+    // D081: once, the ask for a real customer's words for the site
+    const askedAlready = !!(await getSetting<unknown>(ctx.db, "docledger_quote_ask", null)) || !!(await clipboardValue(ctx.db, "docledger_customer_quote"));
     return {
-      user: `${focus ? `Focus from the Head of Growth: ${focus}\n` : ""}${await experimentLines(ctx.db, ctx.now, "marketer")}This week: ${funnel.sentWeek} emails sent, ${funnel.repliesWeek} replies, ${funnel.demosWeek} demos.\nWhat the market said (anonymise, never name them):\n${replies.map((r) => `- ${r.text}`).join("\n") || "- nothing yet"}\nWhat Product is working on: ${roadmap.map((r) => r.title).join("; ") || "nothing listed"}\n\nWrite this week's material and return the JSON object.`,
+      user: `${focus ? `Focus from the Head of Growth: ${focus}\n` : ""}${await experimentLines(ctx.db, ctx.now, "marketer")}This week: ${funnel.sentWeek} emails sent, ${funnel.repliesWeek} replies, ${funnel.demosWeek} demos.\nWhat the market said (anonymise, never name them):\n${replies.map((r) => `- ${r.text}`).join("\n") || "- nothing yet"}\nWhat Product is working on: ${roadmap.map((r) => r.title).join("; ") || "nothing listed"}\n${askedAlready ? "quoteAsk: not needed, return an empty string." : "quoteAsk: needed this time, write the message."}\n\nWrite this week's material and return the JSON object.`,
     };
   },
   async absorb(_task, output, ctx) {
@@ -467,10 +471,17 @@ ${STYLE}`,
       page: { headline: plainDashes(str(pg.headline, 120)), subheadline: plainDashes(str(pg.subheadline, 240)), points: (Array.isArray(pg.points) ? pg.points : []).map((p) => plainDashes(str(p, 200))).filter(Boolean).slice(0, 3), cta: plainDashes(str(pg.cta, 60)) },
     };
     await setSetting(ctx.db, "docledger_marketing", pack);
-    if (linkedin[0]) {
-      await enqueueMessage(ctx.db, { kind: "marketing", body: `Marketer: this week's LinkedIn post, ready for you to post:\n\n${linkedin[0].hook}\n\n${linkedin[0].body}\n\nA second post, a directory listing and web page words are in the game: Warden, Company tab.`, now: ctx.now });
+    // D081: two posts a week, both in one message so he can schedule them; the quote ask once
+    const quoteAsk = plainDashes(str(output.quoteAsk, 600));
+    if (quoteAsk && !(await getSetting<unknown>(ctx.db, "docledger_quote_ask", null))) {
+      await setSetting(ctx.db, "docledger_quote_ask", { text: quoteAsk, at: ctx.now.toISOString() });
+      await enqueueMessage(ctx.db, { kind: "marketing", body: `Marketer: the site needs one real customer's words. Send this to the finance manager at the food group, then paste their two sentences in Setup under "A customer's words for the site":\n\n${quoteAsk}`, now: ctx.now });
     }
-    return { summary: `Wrote ${linkedin.length} LinkedIn post${linkedin.length === 1 ? "" : "s"}, a listing and page copy`, extra: { posts: linkedin.length } };
+    if (linkedin[0]) {
+      const second = linkedin[1] ? `\n\nSecond post, for three days later:\n\n${linkedin[1].hook}\n\n${linkedin[1].body}` : "";
+      await enqueueMessage(ctx.db, { kind: "marketing", body: `Marketer: this week's LinkedIn posts, ready for you to post. First one today:\n\n${linkedin[0].hook}\n\n${linkedin[0].body}${second}\n\nThe directory listing and web page words are in the game: Warden, Company tab.`.slice(0, 3900), now: ctx.now });
+    }
+    return { summary: `Wrote ${linkedin.length} LinkedIn post${linkedin.length === 1 ? "" : "s"}, a listing and page copy${quoteAsk ? ", and the ask for a customer quote" : ""}`, extra: { posts: linkedin.length, quoteAsk: !!quoteAsk } };
   },
 };
 

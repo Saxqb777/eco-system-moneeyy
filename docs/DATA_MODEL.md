@@ -236,7 +236,7 @@ Indexes on (occurred_at) and (floor_id, occurred_at). The roof counters, the pet
 | country | text | two letter code from Scout (GB, US, AU, SG, AE...); sets the send window and the skip rules |
 | phone | text | |
 | source_url | text | where Scout found it |
-| decision_maker | jsonb | name, title, email, linkedin, confidence, research, angle, approach, snoozeUntil (set on not now: 30 days, out of office: 7 days); D079: siteEmails, sitePhones, siteNote (what the Tower read on their website), calls [{ at, outcome, note }], hotFromCall (the owner called and they were interested, cleared by the email after the call), calledEmailAt; D080: appOrgId, appEmail (the organisation in the Doc Ledger app), billing (paddle), churnedAt |
+| decision_maker | jsonb | name, title, email, linkedin, confidence, research, angle, approach, snoozeUntil (set on not now: 30 days, out of office: 7 days); D079: siteEmails, sitePhones, siteNote (what the Tower read on their website), calls [{ at, outcome, note }], hotFromCall (the owner called and they were interested, cleared by the email after the call), calledEmailAt; D080: appOrgId, appEmail (the organisation in the Doc Ledger app), billing (paddle), churnedAt; D081: linkedinAskedAt |
 | score | int | 1 to 10 from Analyst |
 | score_reason | text | |
 | status | text | new, qualified, disqualified, no_contact, drafted, contacted, replied, bounced (D077: their address bounced), trial, demo_booked, client, lost |
@@ -464,4 +464,5 @@ One row per heartbeat so the status page and Warden can see the pulse.
 ### Wall Street settings added in D078
 - trading_bench: { items: [{ at, spy, btc }] }, SPY and Bitcoin prices one point every 10 minutes, last 400 kept; the terminal draws the desks against them. Reset with the race.
 - trading_reports: the last 40 reports the firm wrote, [{ kind: close or week, title, body, extra, at }], written by the pulse beside the Telegram message. Reset with the race.
+- docledger_quote_ask (D081): { text, at }, the Marketer's one time ask to the food group for a customer quote. The quote itself and the recording link live on the clipboard (setup_items docledger_customer_quote, docledger_demo_video) and are served at /api/public/proof.
 - docledger_callsheet (D079): { dayKey, leadIds }, today's five for the owner's call sheet. docledger_callsheet_sent: the Dubai day the 10:00 card went out. docledger_directory_cursor: { i, page } of the member directory the Scout works through.

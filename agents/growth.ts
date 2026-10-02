@@ -45,12 +45,16 @@ export interface FounderNumbers {
   to: string;
   leads: number;
   partners: number;
+  // D081: the funnel, stage by stage
+  emailable: number;
   emailsSent: number;
   delivered: number;
   bounced: number;
   demoOpens: number;
   replies: number;
   demos: number;
+  costPerEmailUsd: number | null;
+  costPerDemoOpenUsd: number | null;
   trials: number;
   clients: number;
   mrrUsd: number;
@@ -73,6 +77,8 @@ export async function founderNumbers(db: Db, now: Date, days = 7): Promise<Found
   const leadsWeek = await leadsIn(from);
   const repliesWeek = await repliesIn(from);
   const spendWeek = await spendIn(from);
+  const sentWeek = await sentIn(from);
+  const demoOpensWeek = await n(db.select({ n: sql<string>`count(*)` }).from(leads).where(and(eq(leads.simulated, false), gte(leads.demoVisitedAt, from))));
   const clientRows = await db.select({ dm: leads.decisionMaker }).from(leads).where(and(eq(leads.simulated, false), eq(leads.status, "client")));
   const mrr = clientRows.reduce((sum, r) => sum + Number(((r.dm ?? {}) as Record<string, unknown>).monthlyUsd ?? 0), 0);
   const round = (v: number) => Math.round(v * 100) / 100;
@@ -81,10 +87,13 @@ export async function founderNumbers(db: Db, now: Date, days = 7): Promise<Found
     to: now.toISOString(),
     leads: leadsWeek,
     partners: await n(db.select({ n: sql<string>`count(*)` }).from(leads).where(and(eq(leads.simulated, false), gte(leads.createdAt, from), sql`coalesce(${leads.segment}, '') like 'partner%'`))),
-    emailsSent: await sentIn(from),
+    emailable: await n(db.select({ n: sql<string>`count(*)` }).from(leads).where(and(eq(leads.simulated, false), gte(leads.createdAt, from), sql`coalesce(${leads.decisionMaker} ->> 'email', '') <> ''`))),
+    emailsSent: sentWeek,
+    costPerEmailUsd: sentWeek ? round(spendWeek / sentWeek) : null,
+    costPerDemoOpenUsd: demoOpensWeek ? round(spendWeek / demoOpensWeek) : null,
     delivered: await n(db.select({ n: sql<string>`count(*)` }).from(outreach).where(and(eq(outreach.simulated, false), gte(outreach.deliveredAt, from)))),
     bounced: await n(db.select({ n: sql<string>`count(*)` }).from(outreach).where(and(eq(outreach.simulated, false), eq(outreach.status, "bounced"), gte(outreach.updatedAt, from)))),
-    demoOpens: await n(db.select({ n: sql<string>`count(*)` }).from(leads).where(and(eq(leads.simulated, false), gte(leads.demoVisitedAt, from)))),
+    demoOpens: demoOpensWeek,
     replies: repliesWeek,
     demos: await n(db.select({ n: sql<string>`count(*)` }).from(leads).where(and(eq(leads.simulated, false), eq(leads.status, "demo_booked"), gte(leads.updatedAt, from)))),
     trials: await n(db.select({ n: sql<string>`count(*)` }).from(leads).where(and(eq(leads.simulated, false), eq(leads.status, "trial")))),
@@ -102,11 +111,10 @@ export function formatFounderReport(f: FounderNumbers): string {
   const money = (v: number) => `${v.toFixed(2)} USD`;
   return [
     "Founder report from Finance, last 7 days",
-    `Leads found: ${f.leads}, partners found: ${f.partners}`,
-    `Emails sent: ${f.emailsSent}, delivered: ${f.delivered}, bounced: ${f.bounced}, opened their demo: ${f.demoOpens}, replies: ${f.replies}, demos booked: ${f.demos}`,
-    `Companies in their free month: ${f.trials}, paying customers: ${f.clients}, monthly revenue: ${money(f.mrrUsd)}`,
+    `The funnel: found ${f.leads}, with an address ${f.emailable}, sent ${f.emailsSent}, delivered ${f.delivered}, bounced ${f.bounced}, opened their demo ${f.demoOpens}, replied ${f.replies}, demos booked ${f.demos}, in their free month ${f.trials}, paying ${f.clients}`,
+    `Partners found: ${f.partners}. Monthly revenue: ${money(f.mrrUsd)}`,
     `Money in: ${money(f.revenueUsd)}, AI spend: ${money(f.spendUsd)}`,
-    `Cost per lead: ${f.costPerLeadUsd !== null ? money(f.costPerLeadUsd) : "no leads yet"}, cost per reply: ${f.costPerReplyUsd !== null ? money(f.costPerReplyUsd) : "no replies yet"}`,
+    `Cost per stage: lead ${f.costPerLeadUsd !== null ? money(f.costPerLeadUsd) : "none yet"}, email ${f.costPerEmailUsd !== null ? money(f.costPerEmailUsd) : "none yet"}, demo opened ${f.costPerDemoOpenUsd !== null ? money(f.costPerDemoOpenUsd) : "none yet"}, reply ${f.costPerReplyUsd !== null ? money(f.costPerReplyUsd) : "none yet"}`,
     `Since the start: ${f.allTime.leads} leads, ${f.allTime.emailsSent} emails, ${f.allTime.replies} replies, ${f.allTime.clients} customers, ${money(f.allTime.revenueUsd)} in, ${money(f.allTime.spendUsd)} spent`,
   ].join("\n");
 }

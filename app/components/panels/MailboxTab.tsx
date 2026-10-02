@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { CallRow } from "@/lib/callsheet";
+import type { CallRow, LinkedinRow } from "@/lib/callsheet";
 import type { MailMessage, MailThread, MailThreadDetail, ThreadState } from "@/lib/mailbox";
 import { Empty, Key, Pill, Sheet, post, since, usePoll, when } from "./shared";
 
@@ -155,7 +155,7 @@ function Letter({ m, contact, onApprovals }: { m: MailMessage; contact: string; 
 const OUTCOME_LABEL: Record<string, string> = { interested: "Interested", no_answer: "No answer", not_now: "Not now", no: "No" };
 
 function CallSheetView({ onBack }: { onBack: () => void }) {
-  const q = usePoll<{ dayKey: string; rows: CallRow[] }>("/api/mailbox?filter=calls", 30000);
+  const q = usePoll<{ dayKey: string; rows: CallRow[]; linkedin?: LinkedinRow[] }>("/api/mailbox?filter=calls", 30000);
   const [note, setNote] = useState<string>("");
   const [busy, setBusy] = useState<string | null>(null);
   const rows = q.data?.rows ?? [];
@@ -168,6 +168,15 @@ function CallSheetView({ onBack }: { onBack: () => void }) {
     setTimeout(() => setNote(""), 5000);
   }
   const wa = (phone: string) => `https://wa.me/${phone.replace(/[^\d]/g, "")}`;
+  const linkedin = q.data?.linkedin ?? [];
+  async function messaged(leadId: string) {
+    setBusy(leadId);
+    const res = await post("/api/mailbox", { action: "linkedin", leadId });
+    setBusy(null);
+    setNote(res.ok ? String(res.message ?? "Noted.") : (res.error ?? "Could not save that"));
+    q.reload();
+    setTimeout(() => setNote(""), 5000);
+  }
   return (
     <>
       <div className="mail-filters">
@@ -217,6 +226,30 @@ function CallSheetView({ onBack }: { onBack: () => void }) {
           </div>
         </Sheet>
       ))}
+      {linkedin.length ? (
+        <Sheet title="LinkedIn today" clip>
+          <div className="muted">Five named people, two lines each. Open the profile, paste the lines, then mark it. Each name comes back in a month if nothing happens.</div>
+          {linkedin.map((r) => (
+            <div key={r.leadId} className="trade-row">
+              <div className="h-top">
+                <b>
+                  {r.name} <span className="muted">{[r.title, r.company].filter(Boolean).join(", ")}</span>
+                </b>
+                {r.visited ? <span className="pill-s">opened the demo</span> : null}
+              </div>
+              <pre>{r.message}</pre>
+              <div className="row-keys">
+                <a className="key small" href={r.profileUrl} target="_blank" rel="noreferrer">
+                  {r.searched ? "Find on LinkedIn" : "Open profile"}
+                </a>
+                <Key small tone="ok" disabled={busy === r.leadId} onClick={() => void messaged(r.leadId)}>
+                  Messaged
+                </Key>
+              </div>
+            </div>
+          ))}
+        </Sheet>
+      ) : null}
     </>
   );
 }

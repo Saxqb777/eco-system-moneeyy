@@ -138,7 +138,7 @@ export async function salesFunnel(db: Db, now: Date): Promise<SalesFunnel> {
   const count = async (q: Promise<Array<{ n: string }>>) => Number((await q)[0]?.n ?? 0);
   const leadsWeek = await count(db.select({ n: sql<string>`count(*)` }).from(leads).where(and(eq(leads.simulated, false), gte(leads.createdAt, week))));
   const sentWeek = await count(db.select({ n: sql<string>`count(*)` }).from(outreach).where(and(eq(outreach.simulated, false), gte(outreach.sentAt, week))));
-  const repliesWeek = await count(db.select({ n: sql<string>`count(*)` }).from(outreach).where(and(eq(outreach.simulated, false), gte(outreach.replyAt, week))));
+  const repliesWeek = await count(db.select({ n: sql<string>`count(*)` }).from(outreach).where(and(eq(outreach.simulated, false), gte(outreach.replyAt, week), sql`${outreach.status} <> 'auto_reply'`)));
   const hotOpen = await count(db.select({ n: sql<string>`count(*)` }).from(approvals).where(and(eq(approvals.type, "outreach_email"), eq(approvals.status, "pending"), eq(approvals.simulated, false), sql`${approvals.content} ->> 'hot' = 'true'`)));
   const demosWeek = await count(db.select({ n: sql<string>`count(*)` }).from(leads).where(and(eq(leads.simulated, false), eq(leads.status, "demo_booked"), gte(leads.updatedAt, week))));
   const autoSentToday = await count(db.select({ n: sql<string>`count(*)` }).from(approvals).where(and(eq(approvals.type, "outreach_email"), eq(approvals.simulated, false), eq(approvals.decidedVia, "auto"), gte(approvals.decidedAt, dubaiDayStartUtc(now)))));

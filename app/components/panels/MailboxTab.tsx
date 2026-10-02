@@ -10,6 +10,7 @@ const STATE_LABEL: Record<ThreadState, string> = {
   waiting: "Waiting on you",
   replied: "They replied",
   visited: "Opened the demo",
+  auto: "Auto reply only",
   sent: "Sent",
   drafting: "Drafting",
   paused: "Paused",

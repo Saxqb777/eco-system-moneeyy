@@ -38,7 +38,7 @@ export async function sendEmail(db: Db, m: { to: string; subject: string; text: 
 export type SendResult = { ok: boolean; error?: string; skipped?: string };
 
 // Outreach rows that mean "this company already got its first email".
-const EMAILED_STATES = ["sent", "replied", "reply_pending", "handling", "answered", "bounced", "complained"];
+export const EMAILED_STATES = ["sent", "replied", "reply_pending", "handling", "answered", "bounced", "complained", "auto_reply"];
 
 export async function sendOutreach(db: Db, a: typeof approvals.$inferSelect, now = new Date(), opts: { anyHour?: boolean } = {}): Promise<SendResult> {
   if (a.status !== "approved") return { ok: false, error: "not approved" };
@@ -191,7 +191,7 @@ export interface InboundReply {
 }
 
 // A reply, from the inbound webhook or forwarded by hand: matched to the latest sent email of that lead.
-export async function recordInboundReply(db: Db, r: InboundReply, now = new Date()): Promise<{ matched: boolean; leadId?: string; company?: string; pending?: boolean; stopped?: boolean }> {
+export async function recordInboundReply(db: Db, r: InboundReply, now = new Date()): Promise<{ matched: boolean; leadId?: string; company?: string; pending?: boolean; stopped?: boolean; autoReply?: boolean }> {
   const fromEmail = (r.from.match(/[^\s<>]+@[^\s<>]+/)?.[0] ?? "").toLowerCase();
   const fromDomain = fromEmail.split("@")[1] ?? "";
   let lead: typeof leads.$inferSelect | undefined;
@@ -226,6 +226,11 @@ export async function recordInboundReply(db: Db, r: InboundReply, now = new Date
     await stopLead(db, lead, last ?? null, text, fromEmail || (typeof (lead.decisionMaker as Record<string, unknown> | null)?.email === "string" ? String((lead.decisionMaker as Record<string, unknown>).email) : ""), "asked us to stop", now);
     return { matched: true, leadId: lead.id, company: lead.company, stopped: true };
   }
+  const machine = isAutoReply(r.from, r.subject, text);
+  if (machine) {
+    await parkAutoReply(db, lead, last ?? null, text, emailId, machine, r.from, r.subject, now);
+    return { matched: true, leadId: lead.id, company: lead.company, autoReply: true };
+  }
   if (last) {
     await db.update(outreach).set({ status: "replied", replyText: text, replyAt: now, replyEmailId: emailId, updatedAt: now }).where(eq(outreach.id, last.id));
   } else {
@@ -235,6 +240,71 @@ export async function recordInboundReply(db: Db, r: InboundReply, now = new Date
   await db.insert(taskEvents).values({ floorId: lead.floorId, type: "reply", message: `Reply from ${lead.company}: ${r.subject || text.slice(0, 60)}`, createdAt: now });
   await enqueueMessage(db, { kind: "reply", body: `Reply from ${lead.company} (${r.from}):\n${text.slice(0, 800)}\n\nChaser picks it up on the next heartbeat.`, now });
   return { matched: true, leadId: lead.id, company: lead.company };
+}
+
+// D083: an answer from a machine. Helpdesk ticket and account notices, out of office, mailer daemons, noreply boxes.
+// Returns what it is in plain words, or null when a person may have written it.
+const AUTO_FROM = /^(?:no-?reply|noreply|do-?not-?reply|donotreply|mailer-daemon|postmaster|bounces?|notifications?|auto-?reply|autoreply)[@+.-]/i;
+const AUTO_SUBJECT = /\b(?:automatic reply|auto-?reply|autoreply|auto response|out of (?:the )?office|away from (?:the |my )?(?:office|desk)|on (?:annual |maternity |sick |paternity )?leave|ticket (?:received|created|opened|#)|\[ticket|\[#?\d{3,}\]|we(?:'ve| have) received your|your request (?:has been|was) received|account has been created|activate your account|delivery (?:status|failure)|undeliverable|mail delivery failed)\b/i;
+const AUTO_BODY = /\b(?:this is an auto(?:mated|matic)? (?:reply|response|message|notification)|automatic reply|out of (?:the )?office|i am (?:currently )?(?:away|out of the office|on leave|travelling|traveling)|do not reply to this (?:email|message)|please do not reply|a new .{0,40} account has been created for you|click the (?:url|link) below to activate|your (?:ticket|request|case) (?:number|id|#|has been (?:received|logged|created))|has been (?:received|logged) and (?:a|our) (?:team|agent)|we will (?:get back|respond|reply) (?:to you )?(?:shortly|within|as soon)|ticket (?:id|number)[:\s])/i;
+
+export function isAutoReply(from: string, subject: string, text: string): string | null {
+  const addr = (from.match(/[^\s<>]+@[^\s<>]+/)?.[0] ?? from).toLowerCase();
+  if (AUTO_FROM.test(addr) || /mailer-daemon|postmaster@/.test(addr)) return "a noreply address";
+  const subj = subject ?? "";
+  const head = text.slice(0, 1200);
+  if (/out of (?:the )?office|away from|on (?:annual |maternity |sick |paternity )?leave|i am (?:currently )?(?:away|out of the office|on leave|travelling|traveling)/i.test(`${subj}\n${head}`)) return "an out of office notice";
+  if (/ticket|account has been created|activate your account|received your|request (?:has been|was) received|has been (?:received|logged)|will (?:get back|respond|reply)/i.test(`${subj}\n${head}`) && (AUTO_SUBJECT.test(subj) || AUTO_BODY.test(head))) return "a helpdesk notice";
+  if (/delivery (?:status|failure)|undeliverable|mail delivery failed/i.test(subj)) return "a delivery notice";
+  if (AUTO_SUBJECT.test(subj) || AUTO_BODY.test(head)) return "an automatic reply";
+  return null;
+}
+
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+// When an out of office says when they are back, the check in waits for that day; otherwise a week.
+export function returnDate(text: string, now: Date): Date {
+  const week = new Date(now.getTime() + 7 * 86400_000);
+  const t = text.slice(0, 1500);
+  let d: Date | null = null;
+  const iso = t.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
+  const dm = t.match(/\b(?:until|till|back on|back in the office on|returning(?: on)?|return(?:s|ing)?(?: on)?|from)\s+(?:[A-Za-z]+day,?\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?([A-Za-z]{3,9})\.?(?:,?\s+(20\d{2}))?/i);
+  const md = t.match(/\b(?:until|till|back on|back in the office on|returning(?: on)?|return(?:s|ing)?(?: on)?|from)\s+(?:[A-Za-z]+day,?\s+)?([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(20\d{2}))?/i);
+  const build = (day: string, monthWord: string, year?: string) => {
+    const m = MONTHS.indexOf(monthWord.slice(0, 3).toLowerCase());
+    if (m < 0) return null;
+    const y = year ? Number(year) : now.getUTCFullYear();
+    const out = new Date(Date.UTC(y, m, Number(day), 6, 0, 0));
+    // a month that already passed this year means next year
+    if (!year && out.getTime() < now.getTime() - 86400_000) out.setUTCFullYear(y + 1);
+    return out;
+  };
+  if (iso) d = new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]), 6));
+  else if (dm) d = build(dm[1]!, dm[2]!, dm[3]);
+  else if (md) d = build(md[2]!, md[1]!, md[3]);
+  if (!d || Number.isNaN(d.getTime())) return week;
+  const ahead = d.getTime() - now.getTime();
+  // the day after they are back, within reason
+  if (ahead < 0 || ahead > 60 * 86400_000) return week;
+  return new Date(d.getTime() + 86400_000);
+}
+
+// The machine's answer is kept on the thread, the lead stays where it was, no Chaser, one line to the owner.
+// An out of office sets the pause the Chaser used to set, so the check in still comes when they are back.
+async function parkAutoReply(db: Db, lead: typeof leads.$inferSelect, last: typeof outreach.$inferSelect | null, text: string, emailId: string | null, reason: string, from: string, subject: string, now: Date): Promise<void> {
+  if (last) await db.update(outreach).set({ status: "auto_reply", replyText: text, replyAt: last.replyAt ?? now, replyEmailId: emailId ?? last.replyEmailId, updatedAt: now }).where(eq(outreach.id, last.id));
+  else await db.insert(outreach).values({ leadId: lead.id, step: 0, channel: "email", subject, bodyText: "", status: "auto_reply", replyText: text, replyAt: now, replyEmailId: emailId, simulated: false, createdAt: now, updatedAt: now });
+  const away = reason === "an out of office notice" ? returnDate(`${subject}\n${text}`, now) : null;
+  const dm = (lead.decisionMaker ?? {}) as Record<string, unknown>;
+  // the bodyless path had already marked the lead replied: back to where it was
+  await db
+    .update(leads)
+    .set({ status: lead.status === "replied" ? "contacted" : lead.status, ...(away ? { decisionMaker: { ...dm, snoozeUntil: away.toISOString() } } : {}), updatedAt: now })
+    .where(eq(leads.id, lead.id));
+  if (last) await db.update(tasks).set({ status: "done", output: { note: `${lead.company} sent ${reason}, not a person` }, finishedAt: now, updatedAt: now }).where(and(eq(tasks.kind, "follow_up"), inArray(tasks.status, ["queued", "blocked"]), sql`${tasks.input} ->> 'outreachId' = ${last.id}`));
+  const when = away ? away.toISOString().slice(0, 10) : null;
+  await db.insert(taskEvents).values({ floorId: lead.floorId, type: "reply", message: `${lead.company}: ${reason}, not a person${when ? `, check in on ${when}` : ""}`, createdAt: now });
+  await enqueueMessage(db, { kind: "reply", body: `${lead.company} (${from}) answered with ${reason}, not a person. ${when ? `Chaser checks back in on ${when}.` : "Nothing to chase; the thread stays open for a real answer."}`, now });
 }
 
 // They said stop: the thread closes, the address goes on the stop list, the owner hears it once. No Chaser.
@@ -270,6 +340,13 @@ export async function repairBlankReplies(db: Db, now = new Date()): Promise<{ re
     const text = stripQuoted(got.text).slice(0, 4000) || "(empty reply)";
     // A Chaser task that was blocked on this thread is replaced: the pipeline queues a fresh one for the replied row.
     await db.update(tasks).set({ status: "done", output: { note: "replaced once the reply text was read" }, finishedAt: now, updatedAt: now }).where(and(eq(tasks.kind, "follow_up"), inArray(tasks.status, ["queued", "blocked"]), sql`${tasks.input} ->> 'outreachId' = ${row.id}`));
+    const subject = String((got as { subject?: unknown }).subject ?? "");
+    const machine = isAutoReply(got.from, subject, text);
+    if (lead && machine) {
+      await parkAutoReply(db, lead, row, text, id, machine, got.from, subject, now);
+      repaired += 1;
+      continue;
+    }
     if (lead && isStopReply(text)) {
       await stopLead(db, lead, row, text, (got.from.match(/[^\s<>]+@[^\s<>]+/)?.[0] ?? "").toLowerCase(), "asked us to stop", now);
       repaired += 1;

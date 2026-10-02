@@ -4,7 +4,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { approvals, leads, outreach } from "@/db/schema";
 
-export type ThreadState = "hot" | "waiting" | "replied" | "visited" | "sent" | "drafting" | "paused" | "demo" | "closed";
+export type ThreadState = "hot" | "waiting" | "replied" | "visited" | "auto" | "sent" | "drafting" | "paused" | "demo" | "closed";
 export type SentHow = "auto" | "approved" | "yours" | "waiting" | "rejected" | "replaced" | "draft";
 
 export interface MailThread {
@@ -73,7 +73,7 @@ function messagesFor(rows: OutreachRow[], byApproval: Map<string, ApprovalRow>):
       });
     }
     if (r.replyText && r.replyText.trim()) {
-      out.push({ id: `${r.id}:in`, from: "them", step: r.step, subject: null, body: r.replyText, at: (r.replyAt ?? r.updatedAt).toISOString(), how: null, status: "reply", approvalId: null, previewUrl: null });
+      out.push({ id: `${r.id}:in`, from: "them", step: r.step, subject: null, body: r.replyText, at: (r.replyAt ?? r.updatedAt).toISOString(), how: null, status: r.status === "auto_reply" ? "auto" : "reply", approvalId: null, previewUrl: null });
     }
   }
   return out.sort((x, y) => x.at.localeCompare(y.at) || (x.from === "us" ? -1 : 1));
@@ -87,7 +87,7 @@ function stateOf(lead: LeadRow, items: MailMessage[], pending: ApprovalRow[], no
   const snooze = (lead.decisionMaker as { snoozeUntil?: string } | null)?.snoozeUntil;
   if (snooze && Date.parse(snooze) > now.getTime()) return "paused";
   const last = items.at(-1);
-  if (last?.from === "them") return last.status === "visit" || last.status === "read" ? "visited" : "replied";
+  if (last?.from === "them") return last.status === "visit" || last.status === "read" ? "visited" : last.status === "auto" ? "auto" : "replied";
   return items.some((m) => m.from === "us" && m.status === "sent") ? "sent" : "drafting";
 }
 
@@ -152,7 +152,7 @@ function threadFrom(lead: LeadRow, rows: OutreachRow[], byApproval: Map<string, 
   };
 }
 
-const ORDER: Record<ThreadState, number> = { hot: 0, waiting: 1, replied: 2, visited: 3, demo: 4, sent: 5, drafting: 6, paused: 7, closed: 8 };
+const ORDER: Record<ThreadState, number> = { hot: 0, waiting: 1, replied: 2, visited: 3, demo: 4, auto: 5, sent: 6, drafting: 7, paused: 8, closed: 9 };
 
 export async function listThreads(db: Db, simulated: boolean, filter: "all" | "hot" | "waiting" = "all", now = new Date()): Promise<MailThread[]> {
   const { rows, leadRows, byApproval } = await load(db, simulated);

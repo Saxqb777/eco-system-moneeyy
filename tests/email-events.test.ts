@@ -7,7 +7,7 @@ import type { Db } from "@/db/client";
 import { agents, approvals, floors, leads, messagesOut, outreach, setupItems, taskEvents, tasks } from "@/db/schema";
 import { encryptSecret } from "@/lib/crypto";
 import { recordDemoRead, recordDemoVisit } from "@/lib/demo-visits";
-import { fetchReceivedEmail, isStopReply, isSuppressed, recordEmailEvent, recordInboundReply, repairBlankReplies, sendOutreach, setEmailTransport, stripQuoted } from "@/lib/email";
+import { fetchReceivedEmail, isAutoReply, isStopReply, returnDate, isSuppressed, recordEmailEvent, recordInboundReply, repairBlankReplies, sendOutreach, setEmailTransport, stripQuoted } from "@/lib/email";
 import { listThreads, threadDetail } from "@/lib/mailbox";
 import { setSetting } from "@/lib/settings";
 import { setTelegramApi } from "@/lib/telegram";
@@ -329,3 +329,70 @@ describe("demo visits (D077)", () => {
     expect(funnel.visitedOpen).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe("machines are not replies (D083)", () => {
+  it("knows a helpdesk notice, an out of office and a noreply box from a person", () => {
+    expect(isAutoReply("Al Sharqi Support <hello@qafila.example>", "Al Sharqi Support", "Hi Saaqib Khan,\n\nA new Al Sharqi account has been created for you.\n\nClick the url below to activate your account and select a password!\nhttps://alsharqi.freshdesk.example/register/x")).toBe("a helpdesk notice");
+    expect(isAutoReply("Noor <noor@away.example>", "Automatic reply: Your shipping bills", "I am currently out of the office until 12 October with limited access to email.")).toBe("an out of office notice");
+    expect(isAutoReply("noreply@system.example", "Re: Your shipping bills", "Thanks for writing in.")).toBe("a noreply address");
+    expect(isAutoReply("Mail Delivery System <MAILER-DAEMON@mx.example>", "Undeliverable: Your shipping bills", "The address was not found.")).toBe("a noreply address");
+    expect(isAutoReply("Support <support@desk.example>", "[Ticket #4821] We have received your request", "Your request (#4821) has been received and is being reviewed by our support staff.")).toBe("a helpdesk notice");
+    expect(isAutoReply("Atif <hello@qafila.example>", "Re: Your shipping bills", "Interesting. Who is this for exactly? We handle about 300 shipping bills a month.")).toBeNull();
+    expect(isAutoReply("Farah <farah@gulf.example>", "Re: bills", "Not now, we have an accountant for this. Try us in January.")).toBeNull();
+    expect(isAutoReply("Omar <omar@pearl.example>", "Re: Your shipping bills", "Yes please send times for a demo next week.")).toBeNull();
+    // when they are back: the day after the date they name, else a week
+    const now = new Date("2026-10-06T06:00:00Z");
+    expect(returnDate("I am out of the office until 12 October with limited access to email.", now).toISOString().slice(0, 10)).toBe("2026-10-13");
+    expect(returnDate("Back in the office on Monday, Oct 20.", now).toISOString().slice(0, 10)).toBe("2026-10-21");
+    expect(returnDate("I will return on 2026-10-30.", now).toISOString().slice(0, 10)).toBe("2026-10-31");
+    expect(returnDate("I am out of the office until next week.", now).toISOString().slice(0, 10)).toBe("2026-10-13");
+    expect(returnDate("Away until 3 March.", now).toISOString().slice(0, 10)).toBe("2026-10-13");
+  });
+
+  it("parks a helpdesk answer on the thread, leaves the lead and the funnel alone, and keeps the Chaser away", async () => {
+    const lead = await addLead("Helpdesk Cargo", "hello@helpdeskcargo.example");
+    const row = await sentEmail(lead.id, hours(-2), "re_hd1");
+    const before = await founderNumbers(db, T0);
+    const r = await recordInboundReply(db, { from: "Al Sharqi Support <hello@helpdeskcargo.example>", subject: "Al Sharqi Support: new account", text: "Hi Saaqib Khan,\n\nA new Al Sharqi account has been created for you.\n\nClick the url below to activate your account and select a password!\nhttps://alsharqi.freshdesk.example/register/abc", emailId: "em-hd" }, T0);
+    expect(r).toMatchObject({ matched: true, autoReply: true });
+    const [o] = await db.select().from(outreach).where(eq(outreach.id, row.id));
+    expect(o!.status).toBe("auto_reply");
+    expect(o!.replyText).toContain("account has been created");
+    const [l] = await db.select().from(leads).where(eq(leads.id, lead.id));
+    expect(l!.status).toBe("contacted");
+    const after = await founderNumbers(db, T0);
+    expect(after.replies).toBe(before.replies);
+    expect(after.allTime.replies).toBe(before.allTime.replies);
+    await advancePipelines(db, min(1));
+    const chasers = await db.select().from(tasks).where(and(eq(tasks.kind, "follow_up"), sql`${tasks.input} ->> 'outreachId' = ${row.id}`));
+    expect(chasers).toHaveLength(0);
+    const told = await db.select().from(messagesOut).where(and(eq(messagesOut.kind, "reply"), sql`${messagesOut.body} like '%Helpdesk Cargo%'`));
+    expect(told).toHaveLength(1);
+    expect(told[0]!.body).toContain("not a person");
+    const detail = await threadDetail(db, lead.id, min(2));
+    expect(detail!.state).toBe("auto");
+    expect(detail!.items.at(-1)!.status).toBe("auto");
+  });
+
+  it("repairs a bodyless out of office the same way and puts the lead back", async () => {
+    const lead = await addLead("Away Logistics", "noor@awaylogistics.example");
+    const row = await sentEmail(lead.id, hours(-3), "re_aw1");
+    const r = await recordInboundReply(db, { from: "Noor <noor@awaylogistics.example>", subject: "Automatic reply: Your shipping bills", text: "", emailId: "em-away", pending: true }, T0);
+    expect(r).toMatchObject({ matched: true, pending: true });
+    let [l] = await db.select().from(leads).where(eq(leads.id, lead.id));
+    expect(l!.status).toBe("replied");
+    received.set("em-away", { text: "I am currently out of the office until 12 October with limited access to email.", from: "Noor <noor@awaylogistics.example>", subject: "Automatic reply: Your shipping bills" });
+    const rep = await repairBlankReplies(db, min(2));
+    expect(rep.repaired).toBeGreaterThanOrEqual(1);
+    const [o] = await db.select().from(outreach).where(eq(outreach.id, row.id));
+    expect(o!.status).toBe("auto_reply");
+    expect(o!.replyText).toContain("out of the office");
+    [l] = await db.select().from(leads).where(eq(leads.id, lead.id));
+    expect(l!.status).toBe("contacted");
+    expect((l!.decisionMaker as { snoozeUntil?: string }).snoozeUntil?.slice(0, 10)).toBe("2026-10-13");
+    await advancePipelines(db, min(3));
+    const chasers = await db.select().from(tasks).where(and(eq(tasks.kind, "follow_up"), sql`${tasks.input} ->> 'outreachId' = ${row.id}`));
+    expect(chasers).toHaveLength(0);
+  });
+});
+

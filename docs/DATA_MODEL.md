@@ -262,7 +262,7 @@ Indexes on (occurred_at) and (floor_id, occurred_at). The roof counters, the pet
 | body_text | text | |
 | body_html | text | |
 | approval_id | uuid | required before sending |
-| status | text | draft, approved, sent, reply_pending (D077: a reply arrived, its text is read on the next heartbeat), replied, handling, answered (Chaser handled the reply), bounced, complained, duplicate (D077: a second first email, dropped), stopped (D077: address on the stop list, dropped), rejected |
+| status | text | draft, approved, sent, reply_pending (D077: a reply arrived, its text is read on the next heartbeat), replied, handling, answered (Chaser handled the reply), bounced, complained, duplicate (D077: a second first email, dropped), stopped (D077: address on the stop list, dropped), rejected, auto_reply (D083: a machine answered, helpdesk or out of office or noreply; the lead stays where it was, no Chaser) |
 | resend_id | text | Resend's id of the email we sent; delivery events match on it |
 | sent_at | timestamptz | |
 | reply_text | text | quoted history cut off (D077) |

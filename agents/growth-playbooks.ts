@@ -3,6 +3,7 @@
 // what the founder posts, Success looks after companies in their free month. Every email and every ticket still
 // goes to the owner's phone first; Marketer's material is for him to post himself.
 import { and, desc, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
+import { appBaseUrl, appUsageByCode, usageLine } from "@/lib/app-usage";
 import type { Db } from "@/db/client";
 import { approvals, floors, leads, outreach, tasks, tickets } from "@/db/schema";
 import { DOCLEDGER, PARTNER_OFFER, docledgerKnowledge } from "@/config/docledger";
@@ -36,12 +37,13 @@ export interface MarketingPack {
   page: { headline: string; subheadline: string; points: string[]; cta: string };
 }
 
+// D080: welcome on day 0, did the first bill read right on day 3, a usage check on day 10, the paid offer on day 25
+// (the free month ends on day 30 and the Billing page takes the card).
 export const SUCCESS_STEPS = [
   { key: "welcome", day: 0, label: "Welcome" },
   { key: "day3", day: 3, label: "Day 3 check in" },
-  { key: "day7", day: 7, label: "Day 7 check in" },
-  { key: "day21", day: 21, label: "Day 21 check in" },
-  { key: "offer", day: 27, label: "Paid offer" },
+  { key: "day10", day: 10, label: "Day 10 usage check" },
+  { key: "offer", day: 25, label: "Paid offer" },
 ] as const;
 export type SuccessStep = (typeof SUCCESS_STEPS)[number]["key"];
 
@@ -478,7 +480,7 @@ export const successEmail: Playbook = {
   kind: "success_email",
   webSearchMaxUses: 0,
   maxTokens: 1500,
-  system: `You are Customer Success at Doc Ledger. A company started its free first month. Your emails help them get value fast and stay: the welcome gives the first three things to do (photograph ten real bills, check the fields, add their own document type if ours do not fit) and says who to write to; a check in asks one question about what they processed and offers a short call; the paid offer on day 27 thanks them, names what they did in the month if you know it, and asks them to continue at the founder's price (set per company, the base from his facts), with the calendar link for questions. Short, warm, plain. Sign with the founder's signature.
+  system: `You are Customer Success at Doc Ledger. A company started its free first month. Your emails help them get value fast and stay: the welcome gives the first three things to do (photograph ten real bills, check the fields, add their own document type if ours do not fit) and says who to write to; the day 3 check in asks whether the first bill read right and offers a short call; the day 10 check in uses the usage numbers you are given (documents read, members, last activity): praise what they did, or ask what got in the way if they did little, one question only; the paid offer on day 25 thanks them, names what they did in the month from the numbers, and asks them to continue at the founder's price (set per company, the base from his facts) by adding a card on the Billing page of the app (the link you are given), with the calendar link for questions. Never invent usage: when the numbers are missing, do not mention them. Short, warm, plain. Sign with the founder's signature.
 ${docledgerKnowledge()}
 ${STYLE}`,
   schema: { type: "object", additionalProperties: false, required: ["subject", "body"], properties: { subject: { type: "string" }, body: { type: "string" } } },
@@ -491,8 +493,11 @@ ${STYLE}`,
     const dm = (lead.decisionMaker ?? {}) as Record<string, unknown>;
     const calendar = await clipboardValue(ctx.db, "calendar_link");
     const thread = await ctx.db.select().from(outreach).where(and(eq(outreach.leadId, lead.id), eq(outreach.simulated, false))).orderBy(desc(outreach.step)).limit(4);
+    // D080: the app's numbers for this company, when it signed up through its sales code
+    const usage = lead.previewCode ? (await appUsageByCode(ctx.db, [lead.previewCode])).get(lead.previewCode) : undefined;
+    const billingUrl = `${await appBaseUrl(ctx.db)}/billing`;
     return {
-      user: `${await ownerFacts(ctx.db)}\nCalendar link: ${calendar ?? "not pasted"}\n${await experimentLines(ctx.db, ctx.now, "success")}Company: ${lead.company} (${lead.country}), contact ${str(dm.name) || "unknown"}\nFree month started: ${str(dm.trialStart).slice(0, 10) || "recently"}\nThis email: ${step.label}\nLast messages in the thread:\n${thread.reverse().map((o) => `${o.status === "replied" ? "They wrote" : "We wrote"}: ${(o.replyText ?? o.bodyText ?? "").replace(/\s+/g, " ").slice(0, 300)}`).join("\n") || "none"}\n\nWrite the email and return the JSON object.`,
+      user: `${await ownerFacts(ctx.db)}\nCalendar link: ${calendar ?? "not pasted"}\nBilling page in the app (where they add a card): ${billingUrl}\n${await experimentLines(ctx.db, ctx.now, "success")}Company: ${lead.company} (${lead.country}), contact ${str(dm.name) || "unknown"}\nFree month started: ${str(dm.trialStart).slice(0, 10) || "recently"}\nWhat they did in the app: ${usageLine(usage, ctx.now)}\nThis email: ${step.label}\nLast messages in the thread:\n${thread.reverse().map((o) => `${o.status === "replied" ? "They wrote" : "We wrote"}: ${(o.replyText ?? o.bodyText ?? "").replace(/\s+/g, " ").slice(0, 300)}`).join("\n") || "none"}\n\nWrite the email and return the JSON object.`,
     };
   },
   async absorb(task, output, ctx) {

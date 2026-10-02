@@ -164,7 +164,9 @@ export function CompanyTab({ onApprovals }: { onApprovals: () => void }) {
             <div className="muted">
               {k.country}
               {k.since ? `, since ${when(k.since)}` : ""}
+              {k.trialEndsAt && k.status === "trial" ? `, free month ends ${when(k.trialEndsAt)}` : ""}
             </div>
+            {k.usage ? <div className="muted">{k.usage}</div> : null}
           </div>
         ))}
       </Sheet>

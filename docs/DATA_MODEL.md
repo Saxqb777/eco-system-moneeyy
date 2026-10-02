@@ -236,7 +236,7 @@ Indexes on (occurred_at) and (floor_id, occurred_at). The roof counters, the pet
 | country | text | two letter code from Scout (GB, US, AU, SG, AE...); sets the send window and the skip rules |
 | phone | text | |
 | source_url | text | where Scout found it |
-| decision_maker | jsonb | name, title, email, linkedin, confidence, research, angle, approach, snoozeUntil (set on not now: 30 days, out of office: 7 days); D079: siteEmails, sitePhones, siteNote (what the Tower read on their website), calls [{ at, outcome, note }], hotFromCall (the owner called and they were interested, cleared by the email after the call), calledEmailAt |
+| decision_maker | jsonb | name, title, email, linkedin, confidence, research, angle, approach, snoozeUntil (set on not now: 30 days, out of office: 7 days); D079: siteEmails, sitePhones, siteNote (what the Tower read on their website), calls [{ at, outcome, note }], hotFromCall (the owner called and they were interested, cleared by the email after the call), calledEmailAt; D080: appOrgId, appEmail (the organisation in the Doc Ledger app), billing (paddle), churnedAt |
 | score | int | 1 to 10 from Analyst |
 | score_reason | text | |
 | status | text | new, qualified, disqualified, no_contact, drafted, contacted, replied, bounced (D077: their address bounced), trial, demo_booked, client, lost |

@@ -13,10 +13,10 @@ import { setTelegramApi } from "@/lib/telegram";
 import { availableCash, closePosition, deskBySlug, ensureDesks, markDesks, openPosition, replayBars, riskCheck, settleTime } from "@/trading/engine";
 import { kindBonus, kindRecords, scoreOutcomes, trackRecordLine, voiceRecords } from "@/trading/learn";
 import { atr, emaSeries, rsiSeries } from "@/trading/indicators";
-import { reviewDue, runTradingPulse } from "@/trading/pulse";
+import { rememberReport, reviewDue, runTradingPulse } from "@/trading/pulse";
 import { closeReport, signedPct } from "@/trading/report";
 import { defaultPlan, scanSymbol } from "@/trading/scanner";
-import { tradingDetail } from "@/trading/view";
+import { computeAnalytics, sectorFor, tradingDetail } from "@/trading/view";
 import { fakeAnthropic, fakeTelegram, testSecretsKey } from "./helpers/fakes";
 import { makeTestDb } from "./helpers/pglite";
 
@@ -474,5 +474,70 @@ describe("Words for the owner", () => {
     expect(usSessionClock(new Date("2026-10-06T15:00:00Z")).isOpen).toBe(true);
     expect(usSessionClock(new Date("2026-10-10T15:00:00Z")).isOpen).toBe(false);
     expect(usSessionClock(new Date("2026-10-10T15:00:00Z")).nextOpen).toBe("2026-10-12T13:30:00.000Z");
+  });
+});
+
+describe("The terminal (D078)", () => {
+  it("works out the numbers behind the Analytics tab", () => {
+    const at = (h: number) => new Date(`2026-10-06T${String(h).padStart(2, "0")}:30:00Z`); // Dubai is UTC plus 4
+    const rows = [
+      { desk: "ai_stocks", symbol: "NVDA", kind: "breakout", pnlUsd: 2, rMultiple: 2, holdHours: 4, openedAt: at(10) },
+      { desk: "ai_stocks", symbol: "AMD", kind: "breakout", pnlUsd: -1, rMultiple: -1, holdHours: 2, openedAt: at(10) },
+      { desk: "ai_crypto", symbol: "SOL/USD", kind: "pullback", pnlUsd: 1, rMultiple: 1.5, holdHours: 12, openedAt: at(20) },
+      { desk: "quant", symbol: "TSLA", kind: null, pnlUsd: -0.5, rMultiple: null, holdHours: 6, openedAt: at(10) },
+    ];
+    const a = computeAnalytics(rows, [{ slug: "ai_stocks", points: [{ v: 100 }, { v: 104 }, { v: 101.92 }, { v: 103 }] }], 1.5);
+    expect(a.overall.trades).toBe(4);
+    expect(a.overall.wins).toBe(2);
+    expect(a.overall.pnlUsd).toBe(1.5);
+    expect(a.overall.profitFactor).toBe(2);
+    expect(a.overall.avgR).toBe(0.83);
+    expect(a.overall.expectancyUsd).toBe(0.38);
+    expect(a.overall.avgHoldHours).toBe(6);
+    expect(a.overall.best).toEqual({ symbol: "NVDA", pnlUsd: 2 });
+    expect(a.overall.worst).toEqual({ symbol: "AMD", pnlUsd: -1 });
+    expect(a.byDesk.ai_stocks).toMatchObject({ trades: 2, wins: 1, pnlUsd: 1, profitFactor: 2 });
+    expect(a.byKind.pullback).toMatchObject({ trades: 1, wins: 1, profitFactor: null });
+    expect(Object.keys(a.byKind)).not.toContain("other");
+    expect(a.bySector[sectorFor("SOL/USD")]?.pnlUsd).toBe(1);
+    expect(a.bySector.chips).toMatchObject({ trades: 2, wins: 1, pnlUsd: 1 });
+    expect(sectorFor("XYZ/USD")).toBe("crypto");
+    // 10:30 UTC is 14:30 in Dubai; 20:30 UTC is 00:30 the next day
+    expect(a.byHour).toEqual([
+      { hour: 0, trades: 1, pnlUsd: 1 },
+      { hour: 14, trades: 3, pnlUsd: 0.5 },
+    ]);
+    expect(a.drawdownPct.ai_stocks).toBe(2);
+    expect(a.aiVsPnl).toEqual({ aiUsd: 1.5, pnlUsd: 1.5 });
+    const empty = computeAnalytics([], [], 0);
+    expect(empty.overall.profitFactor).toBeNull();
+    expect(empty.overall.expectancyUsd).toBeNull();
+    expect(empty.byHour).toEqual([]);
+  });
+
+  it("keeps the yardsticks' curve, the reports and the calls with their outcomes for the terminal", async () => {
+    const detail = await tradingDetail(db, NOW);
+    expect(detail).not.toBeNull();
+    // the pulses before this test stored SPY and Bitcoin prices
+    expect(detail!.bench.length).toBeGreaterThanOrEqual(1);
+    expect(detail!.bench[0]!.spy).not.toBeNull();
+    expect(detail!.bench[0]!.btc).not.toBeNull();
+    // a stored report shows newest first, with the Coach's words beside it
+    await rememberReport(db, { kind: "close", title: "Close report, 2026-10-06", body: "Wall Street close\n1. AI Desk: 101.00 USD", extra: "Patience paid.", at: NOW.toISOString() });
+    await rememberReport(db, { kind: "week", title: "Weekly report card", body: "Wall Street weekly report card", extra: null, at: new Date(NOW.getTime() + 60_000).toISOString() });
+    const again = await tradingDetail(db, NOW);
+    expect(again!.reports[0]!.kind).toBe("week");
+    expect(again!.reports[1]!.extra).toBe("Patience paid.");
+    // the NVDA call was taken and the trade closed, so the call carries its result
+    const nvda = again!.calls.find((c) => c.symbol === "NVDA" && c.status === "taken");
+    expect(nvda).toBeTruthy();
+    expect(["won", "lost", "even", "open"]).toContain(nvda!.outcome.state);
+    expect(again!.trades.find((t) => t.symbol === "NVDA")?.holdHours).toBeGreaterThan(0);
+    expect(again!.dayPnl.ai_stocks).toBeDefined();
+    expect(typeof again!.analytics.overall.trades).toBe("number");
+    // a race reset wipes the terminal's memory too
+    const { RACE_SETTINGS } = await import("@/trading/engine");
+    expect(RACE_SETTINGS).toContain("trading_bench");
+    expect(RACE_SETTINGS).toContain("trading_reports");
   });
 });

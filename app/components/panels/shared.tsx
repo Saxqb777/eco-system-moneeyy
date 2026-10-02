@@ -112,8 +112,69 @@ export function Empty({ children }: { children: ReactNode }) {
 // Hand drawn icons in the palette. Never emoji.
 const ICON_STYLE = { width: 15, height: 15, display: "inline-block", verticalAlign: "-2px" } as const;
 
-export function Icon({ name }: { name: "desk" | "phone" | "clipboard" | "brief" | "coins" | "mail" | "floor" | "tray" | "company" | "chart" }) {
+export type IconName = "desk" | "phone" | "clipboard" | "brief" | "coins" | "mail" | "floor" | "tray" | "company" | "chart" | "terminal" | "candle" | "coin" | "mic" | "ledger" | "report";
+
+export function Icon({ name }: { name: IconName }) {
   switch (name) {
+    case "terminal":
+      return (
+        <svg viewBox="0 0 16 16" style={ICON_STYLE} aria-hidden="true">
+          <rect x="1.5" y="2.5" width="13" height="10" fill="#07100c" stroke="#c9963b" strokeWidth="1.2" />
+          <path d="M4 6 L6.5 8 L4 10" fill="none" stroke="#3ddc84" strokeWidth="1.2" />
+          <rect x="7.5" y="9.4" width="4" height="1.2" fill="#ffc857" />
+          <rect x="5" y="13" width="6" height="1.2" fill="#8a6424" />
+        </svg>
+      );
+    case "candle":
+      return (
+        <svg viewBox="0 0 16 16" style={ICON_STYLE} aria-hidden="true">
+          <rect x="1.5" y="1.5" width="13" height="13" fill="#07100c" stroke="#c9963b" strokeWidth="1.2" />
+          <rect x="4.2" y="3" width="0.8" height="10" fill="#3ddc84" />
+          <rect x="3.2" y="5" width="2.8" height="5" fill="#3ddc84" />
+          <rect x="7.6" y="4" width="0.8" height="8" fill="#ff5a4f" />
+          <rect x="6.6" y="6" width="2.8" height="4" fill="#ff5a4f" />
+          <rect x="11" y="3" width="0.8" height="9" fill="#3ddc84" />
+          <rect x="10" y="4" width="2.8" height="5" fill="#3ddc84" />
+        </svg>
+      );
+    case "coin":
+      return (
+        <svg viewBox="0 0 16 16" style={ICON_STYLE} aria-hidden="true">
+          <circle cx="8" cy="8" r="6.2" fill="#e0b04a" stroke="#8a6424" strokeWidth="1.2" />
+          <circle cx="8" cy="8" r="3.8" fill="none" stroke="#8a6424" strokeWidth="1" />
+          <path d="M6.6 5.2 h2 a1.3 1.3 0 0 1 0 2.6 h-2 Z M6.6 7.8 h2.3 a1.3 1.3 0 0 1 0 2.6 h-2.3 Z" fill="none" stroke="#5a3a22" strokeWidth="1" />
+        </svg>
+      );
+    case "mic":
+      return (
+        <svg viewBox="0 0 16 16" style={ICON_STYLE} aria-hidden="true">
+          <rect x="6" y="2" width="4" height="7" rx="2" fill="#c9963b" stroke="#8a6424" strokeWidth="1" />
+          <path d="M4.2 7.5 a3.8 3.8 0 0 0 7.6 0" fill="none" stroke="#e0b56a" strokeWidth="1.2" />
+          <rect x="7.4" y="11.2" width="1.2" height="2.2" fill="#8a6424" />
+          <rect x="5.5" y="13.2" width="5" height="1.2" fill="#8a6424" />
+        </svg>
+      );
+    case "ledger":
+      return (
+        <svg viewBox="0 0 16 16" style={ICON_STYLE} aria-hidden="true">
+          <rect x="3" y="1.5" width="10" height="13" fill="#f3e9d2" stroke="#5a3a22" strokeWidth="1" />
+          <rect x="3" y="1.5" width="2" height="13" fill="#8c5a2b" />
+          <rect x="6.5" y="4.5" width="5" height="1" fill="#1e1a16" />
+          <rect x="6.5" y="7" width="5" height="1" fill="#1e1a16" />
+          <rect x="6.5" y="9.5" width="3" height="1" fill="#1a8a4a" />
+          <rect x="6.5" y="12" width="4" height="1" fill="#b8322a" />
+        </svg>
+      );
+    case "report":
+      return (
+        <svg viewBox="0 0 16 16" style={ICON_STYLE} aria-hidden="true">
+          <path d="M3 1.5 h7 l3 3 v10 h-10 Z" fill="#f3e9d2" stroke="#5a3a22" strokeWidth="1" />
+          <path d="M10 1.5 v3 h3" fill="none" stroke="#5a3a22" strokeWidth="1" />
+          <rect x="5" y="7" width="6" height="1" fill="#1e1a16" />
+          <rect x="5" y="9.5" width="6" height="1" fill="#1e1a16" />
+          <rect x="5" y="12" width="4" height="1" fill="#c9963b" />
+        </svg>
+      );
     case "chart":
       return (
         <svg viewBox="0 0 16 16" style={ICON_STYLE} aria-hidden="true">
@@ -200,7 +261,7 @@ export function Icon({ name }: { name: "desk" | "phone" | "clipboard" | "brief" 
 export interface Tab {
   id: string;
   label: string;
-  icon: Parameters<typeof Icon>[0]["name"];
+  icon: IconName;
   badge?: number;
 }
 

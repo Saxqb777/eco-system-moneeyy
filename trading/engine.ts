@@ -40,7 +40,7 @@ export async function tradingEvent(db: Db, input: { agentSlug?: string; message:
 }
 
 // Settings that belong to one race: caches, bells, the brief, the lessons and the report marks.
-export const RACE_SETTINGS = ["trading_plan", "trading_breaker", "trading_reviews_day", "trading_voices", "trading_kinds", "trading_memo", "trading_trend_stocks", "trading_trend_crypto", "trading_btc_start", "trading_brief", "trading_lessons", "trading_tape", "trading_bell_day", "trading_stocks_open", "trading_report_day", "trading_week_report", "trading_quiet_day", "trading_coach_at", "trading_status"];
+export const RACE_SETTINGS = ["trading_plan", "trading_breaker", "trading_reviews_day", "trading_voices", "trading_kinds", "trading_memo", "trading_trend_stocks", "trading_trend_crypto", "trading_btc_start", "trading_brief", "trading_lessons", "trading_tape", "trading_bell_day", "trading_stocks_open", "trading_report_day", "trading_week_report", "trading_quiet_day", "trading_coach_at", "trading_status", "trading_bench", "trading_reports"];
 
 // The four desks with their 100 USD each. A switch between simulation and real prices starts the race over:
 // made up prices and real ones never share a scoreboard.

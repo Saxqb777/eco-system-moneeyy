@@ -63,12 +63,15 @@ export const TRADING_SEATS: Record<string, number> = {
   trading_news: 515,
   trading_quant: 581,
   trading_bull: 647,
-  trading_chief: 713,
   trading_bear: 847,
   trading_risk: 913,
   trading_runner: 979,
   trading_coach: 1045,
+  // the Chief runs the floor from the glass corner office at the end (D078)
+  trading_chief: 1150,
   // the Strategist stands in the pit under the market wall
   trading_strategist: 780,
 };
 export const TRADING_PIT = { x: 780, w: 66 };
+// The Chief's glass corner office (D078): the partition, the door gap, the desk inside, the bull outside by the pit.
+export const TRADING_OFFICE = { wallX: 1112, doorY: 0, bullX: 740 };

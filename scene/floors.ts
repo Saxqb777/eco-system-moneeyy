@@ -1,6 +1,6 @@
 // Interiors per floor. Static shell plus the animated props the polish layer drives.
 import { Container, Graphics } from "pixi.js";
-import { BUILDING, DESK_SLOTS, LEVEL_H, PENTHOUSE, SLAB, WORKSHOP, floorY } from "./layout";
+import { BUILDING, DESK_SLOTS, LEVEL_H, PENTHOUSE, SLAB, WORKSHOP, floorY, TRADING_OFFICE } from "./layout";
 import { C, FLOOR_ACCENT, mix, shade } from "./palette";
 import { label, plane, twoTone } from "./draw";
 import * as P from "./props";
@@ -47,6 +47,8 @@ export interface TradingProps {
   bell: T.Bell;
   floorY: number;
   top: number;
+  // the Chief's corner office (D078): its wall screens follow the market
+  office: T.CornerOffice;
 }
 
 const IX = BUILDING.interiorX;
@@ -256,7 +258,12 @@ function buildTrading(c: Container, build: FloorBuild, slots: number[], y: numbe
   const bell = T.brassBell(487, top + 18);
   c.addChild(bell.container);
   c.addChild(T.pitRug(780, y, 66));
-  c.addChild(T.bullStatue(1160, y - 1));
+  c.addChild(T.bullStatue(TRADING_OFFICE.bullX, y - 1));
+  // the Chief's glass corner office (D078): a frosted partition with a door gap, a carpet, a wall of small
+  // screens under the race board, and the name on the glass
+  const office = T.cornerOffice(TRADING_OFFICE.wallX, IR, top, y, on);
+  c.addChild(office.back);
+  build.front.addChild(office.front);
   const chair = T.recliner(452, y - 1);
   c.addChild(chair.back);
   build.front.addChild(chair.front);
@@ -273,7 +280,7 @@ function buildTrading(c: Container, build: FloorBuild, slots: number[], y: numbe
   c.addChild(clock.container);
   build.clocks.push(clock);
   build.spots = { window: 780 };
-  build.trading = { tape, board, wall, bell, floorY: y, top };
+  build.trading = { tape, board, wall, bell, office, floorY: y, top };
 }
 
 // A whiteboard on a stand at the end of the Growth floor, with the company's numbers in marker.

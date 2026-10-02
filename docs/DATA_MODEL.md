@@ -461,3 +461,6 @@ One row per heartbeat so the status page and Warden can see the pulse.
 - Settings: trading_daily_usd, trading_plan, trading_brief, trading_lessons, trading_tape, trading_status, trading_btc_start, trading_pulse_at, trading_lock, trading_trend_stocks and trading_trend_crypto (daily caches), bell, report and quiet day marks, trading_cap_asked.
 - D076: trading_positions.meeting gains "scored": true once the room's votes and the signal's kind were counted. trading_positions.reviews entries carry price (the price at that look). trading_signals.detail may carry kindBonus (what the kind's win rate added). New settings: trading_breaker {dayKey, at, spyChg}, trading_reviews_day {dayKey, n}, trading_voices {Voice: {right, wrong, recent[]}}, trading_kinds {kind: {wins, losses}}, trading_memo {weekKey, memo, at}.
 
+### Wall Street settings added in D078
+- trading_bench: { items: [{ at, spy, btc }] }, SPY and Bitcoin prices one point every 10 minutes, last 400 kept; the terminal draws the desks against them. Reset with the race.
+- trading_reports: the last 40 reports the firm wrote, [{ kind: close or week, title, body, extra, at }], written by the pulse beside the Telegram message. Reset with the race.

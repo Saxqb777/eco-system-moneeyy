@@ -88,6 +88,9 @@ export class TradingFloor {
     const status = view.status;
     const footer = status ? `PAPER MONEY  ${status.stocksOpen ? "STOCKS OPEN" : "CRYPTO ONLY"}` : "PAPER MONEY";
     p.board.set(view.desks.map((d) => ({ name: d.name, pnlPct: d.pnlPct, status: d.status, hold: d.style === "hold" })), footer);
+    // the Chief's wall of screens (D078) goes green or red with the S&P 500, dark when no prices come in
+    const spy = view.tape.find((t) => t.s === "SPY");
+    p.office.screens(spy?.chg ?? null, !!status && (status.stocksLive || status.cryptoLive));
   }
 
   update(dt: number) {

@@ -378,3 +378,73 @@ export function stampText(text: string, color: number): Text {
   t.anchor.set(0.5);
   return t;
 }
+
+// The Chief's glass corner office (D078). back: the carpet, the partition and the wall screens (behind the
+// characters); front: the glass pane's shine and the name plate (in front). screens() tints the small screens
+// so the office looks alive when the market moves.
+export interface CornerOffice {
+  back: Container;
+  front: Container;
+  screens: (chg: number | null, on: boolean) => void;
+}
+
+export function cornerOffice(wallX: number, right: number, top: number, floor: number, on: boolean): CornerOffice {
+  const back = new Container();
+  const front = new Container();
+  const carpet = new Graphics();
+  carpet.rect(wallX + 3, floor - 4, right - wallX - 3, 4).fill(0x1b2a3a);
+  carpet.rect(wallX + 3, floor - 4, right - wallX - 3, 1).fill(0x2d4258);
+  back.addChild(carpet);
+  // the partition: frosted glass in a dark frame, a door gap near the floor on the pit side
+  const wall = new Graphics();
+  const wallTop = top + 46;
+  const doorH = 46;
+  wall.rect(wallX, wallTop, 4, floor - wallTop - doorH).fill(0x2b3a33);
+  wall.rect(wallX - 1, wallTop, 6, 3).fill(0x3ddc84, 0.6);
+  wall.rect(wallX + 1, wallTop + 3, 2, floor - wallTop - doorH - 3).fill({ color: 0xbfe8d8, alpha: 0.35 });
+  // the door frame and a brass handle
+  wall.rect(wallX, floor - doorH, 4, 3).fill(0x8a6424);
+  wall.rect(wallX + 1, floor - doorH + 3, 2, doorH - 3).fill({ color: 0xbfe8d8, alpha: 0.12 });
+  wall.rect(wallX + 3, floor - 22, 3, 2).fill(0xc9963b);
+  back.addChild(wall);
+  // the wall of small screens under the race board
+  const screens: Graphics[] = [];
+  const sx0 = wallX + 10;
+  const cols = Math.max(3, Math.floor((right - wallX - 18) / 22));
+  for (let i = 0; i < cols; i++) {
+    const g = new Graphics();
+    const x = sx0 + i * 22;
+    g.rect(x, top + 84, 18, 11).fill(0x0b1a14);
+    g.rect(x + 1, top + 85, 16, 9).fill(on ? 0x15402c : 0x0f1f18);
+    back.addChild(g);
+    screens.push(g);
+  }
+  // the name on the glass, under the wall of screens so it never sits on the race board
+  const plate = new Graphics();
+  plate.rect(wallX + 8, top + 100, 48, 10).fill({ color: 0x07140f, alpha: 0.7 });
+  plate.rect(wallX + 8, top + 100, 48, 1).fill(0xc9963b);
+  front.addChild(plate);
+  const name = new Text({ text: "THE CHIEF", style: { fontFamily: "Barlow Condensed, sans-serif", fontSize: 8, fontWeight: "700", fill: 0xe0b56a, letterSpacing: 1 } });
+  name.x = wallX + 12;
+  name.y = top + 101;
+  front.addChild(name);
+  // the glass pane's shine
+  const shine = new Graphics();
+  shine.rect(wallX + 6, wallTop + 6, 1, 40).fill({ color: 0xffffff, alpha: 0.12 });
+  shine.rect(wallX + 8, wallTop + 10, 1, 24).fill({ color: 0xffffff, alpha: 0.08 });
+  front.addChild(shine);
+  return {
+    back,
+    front,
+    screens(chg, live) {
+      screens.forEach((g, i) => {
+        g.clear();
+        const x = sx0 + i * 22;
+        g.rect(x, top + 84, 18, 11).fill(0x0b1a14);
+        const tone = !live ? 0x0f1f18 : chg === null ? 0x15402c : (chg >= 0) !== (i % 3 === 1) ? 0x1d6b3f : 0x6b2a24;
+        g.rect(x + 1, top + 85, 16, 9).fill(tone);
+        g.rect(x + 3, top + 87 + (i % 3), 10, 1).fill({ color: 0xe8f5ee, alpha: 0.35 });
+      });
+    },
+  };
+}

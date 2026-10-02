@@ -22,6 +22,13 @@ const shots = [
   { name: "panel-mailbox-phone", width: 430, height: 900, panel: "warden:mailbox", click: ".thread-row.hot" },
   { name: "panel-trading", width: 1600, height: 900, panel: "floor:trading" },
   { name: "panel-trading-phone", width: 430, height: 900, panel: "floor:trading", clip: true },
+  { name: "panel-terminal-stocks", width: 1600, height: 900, panel: "floor:trading", click: ".panel-tabs .tab:nth-child(2)" },
+  { name: "panel-terminal-crypto", width: 1600, height: 900, panel: "floor:trading", click: ".panel-tabs .tab:nth-child(3)" },
+  { name: "panel-terminal-calls", width: 1600, height: 900, panel: "floor:trading", click: ".panel-tabs .tab:nth-child(4)" },
+  { name: "panel-terminal-trades", width: 1600, height: 900, panel: "floor:trading", click: ".panel-tabs .tab:nth-child(5)" },
+  { name: "panel-terminal-reports", width: 1600, height: 900, panel: "floor:trading", click: ".panel-tabs .tab:nth-child(6)" },
+  { name: "panel-terminal-analytics", width: 1600, height: 900, panel: "floor:trading", click: ".panel-tabs .tab:nth-child(7)" },
+  { name: "panel-terminal-calls-phone", width: 430, height: 900, panel: "floor:trading", click: ".panel-tabs .tab:nth-child(4)", clip: true },
   { name: "wall-street", width: 1600, height: 900, dpr: 2, region: { x: 380, y: 536, width: 880, height: 150 }, wait: 11000 },
   { name: "wall-street-meeting", width: 1600, height: 900, dpr: 2, region: { x: 380, y: 536, width: 880, height: 150 }, wait: 17000 },
 ].filter((s) => !process.env.SHOTS || process.env.SHOTS.split(",").some((p) => s.name.startsWith(p)));

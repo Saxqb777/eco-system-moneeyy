@@ -65,6 +65,29 @@ export interface TapeItem {
   m: Market;
 }
 
+// One point of the yardsticks' curve (D078): SPY and Bitcoin prices at that moment.
+export interface BenchPoint {
+  at: string;
+  spy: number | null;
+  btc: number | null;
+}
+
+// A report the firm wrote, kept for the terminal's Reports tab (D078): the close report after the US session and
+// the Sunday report card, each with what the Coach added.
+export interface StoredReport {
+  kind: "close" | "week";
+  title: string;
+  body: string;
+  extra: string | null;
+  at: string;
+}
+
+export async function rememberReport(db: Db, entry: StoredReport): Promise<void> {
+  const list = await getSetting<unknown>(db, "trading_reports", []);
+  const kept = Array.isArray(list) ? (list as StoredReport[]).filter((r) => r && typeof r.body === "string") : [];
+  await setSetting(db, "trading_reports", [...kept, entry].slice(-40));
+}
+
 async function pulseBody(db: Db, now: Date, opts: { maxMeetings?: number }): Promise<PulseResult> {
   const steps: Record<string, unknown> = {};
   const errors: string[] = [];
@@ -113,6 +136,17 @@ async function pulseBody(db: Db, now: Date, opts: { maxMeetings?: number }): Pro
     });
   if (tape.length) await setSetting(db, "trading_tape", { at: now.toISOString(), items: tape });
   steps.prices = { stocks: live.stocks, crypto: live.crypto, stocksOpen, nextOpen: clock.nextOpen };
+  // D078: the yardsticks' curve for the terminal (SPY and Bitcoin), one point every 10 minutes, the last 400 kept.
+  const spyQ = quotes[INDEX_SYMBOL];
+  const btcQ = quotes[CRYPTO_BENCHMARK];
+  if (spyQ || btcQ) {
+    const bench = ((s.trading_bench as { items?: BenchPoint[] } | undefined)?.items ?? []).filter((b) => b && typeof b.at === "string");
+    const lastB = bench.at(-1);
+    if (!lastB || now.getTime() - new Date(lastB.at).getTime() >= 10 * 60_000) {
+      bench.push({ at: now.toISOString(), spy: spyQ?.last ?? null, btc: btcQ?.last ?? null });
+      await setSetting(db, "trading_bench", { items: bench.slice(-400) });
+    }
+  }
 
   // the bells: the US open and close, once a New York day each
   const ny = nyParts(now);
@@ -523,6 +557,7 @@ async function reports(db: Db, input: { stocksOpen: boolean; wasOpen: boolean; l
     const body = await closeReport(db, { title: `Wall Street close, ${dubaiParts(now).dayKey}`, from: dubaiDayStartUtc(now), to: now, btcPct: await btcHoldPct(db, btc), aiCostUsd: floor ? spend.todayByFloor[floor.id] ?? 0 : 0 });
     const notes = await deskNotes(db, body, now, false).catch(() => null);
     await enqueueMessage(db, { kind: "trading_close", body: notes ? `${body}\n\nDesk notes from the Coach: ${notes}` : body, now });
+    await rememberReport(db, { kind: "close", title: `Close report, ${dubaiParts(now).dayKey}`, body, extra: notes, at: now.toISOString() });
     out.close = "queued";
   }
   const p = dubaiParts(now);
@@ -537,6 +572,7 @@ async function reports(db: Db, input: { stocksOpen: boolean; wasOpen: boolean; l
     const learned = learningSummary(await voiceRecords(db), await kindRecords(db));
     const memo = await firmMemo(db, `${body}\n${learned}`, now, false).catch(() => null);
     await enqueueMessage(db, { kind: "trading_week", body: `${body}\n${learned}${memo ? `\n\nThe Coach's memo for next week: ${memo}` : ""}\nThe test runs 6 to 8 weeks. Real money only if a desk beats Lazy Larry after costs.`, now });
+    await rememberReport(db, { kind: "week", title: `Weekly report card, week of ${weekKey}`, body: `${body}\n${learned}`, extra: memo, at: now.toISOString() });
     out.week = "queued";
   }
   return out;

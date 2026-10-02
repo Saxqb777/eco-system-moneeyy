@@ -49,6 +49,11 @@ export function CharacterBody({ agentId, scene, onFloor }: { agentId: string; sc
               </button>
             ) : null}
             <Pill status={agent.status} />
+            {agent.slug === "trading_chief" ? (
+              <Key small onClick={() => onFloor?.("trading")}>
+                Open the terminal
+              </Key>
+            ) : null}
           </div>
         </div>
       </div>

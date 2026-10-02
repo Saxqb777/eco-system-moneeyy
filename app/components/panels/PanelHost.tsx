@@ -10,7 +10,7 @@ import { MailboxTab } from "./MailboxTab";
 import { Panel, usePoll, type Tab } from "./shared";
 import { ApprovalsTab, BriefTab, BudgetTab, IdeasTab, SetupTab, WardenControls } from "./WardenTabs";
 import { CompanyTab } from "./CompanyTab";
-import { TradingTab } from "./TradingTab";
+import { TerminalTab, type TerminalTabId } from "./TerminalTab";
 
 export type WardenTab = "office" | "company" | "approvals" | "mailbox" | "setup" | "brief" | "budget" | "ideas";
 export type PanelSel = { type: "agent"; id: string } | { type: "floor"; slug: string } | { type: "warden"; tab: WardenTab };
@@ -68,17 +68,25 @@ export function PanelHost({ sel, open, state, scene, onClose, onNavigate }: { se
   return <WardenPanel open={open} tab={sel.tab} state={state} scene={scene} onClose={onClose} onNavigate={onNavigate} />;
 }
 
-// Wall Street (D075): the race first, the floor's crew and money one tab over.
+// Wall Street (D075, D078): the Chief's terminal, seven screens deep, and the floor's crew one tab over.
+type TradingPanelTab = TerminalTabId | "floor";
+const TERMINAL_TABS: TerminalTabId[] = ["desk", "stocks", "crypto", "calls", "trades", "reports", "analytics"];
 function TradingPanel({ open, state, onClose, onNavigate }: { open: boolean; state: TowerState; onClose: () => void; onNavigate: (sel: PanelSel) => void }) {
-  const [tab, setTab] = useState<"race" | "floor">("race");
+  const [tab, setTab] = useState<TradingPanelTab>("desk");
   const floor = state.floors.find((f) => f.slug === "trading");
   const tabs: Tab[] = [
-    { id: "race", label: "Trading", icon: "chart" },
+    { id: "desk", label: "Desk", icon: "terminal" },
+    { id: "stocks", label: "Stocks", icon: "candle" },
+    { id: "crypto", label: "Crypto", icon: "coin" },
+    { id: "calls", label: "Calls", icon: "mic" },
+    { id: "trades", label: "Trades", icon: "ledger" },
+    { id: "reports", label: "Reports", icon: "report" },
+    { id: "analytics", label: "Analytics", icon: "chart" },
     { id: "floor", label: "Floor", icon: "floor" },
   ];
   return (
-    <Panel open={open} kicker={floor ? `Level ${floor.level}, paper money` : "Wall Street"} title={floor?.name ?? "Wall Street"} accent={floor?.accent} tabs={tabs} tab={tab} onTab={(id) => setTab(id as "race" | "floor")} onClose={onClose}>
-      {tab === "race" ? <TradingTab /> : null}
+    <Panel open={open} kicker={floor ? `Level ${floor.level}, the Chief's terminal, paper money` : "Wall Street"} title={floor?.name ?? "Wall Street"} accent={floor?.accent} tabs={tabs} tab={tab} onTab={(id) => setTab(id as TradingPanelTab)} onClose={onClose}>
+      {TERMINAL_TABS.includes(tab as TerminalTabId) ? <TerminalTab tab={tab as TerminalTabId} /> : null}
       {tab === "floor" ? (
         <FloorBody
           slug="trading"

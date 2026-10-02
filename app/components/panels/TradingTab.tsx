@@ -154,6 +154,7 @@ export function TradingTab() {
           <dt>Last look</dt>
           <dd>{s ? since(s.at) : "never"}</dd>
         </dl>
+        {s?.breaker ? <div className="alert">Circuit breaker on: SPY is down {Math.abs(s.spyChg ?? 0).toFixed(2)}% today. No new stock trades until tomorrow, open trades keep their stops.</div> : null}
         {s?.errors.length ? <div className="alert">{s.errors[0]}</div> : null}
         <div className="row-keys">
           <Key small onClick={() => void runNow()} disabled={busy}>
@@ -162,6 +163,37 @@ export function TradingTab() {
           {note ? <span className="muted">{note}</span> : null}
         </div>
       </Sheet>
+
+      {t.voices.length ? (
+        <Sheet title="Who to listen to">
+          {t.voices.map((v) => (
+            <div key={v.who} className="voice-row">
+              <div className="h-top">
+                <b>{v.who}</b>
+                <span className={`race-pct ${v.right / v.of >= 0.6 ? "up" : v.right / v.of < 0.45 ? "down" : ""}`}>
+                  {v.right} of {v.of}
+                </span>
+              </div>
+              <div className="meter">
+                <i style={{ width: `${Math.round((v.right / v.of) * 100)}%` }} />
+              </div>
+              <div className="muted">right on the last {v.of} trades it voted on, {v.allRight} of {v.allOf} ever</div>
+            </div>
+          ))}
+          {Object.keys(t.kinds).length ? (
+            <div className="muted">
+              Signal kinds: {Object.entries(t.kinds).map(([k, r]) => `${k} ${r.wins} won ${r.losses} lost`).join(", ")}. A kind that keeps losing needs a stronger setup to get a meeting.
+            </div>
+          ) : null}
+        </Sheet>
+      ) : null}
+
+      {t.memo ? (
+        <Sheet title="The Coach's memo for this week">
+          <div>{t.memo.memo}</div>
+          <div className="muted">Read out at every morning meeting. Written {since(t.memo.at)}.</div>
+        </Sheet>
+      ) : null}
 
       {t.plan ? (
         <Sheet title={`Morning meeting: a ${t.plan.mode} day`}>

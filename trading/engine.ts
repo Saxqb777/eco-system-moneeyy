@@ -2,7 +2,7 @@
 // Paper money: every fill is worked out from a real (or simulated) quote, with a small cash account's real
 // costs, and nothing ever reaches a broker.
 import { and, desc, eq, gt, gte, inArray, sql } from "drizzle-orm";
-import { COSTS, DESKS, INDEX_SYMBOL, RISK, START_USD, type DeskDef, type Market } from "@/config/trading";
+import { COSTS, DESKS, INDEX_SYMBOL, RISK, START_USD, sectorOf, type DeskDef, type Market } from "@/config/trading";
 import type { Db } from "@/db/client";
 import { agents, floors, settings, taskEvents, tradingDesks, tradingEquity, tradingNews, tradingPositions, tradingSignals } from "@/db/schema";
 import type { Bar, MarketData, Quote } from "@/lib/market";
@@ -40,7 +40,7 @@ export async function tradingEvent(db: Db, input: { agentSlug?: string; message:
 }
 
 // Settings that belong to one race: caches, bells, the brief, the lessons and the report marks.
-export const RACE_SETTINGS = ["trading_plan", "trading_trend_stocks", "trading_trend_crypto", "trading_btc_start", "trading_brief", "trading_lessons", "trading_tape", "trading_bell_day", "trading_stocks_open", "trading_report_day", "trading_week_report", "trading_quiet_day", "trading_coach_at", "trading_status"];
+export const RACE_SETTINGS = ["trading_plan", "trading_breaker", "trading_reviews_day", "trading_voices", "trading_kinds", "trading_memo", "trading_trend_stocks", "trading_trend_crypto", "trading_btc_start", "trading_brief", "trading_lessons", "trading_tape", "trading_bell_day", "trading_stocks_open", "trading_report_day", "trading_week_report", "trading_quiet_day", "trading_coach_at", "trading_status"];
 
 // The four desks with their 100 USD each. A switch between simulation and real prices starts the race over:
 // made up prices and real ones never share a scoreboard.
@@ -135,15 +135,22 @@ export function riskCheck(input: {
   tradesToday: number;
   cashAvailable: number;
   entry: number;
-  plan: Pick<TradePlan, "symbol" | "stop" | "target" | "sizeUsd">;
+  plan: Pick<TradePlan, "symbol" | "stop" | "target" | "sizeUsd"> & { market?: Market };
+  // the SPY circuit breaker is on: no new stock trades today
+  breaker?: boolean;
 }): RiskVerdict {
   const { desk, entry, plan } = input;
   const equity = n(desk.equityUsd);
+  const market: Market = plan.market ?? (plan.symbol.includes("/") ? "crypto" : "stocks");
   if (desk.status !== "live") return { ok: false, reason: `desk is ${desk.status}` };
   if (input.open.some((p) => p.symbol === plan.symbol)) return { ok: false, reason: `already holds ${shortSymbol(plan.symbol)}` };
   if (input.style !== "hold") {
+    if (input.breaker && market === "stocks") return { ok: false, reason: `circuit breaker: SPY is down ${RISK.breakerPct} percent today` };
     if (input.open.length >= RISK.maxOpenPerDesk) return { ok: false, reason: `${RISK.maxOpenPerDesk} trades already open` };
     if (input.tradesToday >= RISK.maxNewTradesPerDay) return { ok: false, reason: `${RISK.maxNewTradesPerDay} trades today already` };
+    const sector = sectorOf(plan.symbol);
+    const same = input.open.filter((p) => sectorOf(p.symbol) === sector).length;
+    if (same >= RISK.maxPerSector) return { ok: false, reason: `already ${same} trades in ${sector}` };
   }
   if (!(entry > 0)) return { ok: false, reason: "no price" };
   let stop = plan.stop;
@@ -154,10 +161,14 @@ export function riskCheck(input: {
     if (stopPct < RISK.minStopPct) stop = entry * (1 - RISK.minStopPct);
     if (stopPct > RISK.maxStopPct) stop = entry * (1 - RISK.maxStopPct);
     const risk = entry - stop;
-    if (target !== null && target !== undefined) {
-      const rr = (target - entry) / risk;
-      if (rr < RISK.minRewardRisk) target = entry + risk * RISK.minRewardRisk;
-      if (rr > RISK.maxRewardRisk) target = entry + risk * RISK.maxRewardRisk;
+    const minRr = market === "crypto" ? RISK.cryptoMinRewardRisk : RISK.minRewardRisk;
+    // crypto: the target must also clear the fees, three round trips, or the trade is not worth taking
+    const minTarget = market === "crypto" ? Math.max(entry + risk * minRr, entry * (1 + RISK.cryptoMinTargetPct)) : entry + risk * minRr;
+    if ((minTarget - entry) / risk > RISK.maxRewardRisk) return { ok: false, reason: "stop too tight for a crypto trade to beat the fees" };
+    if (target === null || target === undefined) target = market === "crypto" ? minTarget : null;
+    if (target !== null) {
+      if (target < minTarget) target = minTarget;
+      if ((target - entry) / risk > RISK.maxRewardRisk) target = entry + risk * RISK.maxRewardRisk;
     }
   }
   let size: number;
@@ -173,11 +184,11 @@ export function riskCheck(input: {
 }
 
 // Opens a long position at the ask. Crypto pays the taker fee out of the coins received.
-export async function openPosition(db: Db, desk: Desk, plan: TradePlan, quote: Quote, now: Date): Promise<{ ok: true; position: Position } | { ok: false; reason: string }> {
+export async function openPosition(db: Db, desk: Desk, plan: TradePlan, quote: Quote, now: Date, opts: { breaker?: boolean } = {}): Promise<{ ok: true; position: Position } | { ok: false; reason: string }> {
   const def = deskDef(desk.slug);
   const open = await openPositions(db, desk.id);
   const entry = buyPrice(quote, plan.market);
-  const verdict = riskCheck({ desk, style: def?.style ?? "ai", open, tradesToday: await tradesToday(db, desk.id, now), cashAvailable: await availableCash(db, desk, now), entry, plan });
+  const verdict = riskCheck({ desk, style: def?.style ?? "ai", open, tradesToday: await tradesToday(db, desk.id, now), cashAvailable: await availableCash(db, desk, now), entry, plan, breaker: opts.breaker });
   if (!verdict.ok) return verdict;
   const fee = plan.market === "crypto" ? verdict.sizeUsd * COSTS.cryptoTakerFee : 0;
   const qty = (verdict.sizeUsd - fee) / entry;
@@ -284,7 +295,7 @@ export interface ExecutorResult {
 }
 
 // Runs the Executor over every open position of the markets given. Stocks are only replayed with session bars.
-export async function runExecutor(db: Db, market: MarketData, markets: Market[], quotes: Record<string, Quote>, now: Date): Promise<ExecutorResult> {
+export async function runExecutor(db: Db, market: MarketData, markets: Market[], quotes: Record<string, Quote>, now: Date, tradingNow: Partial<Record<Market, boolean>> = { stocks: true, crypto: true }): Promise<ExecutorResult> {
   const out: ExecutorResult = { checked: 0, closed: [], errors: [] };
   const desks = new Map((await db.select().from(tradingDesks)).map((d) => [d.id, d]));
   const open = (await openPositions(db)).filter((p) => markets.includes(p.market as Market));
@@ -314,7 +325,7 @@ export async function runExecutor(db: Db, market: MarketData, markets: Market[],
       // a trade that went nowhere for too long is closed at the bid
       const maxHours = p.market === "crypto" ? RISK.maxHoldHoursCrypto : RISK.maxHoldHoursStocks;
       const q = quotes[p.symbol];
-      if (q && now.getTime() - p.openedAt.getTime() > maxHours * 3600_000) {
+      if (q && tradingNow[p.market as Market] && now.getTime() - p.openedAt.getTime() > maxHours * 3600_000) {
         const r = await closePosition(db, p, sellPrice(q, p.market as Market), "time", now);
         out.closed.push({ positionId: p.id, desk: desk?.slug ?? "", symbol: p.symbol, reason: "time", pnlUsd: r.pnlUsd, pnlPct: r.pnlPct });
         continue;

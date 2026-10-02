@@ -4,7 +4,7 @@
 // floor's own daily money. Paper money only: no step can reach a broker.
 import { randomUUID } from "node:crypto";
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
-import { CRYPTO_BENCHMARK, CRYPTO_WATCHLIST, DESKS, FIRM, PULSE_GAP_MS, TRADING_DAILY_USD, PULSE_LOCK_MS, RISK, SCAN, STOCK_WATCHLIST, type Market } from "@/config/trading";
+import { CRYPTO_BENCHMARK, CRYPTO_WATCHLIST, DESKS, FIRM, INDEX_SYMBOL, PULSE_GAP_MS, PULSE_TIME_BUDGET_MS, TRADING_DAILY_USD, PULSE_LOCK_MS, RISK, SCAN, STOCK_WATCHLIST, type Market } from "@/config/trading";
 import type { Db } from "@/db/client";
 import { agents, approvals, budgetLedger, floors, settings, tradingDesks, tradingPositions, tradingSignals } from "@/db/schema";
 import { raiseApproval } from "@/lib/approvals";
@@ -13,7 +13,8 @@ import { getMarket, MarketError, usSessionClock, nyParts, type Bar, type MarketC
 import { asBool, asNumber, getSetting, getSettings, setSetting } from "@/lib/settings";
 import { enqueueMessage, getTelegramConfig } from "@/lib/telegram";
 import { dubaiDayStartUtc, dubaiParts, dubaiWeekStartUtc } from "@/lib/time";
-import { aiBudget, coachLessons, deskMeeting, deskNotes, fetchNews, houndTags, morningBrief, morningMeeting, positionReview, todaysPlan } from "./crew";
+import { aiBudget, coachLessons, deskMeeting, deskNotes, fetchNews, firmMemo, houndTags, morningBrief, morningMeeting, positionReview, todaysPlan } from "./crew";
+import { kindBonus, kindRecords, learningSummary, scoreOutcomes, voiceRecords } from "./learn";
 import { availableCash, closePosition, deskBySlug, ensureDesks, fmtPrice, larryBuys, markDesks, openPosition, openPositions, runExecutor, sellPrice, shortSymbol, snapshotEquity, tradingEvent } from "./engine";
 import { sma } from "./indicators";
 import { boardRows, btcHoldPct, closeReport, signedPct } from "./report";
@@ -67,6 +68,8 @@ export interface TapeItem {
 async function pulseBody(db: Db, now: Date, opts: { maxMeetings?: number }): Promise<PulseResult> {
   const steps: Record<string, unknown> = {};
   const errors: string[] = [];
+  // the stopwatch: no new room or review starts once this much of the pulse has gone by
+  const deadline = Date.now() + PULSE_TIME_BUDGET_MS;
   const s = await getSettings(db);
   const simulation = asBool(s.simulation_mode, true);
   const [floor] = await db.select().from(floors).where(eq(floors.slug, "trading")).limit(1);
@@ -125,9 +128,22 @@ async function pulseBody(db: Db, now: Date, opts: { maxMeetings?: number }): Pro
   }
   if (quotes[CRYPTO_BENCHMARK] && !s.trading_btc_start) await setSetting(db, "trading_btc_start", { price: quotes[CRYPTO_BENCHMARK]!.last, at: now.toISOString() });
 
+  // the circuit breaker: SPY down on the day past the limit, no new stock trades until the next Dubai day
+  const dayKey = dubaiParts(now).dayKey;
+  const spy = quotes[INDEX_SYMBOL];
+  const spyChg = spy?.prevClose ? ((spy.last - spy.prevClose) / spy.prevClose) * 100 : null;
+  // read fresh: a switch between simulation and real prices just wiped the race's settings
+  let breaker = (await getSetting<{ dayKey?: string } | null>(db, "trading_breaker", null))?.dayKey === dayKey;
+  if (!breaker && stocksOpen && spyChg !== null && spyChg <= -RISK.breakerPct) {
+    breaker = true;
+    await setSetting(db, "trading_breaker", { dayKey, at: now.toISOString(), spyChg: Number(spyChg.toFixed(2)) });
+    await tradingEvent(db, { agentSlug: "trading_risk", message: `Circuit breaker: SPY is down ${Math.abs(spyChg).toFixed(2)} percent today. No new stock trades until tomorrow, open trades keep their stops`, data: { kind: "breaker", spyChg: Number(spyChg.toFixed(2)) }, at: now });
+  }
+  steps.breaker = breaker;
+
   // 2. The Executor: stops and targets touched since the last look, minute by minute
   const execMarkets: Market[] = [...(live.stocks ? (["stocks"] as const) : []), ...(live.crypto ? (["crypto"] as const) : [])];
-  const exec = await runExecutor(db, market, execMarkets, quotes, now);
+  const exec = await runExecutor(db, market, execMarkets, quotes, now, { stocks: stocksOpen, crypto: live.crypto });
   errors.push(...exec.errors);
   for (const c of exec.closed) {
     const desk = DESKS.find((d) => d.slug === c.desk);
@@ -168,10 +184,16 @@ async function pulseBody(db: Db, now: Date, opts: { maxMeetings?: number }): Pro
   // 3b. The desk reviews its open trades every couple of hours: hold, tighten the stop or close early
   if (!ownerPaused) {
     try {
-      steps.reviews = await reviews(db, quotes, { stocks: stocksOpen, crypto: live.crypto }, simulation, now, opts.maxMeetings === undefined ? FIRM.maxReviewsPerPulse : Math.min(1, opts.maxMeetings));
+      steps.reviews = await reviews(db, quotes, { stocks: stocksOpen, crypto: live.crypto }, simulation, now, opts.maxMeetings === undefined ? FIRM.maxReviewsPerPulse : Math.min(1, opts.maxMeetings), deadline);
     } catch (err) {
       errors.push(`reviews: ${msg(err)}`);
     }
+  }
+  // what the closed trades taught: every voice's record and every signal kind's win rate
+  try {
+    steps.learn = await scoreOutcomes(db);
+  } catch (err) {
+    errors.push(`learn: ${msg(err)}`);
   }
 
   // 4. The scanner, then the desks
@@ -185,15 +207,15 @@ async function pulseBody(db: Db, now: Date, opts: { maxMeetings?: number }): Pro
     }
   }
   const fresh = await recordSignals(db, ideas, simulation, now);
-  steps.scanner = { ideas: ideas.length, fresh: fresh.length };
+  steps.scanner = { ideas: ideas.length, fresh: fresh.length, breaker };
   const loud = fresh.filter((x) => x.idea.score >= SCAN.meetingMin).slice(0, 3);
   for (const f of loud) {
     await tradingEvent(db, { agentSlug: "trading_quant", message: `Quant: ${shortSymbol(f.idea.symbol)} ${SIGNAL_WORDS[f.idea.kind]}, score ${f.idea.score}`, data: { kind: "signal", symbol: f.idea.symbol, signal: f.idea.kind, score: f.idea.score }, at: now });
   }
 
   if (!ownerPaused) {
-    steps.quant = stocksOpen ? await quantBot(db, fresh, quotes, now) : { status: "market closed" };
-    steps.meetings = await meetings(db, fresh, quotes, { stocks: stocksOpen, crypto: live.crypto }, simulation, now, opts.maxMeetings ?? SCAN.maxMeetingsPerPulse);
+    steps.quant = !stocksOpen ? { status: "market closed" } : breaker ? { status: "circuit breaker" } : await quantBot(db, fresh, quotes, now);
+    steps.meetings = await meetings(db, fresh, quotes, { stocks: stocksOpen && !breaker, crypto: live.crypto }, simulation, now, opts.maxMeetings ?? SCAN.maxMeetingsPerPulse, deadline, breaker);
   } else steps.desks = { status: "floor paused by the owner: no new trades, open trades keep their stops" };
 
   // 5. The AI side jobs, each inside the floor's daily money
@@ -228,7 +250,7 @@ async function pulseBody(db: Db, now: Date, opts: { maxMeetings?: number }): Pro
   }
   steps.reports = await reports(db, { stocksOpen, wasOpen, live: live.stocks, nyDay, quotes, simulation }, now);
   if (!simulation && !s.trading_cap_asked) steps.capAsk = await askCap(db, floor.id, now);
-  await setSetting(db, "trading_status", { at: now.toISOString(), stocksOpen, cryptoLive: live.crypto, stocksLive: live.stocks, hasKeys: market.hasKeys, source: market.source, nextOpen: clock.nextOpen, nextClose: clock.nextClose, errors: errors.slice(0, 5), aiLeftUsd: Math.max(0, Number(budget.leftUsd.toFixed(4))), aiSpentUsd: Number(budget.spentTodayUsd.toFixed(4)), aiLimitUsd: budget.limitUsd });
+  await setSetting(db, "trading_status", { at: now.toISOString(), stocksOpen, cryptoLive: live.crypto, stocksLive: live.stocks, hasKeys: market.hasKeys, source: market.source, nextOpen: clock.nextOpen, nextClose: clock.nextClose, breaker, spyChg: spyChg === null ? null : Number(spyChg.toFixed(2)), errors: errors.slice(0, 5), aiLeftUsd: Math.max(0, Number(budget.leftUsd.toFixed(4))), aiSpentUsd: Number(budget.spentTodayUsd.toFixed(4)), aiLimitUsd: budget.limitUsd });
   steps.errors = errors;
   return { status: "ran", at: now.toISOString(), steps };
 }
@@ -244,13 +266,21 @@ async function scan(db: Db, market: MarketData, m: Market, now: Date): Promise<S
   const start = new Date(now.getTime() - (m === "stocks" ? 5 * 24 : 12) * 3600_000);
   const bars = await market.bars(m, symbols, "5Min", start, now);
   const trend = await dailyTrend(db, market, m, now);
+  const kinds = await kindRecords(db);
   const out: SignalIdea[] = [];
   const sessionStart = m === "stocks" ? sessionOpenUtc(now) : null;
   for (const sym of symbols) {
     const list = (bars[sym] ?? []).slice(-SCAN.lookbackBars);
     const session = sessionStart ? list.filter((b) => new Date(b.t).getTime() >= sessionStart.getTime()) : undefined;
     const idea = scanSymbol(sym, m, list, { trendUp: trend[sym] ?? null, sessionBars: session });
-    if (idea) out.push(idea);
+    if (!idea) continue;
+    // a kind that keeps losing needs a stronger setup to get a meeting, one that keeps winning a weaker one
+    const bonus = kindBonus(kinds, idea.kind);
+    if (bonus) {
+      idea.score = Math.max(0, Math.min(95, idea.score + bonus));
+      idea.bonus = bonus;
+    }
+    out.push(idea);
   }
   return out.sort((a, b) => b.score - a.score);
 }
@@ -297,7 +327,7 @@ async function recordSignals(db: Db, ideas: SignalIdea[], simulated: boolean, no
     if (cooling.has(idea.symbol)) continue;
     const [row] = await db
       .insert(tradingSignals)
-      .values({ symbol: idea.symbol, market: idea.market, kind: idea.kind, score: idea.score, price: idea.price.toFixed(8), detail: idea.detail as unknown as Record<string, unknown>, status: "new", simulated, createdAt: now })
+      .values({ symbol: idea.symbol, market: idea.market, kind: idea.kind, score: idea.score, price: idea.price.toFixed(8), detail: { ...(idea.detail as unknown as Record<string, unknown>), ...(idea.bonus ? { kindBonus: idea.bonus } : {}) }, status: "new", simulated, createdAt: now })
       .returning({ id: tradingSignals.id });
     if (row) out.push({ id: row.id, idea });
   }
@@ -328,7 +358,7 @@ function tapeOf(quotes: Record<string, Quote>): Array<{ s: string; chg: number |
 }
 
 // The AI desks' meetings: the strongest fresh signals of each open market, a few per pulse.
-async function meetings(db: Db, fresh: FreshSignal[], quotes: Record<string, Quote>, open: Record<Market, boolean>, simulation: boolean, now: Date, maxMeetings: number) {
+async function meetings(db: Db, fresh: FreshSignal[], quotes: Record<string, Quote>, open: Record<Market, boolean>, simulation: boolean, now: Date, maxMeetings: number, deadline = Number.POSITIVE_INFINITY, breaker = false) {
   const out: Array<Record<string, unknown>> = [];
   let held = 0;
   // the morning meeting's plan: skip what it said to avoid, look first at its focus, a higher bar on careful days
@@ -342,6 +372,10 @@ async function meetings(db: Db, fresh: FreshSignal[], quotes: Record<string, Quo
   const sizeFactor = plan ? FIRM.sizeFactor[plan.mode] ?? 1 : 1;
   for (const f of candidates) {
     if (held >= maxMeetings) break;
+    if (Date.now() > deadline) {
+      out.push({ status: "out of time this pulse" });
+      break;
+    }
     const slug = f.idea.market === "stocks" ? "ai_stocks" : "ai_crypto";
     const desk = await deskBySlug(db, slug);
     if (!desk || desk.status !== "live") continue;
@@ -402,17 +436,35 @@ async function meetings(db: Db, fresh: FreshSignal[], quotes: Record<string, Quo
   return { held, results: out };
 }
 
-// The desk's reviews: each AI desk's open trade is looked at again every couple of hours.
-async function reviews(db: Db, quotes: Record<string, Quote>, open: Record<Market, boolean>, simulation: boolean, now: Date, max: number) {
+// A trade is worth another look when it is old enough and moved since the last look, or sits near its stop or target.
+export function reviewDue(p: { openedAt: Date; reviewedAt: Date | null; reviews: unknown; entryPrice: string; stopPrice: string | null; targetPrice: string | null }, last: number, now: Date): boolean {
+  const since = (p.reviewedAt ?? p.openedAt).getTime();
+  if (now.getTime() - since < FIRM.reviewEveryMinutes * 60_000) return false;
+  const list = (Array.isArray(p.reviews) ? p.reviews : []) as Array<{ price?: number }>;
+  const ref = Number(list[list.length - 1]?.price) || Number(p.entryPrice);
+  if (ref > 0 && Math.abs((last - ref) / ref) * 100 >= FIRM.reviewMovePct) return true;
+  const near = (level: string | null) => level !== null && Math.abs((last - Number(level)) / last) * 100 <= FIRM.reviewNearPct;
+  return near(p.stopPrice) || near(p.targetPrice);
+}
+
+// The desk's reviews: an AI desk's open trade is looked at again when it is due, inside a daily cap.
+async function reviews(db: Db, quotes: Record<string, Quote>, open: Record<Market, boolean>, simulation: boolean, now: Date, max: number, deadline = Number.POSITIVE_INFINITY) {
   const out: Array<Record<string, unknown>> = [];
   if (max <= 0) return { reviewed: 0, results: out };
+  const dayKey = dubaiParts(now).dayKey;
+  const counter = await getSetting<{ dayKey: string; n: number }>(db, "trading_reviews_day", { dayKey: "", n: 0 });
+  let n = counter.dayKey === dayKey ? counter.n : 0;
+  if (n >= FIRM.maxReviewsPerDay) return { reviewed: 0, results: out, status: "daily cap of reviews reached" };
   const desks = (await db.select().from(tradingDesks)).filter((d) => d.style === "ai");
-  const due = new Date(now.getTime() - FIRM.reviewEveryMinutes * 60_000);
   const todo = (await openPositions(db))
-    .filter((p) => desks.some((d) => d.id === p.deskId) && open[p.market as Market] && quotes[p.symbol] && (p.reviewedAt ?? p.openedAt) <= due)
+    .filter((p) => desks.some((d) => d.id === p.deskId) && open[p.market as Market] && quotes[p.symbol] && reviewDue(p, quotes[p.symbol]!.last, now))
     .sort((a, b) => (a.reviewedAt ?? a.openedAt).getTime() - (b.reviewedAt ?? b.openedAt).getTime())
-    .slice(0, max);
+    .slice(0, Math.min(max, FIRM.maxReviewsPerDay - n));
   for (const p of todo) {
+    if (Date.now() > deadline) {
+      out.push({ status: "out of time this pulse" });
+      break;
+    }
     const desk = desks.find((d) => d.id === p.deskId)!;
     const q = quotes[p.symbol]!;
     const res = await positionReview(db, { position: p, deskName: desk.name, last: q.last, equity: Number(desk.equityUsd) }, now, simulation);
@@ -420,7 +472,9 @@ async function reviews(db: Db, quotes: Record<string, Quote>, open: Record<Marke
       out.push({ symbol: p.symbol, status: "no AI money left today" });
       break;
     }
-    const entry = { at: now.toISOString(), action: res.action, stop: res.stop, reason: res.reason, decidedBy: res.decidedBy, voices: res.voices.map((v) => ({ who: v.who, say: v.say, vote: v.vote })) };
+    n += 1;
+    await setSetting(db, "trading_reviews_day", { dayKey, n });
+    const entry = { at: now.toISOString(), price: q.last, action: res.action, stop: res.stop, reason: res.reason, decidedBy: res.decidedBy, voices: res.voices.map((v) => ({ who: v.who, say: v.say, vote: v.vote })) };
     await db
       .update(tradingPositions)
       .set({ reviewedAt: now, reviews: sql`${tradingPositions.reviews} || ${JSON.stringify([entry])}::jsonb`, ...(res.action === "tighten" && res.stop !== null ? { stopPrice: res.stop.toFixed(8) } : {}) })
@@ -480,7 +534,9 @@ async function reports(db: Db, input: { stocksOpen: boolean; wasOpen: boolean; l
       ? await db.select({ s: sql<string>`coalesce(sum(${budgetLedger.amountUsd}), 0)` }).from(budgetLedger).where(and(eq(budgetLedger.floorId, floor.id), eq(budgetLedger.simulated, false), gte(budgetLedger.occurredAt, from)))
       : [{ s: "0" }];
     const body = await closeReport(db, { title: "Wall Street weekly report card", from, to: now, btcPct: await btcHoldPct(db, btc), aiCostUsd: Number(cost?.s ?? 0) });
-    await enqueueMessage(db, { kind: "trading_week", body: `${body}\nThe test runs 6 to 8 weeks. Real money only if a desk beats Lazy Larry after costs.`, now });
+    const learned = learningSummary(await voiceRecords(db), await kindRecords(db));
+    const memo = await firmMemo(db, `${body}\n${learned}`, now, false).catch(() => null);
+    await enqueueMessage(db, { kind: "trading_week", body: `${body}\n${learned}${memo ? `\n\nThe Coach's memo for next week: ${memo}` : ""}\nThe test runs 6 to 8 weeks. Real money only if a desk beats Lazy Larry after costs.`, now });
     out.week = "queued";
   }
   return out;

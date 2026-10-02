@@ -404,6 +404,14 @@ export function mockTradingState(now = new Date()): TradingStateView {
     status: { at: at(2), stocksOpen: true, cryptoLive: true, stocksLive: true, hasKeys: true, source: "sim", nextOpen: at(-900), nextClose: at(-240), errors: [], aiLeftUsd: 1.62, aiSpentUsd: 0.38, aiLimitUsd: 2 },
     btcPct: 1.6,
     brief: { mood: "bullish", headline: "Chips lead, Fed speakers later" },
+    voices: [
+      { who: "Bear", right: 7, of: 10, allRight: 9, allOf: 12 },
+      { who: "Quant", right: 6, of: 10, allRight: 7, allOf: 12 },
+      { who: "Risk Officer", right: 6, of: 10, allRight: 7, allOf: 12 },
+      { who: "Hound", right: 5, of: 10, allRight: 6, allOf: 12 },
+      { who: "Strategist", right: 5, of: 10, allRight: 5, allOf: 12 },
+      { who: "Bull", right: 4, of: 10, allRight: 5, allOf: 12 },
+    ],
     events: [
       { id: 9, kind: "meeting", message: "Meeting on NVDA: 5 buy, 1 pass. The Chief says BUY, decided by Bull.", agentSlug: "trading_chief", data: { kind: "meeting", desk: "ai_stocks", symbol: "NVDA", voices: MOCK_VOICES, votes: { buy: 5, pass: 1 }, decision: "buy", reason: "The Bull answered the Bear: chip demand news backs the volume. Half size into the Fed.", decidedBy: "Bull" }, at: at(1) },
       { id: 8, kind: "signal", message: "Quant: NVDA breakout, score 74", agentSlug: "trading_quant", data: { kind: "signal", symbol: "NVDA", signal: "breakout", score: 74 }, at: at(2) },
@@ -437,7 +445,9 @@ export function mockTradingDetail(now = new Date()): TradingDetail {
     lessons: ["Trade with the daily trend, never against it.", "Skip crypto moves smaller than three times the fee."],
     plan: { dayKey: "2026-10-01", mode: "normal", focus: ["NVDA", "AMD", "SOL/USD"], avoid: ["TSLA"], plan: "Trade the chip leaders with the trend, half size into the Fed. Cut anything that loses its morning low.", strategist: "A firm tape led by chips. The edge is in leaders, not laggards. Fed speakers after lunch can turn it.", at: at(180) },
     briefFull: { dayKey: "2026-10-01", mood: "bullish", headline: "Chips lead, Fed speakers later", watch: ["NVDA", "AMD", "SOL/USD"], avoid: ["TSLA"], notes: "Futures firm on chip strength. Two Fed speakers after lunch in New York could move rates.", at: at(120) },
-    aiCost: { todayUsd: 0.14, totalUsd: 1.92 },
+    kinds: { breakout: { wins: 5, losses: 4 }, momentum: { wins: 2, losses: 1 }, pullback: { wins: 3, losses: 0 }, volume: { wins: 1, losses: 3 } },
+    memo: { memo: "Pullbacks in uptrends paid, late day breakouts did not. Trust the Bear when RSI is over 70. Rule for the week: no new trades in the last hour.", at: at(3000) },
+    aiCost: { todayUsd: 0.38, totalUsd: 1.92 },
     startUsd: 100,
     stats: { signalsToday: 17, meetingsToday: 5, tradesTotal: 12, winRate: 58 },
   };

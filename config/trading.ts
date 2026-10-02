@@ -36,6 +36,22 @@ export const STOCK_WATCHLIST = [
 ];
 export const CRYPTO_WATCHLIST = ["BTC/USD", "ETH/USD", "SOL/USD", "DOGE/USD", "LINK/USD", "AVAX/USD", "LTC/USD", "BCH/USD"];
 
+// Four chip stocks are one bet. Every symbol belongs to a sector and a desk holds at most RISK.maxPerSector of one.
+export const SECTORS: Record<string, string> = {
+  SPY: "index", QQQ: "index", IWM: "index",
+  XLE: "energy", XLF: "banks", JPM: "banks",
+  AAPL: "big tech", MSFT: "big tech", AMZN: "big tech", META: "big tech", GOOGL: "big tech",
+  NVDA: "chips", AMD: "chips", AVGO: "chips", MU: "chips",
+  TSLA: "autos", NFLX: "media", LLY: "pharma", COST: "retail", SHOP: "retail",
+  PLTR: "software", CRM: "software", UBER: "gig", COIN: "crypto stocks",
+  "BTC/USD": "crypto majors", "ETH/USD": "crypto majors", "LTC/USD": "crypto majors", "BCH/USD": "crypto majors",
+  "SOL/USD": "alt coins", "DOGE/USD": "alt coins", "LINK/USD": "alt coins", "AVAX/USD": "alt coins",
+};
+
+export function sectorOf(symbol: string): string {
+  return SECTORS[symbol] ?? "other";
+}
+
 export const RISK = {
   // at most this share of the desk's equity in one trade (25 USD of 100)
   maxPositionPct: 0.25,
@@ -53,6 +69,14 @@ export const RISK = {
   maxStopPct: 0.08,
   minRewardRisk: 1,
   maxRewardRisk: 4,
+  // crypto pays 0.25 percent each way: the target must clear four round trips (2 percent) and the reward 1.5 times
+  // the risk, so a winner nets about 1.5 percent against a loser's 0.9
+  cryptoMinRewardRisk: 1.5,
+  cryptoMinTargetPct: 0.02,
+  // at most this many open trades in one sector per desk
+  maxPerSector: 2,
+  // SPY down this much on the day: no new stock trades until the next Dubai day
+  breakerPct: 1.5,
   // defaults from volatility: the stop 2 ATR under the entry, the target 3 ATR over it (30 minute bars)
   stopAtr: 2,
   targetAtr: 3,
@@ -98,8 +122,12 @@ export const AI_COST_USD = { meeting: 0.06, news: 0.02, brief: 0.1, coach: 0.03,
 export const FIRM = {
   // the morning meeting from this Dubai hour, once a day (the US opens at 17:30 or 18:30 Dubai)
   morningHourDubai: 16,
-  reviewEveryMinutes: 120,
+  // a trade is looked at again after this long, and only when it moved or sits near its stop or target
+  reviewEveryMinutes: 240,
+  reviewMovePct: 1,
+  reviewNearPct: 0.5,
   maxReviewsPerPulse: 2,
+  maxReviewsPerDay: 12,
   // careful days take smaller trades and only stronger signals; bold days look at a few more
   sizeFactor: { careful: 0.6, normal: 1, bold: 1 } as Record<string, number>,
   meetingBar: { careful: 8, normal: 0, bold: -4 } as Record<string, number>,
@@ -109,4 +137,14 @@ export const FIRM = {
 // The pulse: how often the floor looks at the market. Price bars are replayed minute by minute, so a missed
 // pulse still sees the stop or the target that was touched in between.
 export const PULSE_GAP_MS = 4 * 60 * 1000;
-export const PULSE_LOCK_MS = 4 * 60 * 1000;
+export const PULSE_LOCK_MS = 6 * 60 * 1000;
+// no new meeting or review starts after this much of a pulse has gone by: the lock and the function must outlast it
+export const PULSE_TIME_BUDGET_MS = 150 * 1000;
+
+// Learning (D076): a voice's vote is scored on every closed trade, and each signal kind's win rate nudges the
+// scanner's score once there are enough outcomes.
+export const LEARN = {
+  trackWindow: 20,
+  minOutcomesForKind: 10,
+  kindBonusMax: 8,
+};

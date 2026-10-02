@@ -5,14 +5,15 @@
 import { and, asc, desc, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
 import { callModel } from "@/agents/client";
 import { budgetLeftUsd } from "@/agents/spend-guard";
-import { AI_COST_USD, CRYPTO_WATCHLIST, FIRM, RISK, STOCK_WATCHLIST, TRADING_DAILY_USD, type Market } from "@/config/trading";
+import { AI_COST_USD, CRYPTO_WATCHLIST, FIRM, RISK, STOCK_WATCHLIST, TRADING_DAILY_USD, sectorOf, type Market } from "@/config/trading";
 import type { Db } from "@/db/client";
-import { agents, floors, tradingNews, tradingPositions } from "@/db/schema";
+import { agents, floors, tradingNews, tradingPositions, tradingSignals } from "@/db/schema";
 import { getSpendSummary } from "@/lib/budget";
 import type { MarketData } from "@/lib/market";
 import { asNumber, getSetting, getSettings, setSetting } from "@/lib/settings";
 import { plainDashes } from "@/lib/text";
-import { dubaiParts } from "@/lib/time";
+import { dubaiDayStartUtc, dubaiParts } from "@/lib/time";
+import { trackRecordLine, voiceRecords } from "./learn";
 import { fmtPrice, shortSymbol, tradingEvent, type Desk, type Position } from "./engine";
 import { round } from "./indicators";
 import { SIGNAL_WORDS, type SignalIdea } from "./scanner";
@@ -358,7 +359,9 @@ export async function deskMeeting(
   // Rounds 2 to 4: the Bull answers the analysts, the Bear attacks the Bull, the Risk Officer sizes it
   const bull = asVoice("Bull", await ask("Bull", `${head}\nThe analysts:\n${analysts}`, voiceSchema()));
   const bear = asVoice("Bear", await ask("Bear", `${head}\nThe analysts:\n${analysts}\n${voiceLine(bull)}`, voiceSchema()));
-  const deskFacts = `Desk ${desk.name}: equity ${equity.toFixed(2)} USD, settled cash ${input.cashAvailable.toFixed(2)} USD, open trades ${input.open.map((p) => shortSymbol(p.symbol)).join(", ") || "none"}. A trade at the volatility stop risks about ${(RISK.riskPerTradePct * 100).toFixed(1)} percent of the desk. 30 minute ATR ${fmtPrice(d.atr30)}.${signal.market === "crypto" ? " Crypto pays a 0.25 percent fee each way." : ""}`;
+  const sector = sectorOf(signal.symbol);
+  const sameSector = input.open.filter((p) => sectorOf(p.symbol) === sector).map((p) => shortSymbol(p.symbol));
+  const deskFacts = `Desk ${desk.name}: equity ${equity.toFixed(2)} USD, settled cash ${input.cashAvailable.toFixed(2)} USD, open trades ${input.open.map((p) => `${shortSymbol(p.symbol)} (${sectorOf(p.symbol)})`).join(", ") || "none"}. ${sym} is ${sector}${sameSector.length ? `, the desk already holds ${sameSector.join(" and ")} there (limit ${RISK.maxPerSector} per sector)` : ""}. A trade at the volatility stop risks about ${(RISK.riskPerTradePct * 100).toFixed(1)} percent of the desk. 30 minute ATR ${fmtPrice(d.atr30)}.${signal.market === "crypto" ? ` Crypto pays a 0.25 percent fee each way, so the target must clear ${(RISK.cryptoMinTargetPct * 100).toFixed(1)} percent and ${RISK.cryptoMinRewardRisk} times the risk.` : ""}`;
   const rj = await ask("Risk Officer", `${head}\n${deskFacts}\n${chartFacts}\nThe room so far:\n${analysts}\n${voiceLine(bull)}\n${voiceLine(bear)}`, voiceSchema({ maxSizeUsd: { type: "number" }, stop: { type: "number" } }));
   const risk = asVoice("Risk Officer", rj);
   const riskMax = Number(rj.maxSizeUsd);
@@ -366,10 +369,25 @@ export async function deskMeeting(
   const voices = [hound, quant, strat, bull, bear, risk];
   const votes = { buy: voices.filter((v) => v.vote === "buy").length, pass: voices.filter((v) => v.vote === "pass").length };
 
-  // Round 5: the Chief decides
+  // Round 5: the Chief decides, with every voice's record and the day's earlier decisions in mind
+  const records = trackRecordLine(await voiceRecords(db));
+  const earlier = await db
+    .select({ symbol: tradingSignals.symbol, meeting: tradingSignals.meeting, decidedAt: tradingSignals.decidedAt })
+    .from(tradingSignals)
+    .where(and(eq(tradingSignals.deskSlug, desk.slug), gte(tradingSignals.decidedAt, dubaiDayStartUtc(now)), isNotNull(tradingSignals.meeting)))
+    .orderBy(desc(tradingSignals.decidedAt))
+    .limit(8);
+  const dayLine = earlier.length
+    ? `Today's decisions on this desk so far: ${earlier
+        .map((e) => {
+          const m = (e.meeting ?? {}) as { decision?: string; decidedBy?: string };
+          return `${shortSymbol(e.symbol)} ${m.decision === "buy" ? "BUY" : "PASS"}${m.decidedBy ? ` (${m.decidedBy})` : ""}`;
+        })
+        .join(", ")}. Do not re-argue the same symbol unless something changed.`
+    : "";
   const cj = await ask(
     "Chief",
-    `${head}\n${deskFacts}\nEvery voice:\n${voices.map((v) => voiceLine(v, v.who === "Risk Officer" ? `, max size ${Number.isFinite(riskMax) ? riskMax.toFixed(2) : "not given"} USD, stop ${Number.isFinite(riskStop) ? fmtPrice(riskStop) : "not given"}` : v.who === "Quant" && Number.isFinite(quantStop) ? `, stop ${fmtPrice(quantStop)}` : "")).join("\n")}\nVotes: ${votes.buy} buy, ${votes.pass} pass.\n${planLine}\nVolatility plan: stop ${fmtPrice(plan.stop)}, target ${fmtPrice(plan.target)}.${lessons.length ? `\nLessons the Coach wrote from earlier trades:\n${lessons.slice(0, 6).map((l) => `• ${l}`).join("\n")}` : ""}`,
+    `${head}\n${deskFacts}\n${[records, dayLine].filter(Boolean).join("\n")}${records || dayLine ? "\n" : ""}Every voice:\n${voices.map((v) => voiceLine(v, v.who === "Risk Officer" ? `, max size ${Number.isFinite(riskMax) ? riskMax.toFixed(2) : "not given"} USD, stop ${Number.isFinite(riskStop) ? fmtPrice(riskStop) : "not given"}` : v.who === "Quant" && Number.isFinite(quantStop) ? `, stop ${fmtPrice(quantStop)}` : "")).join("\n")}\nVotes: ${votes.buy} buy, ${votes.pass} pass.\n${planLine}\nVolatility plan: stop ${fmtPrice(plan.stop)}, target ${fmtPrice(plan.target)}.${lessons.length ? `\nLessons the Coach wrote from earlier trades:\n${lessons.slice(0, 6).map((l) => `• ${l}`).join("\n")}` : ""}`,
     CHIEF_SCHEMA,
     600,
   );
@@ -530,7 +548,8 @@ export async function morningMeeting(db: Db, now: Date, simulation: boolean, inp
   const briefLine = brief && brief.dayKey === p.dayKey ? `Brief: ${brief.mood}. ${brief.headline}. Watch ${brief.watch.join(", ") || "nothing special"}. Avoid ${brief.avoid.join(", ") || "nothing special"}. ${brief.notes}` : "No brief today.";
   const tapeLine = input.tape.length ? `Market: ${input.tape.map((t) => `${t.s} ${t.chg === null ? "flat" : `${t.chg >= 0 ? "up" : "down"} ${Math.abs(t.chg).toFixed(2)} percent`}`).join(", ")}.` : "No market numbers.";
   const lessons = await getSetting<string[]>(db, "trading_lessons", []);
-  const facts = [briefLine, tapeLine, `The desks: ${input.desks.join("; ")}.`, lessons.length ? `Coach's lessons: ${lessons.slice(0, 4).join(" ")}` : ""].filter(Boolean).join("\n");
+  const memo = await getSetting<{ memo: string } | null>(db, "trading_memo", null);
+  const facts = [briefLine, tapeLine, `The desks: ${input.desks.join("; ")}.`, memo?.memo ? `The Coach's memo for this week: ${memo.memo}` : "", lessons.length ? `Coach's lessons: ${lessons.slice(0, 4).join(" ")}` : ""].filter(Boolean).join("\n");
   let plan: DeskPlan;
   let costUsd = 0;
   if (simulation) {
@@ -655,4 +674,24 @@ export async function deskNotes(db: Db, facts: string, now: Date, simulation: bo
   const notes = clean(res.text, 600);
   if (notes) await tradingEvent(db, { agentSlug: "trading_coach", message: `Desk notes: ${notes}`, data: { kind: "wrap", notes }, at: now });
   return notes || null;
+}
+
+const MEMO_SYSTEM = `WEEKLY REVIEW. You are the COACH of a small paper trading firm. From the week's numbers write the memo that opens every morning meeting next week, at most 90 plain words: what the firm does well, what it should stop doing, which voices to trust more, which signal kinds to doubt, and one rule for the week. Honest, specific, numbers first.
+Write in plain English. Never use dashes or hyphens as punctuation.`;
+
+// The Coach's Sunday memo: kept for the week and read out at every morning meeting.
+export async function firmMemo(db: Db, facts: string, now: Date, simulation: boolean): Promise<string | null> {
+  const weekKey = dubaiParts(now).dayKey;
+  if (simulation) {
+    const memo = "A made up week. Keep the stops tight and trust the trend.";
+    await setSetting(db, "trading_memo", { weekKey, memo, at: now.toISOString() });
+    return memo;
+  }
+  if (!(await canAfford(db, "wrap", now))) return null;
+  const res = await callModel(db, { agentKey: "worker", agentId: await agentId(db, "trading_coach"), floorId: await floorId(db), system: MEMO_SYSTEM, messages: [{ role: "user", content: facts }], maxTokens: 700 }, now);
+  const memo = clean(res.text, 700);
+  if (!memo) return null;
+  await setSetting(db, "trading_memo", { weekKey, memo, at: now.toISOString() });
+  await tradingEvent(db, { agentSlug: "trading_coach", message: `Memo for the week: ${memo}`, data: { kind: "memo", memo }, at: now });
+  return memo;
 }

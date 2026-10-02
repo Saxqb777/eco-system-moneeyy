@@ -450,3 +450,5 @@ One row per heartbeat so the status page and Warden can see the pulse.
 - trading_equity: one point per desk every 15 minutes for the charts.
 - Events for the game are task_events rows of type "trading" on the trading floor; data.kind says which animation plays (bell, signal, meeting, morning, review, open, close_win, close_loss, veto, bench, freeze, back, unfreeze, news, brief, lesson, wrap, quiet, larry_buy).
 - Settings: trading_daily_usd, trading_plan, trading_brief, trading_lessons, trading_tape, trading_status, trading_btc_start, trading_pulse_at, trading_lock, trading_trend_stocks and trading_trend_crypto (daily caches), bell, report and quiet day marks, trading_cap_asked.
+- D076: trading_positions.meeting gains "scored": true once the room's votes and the signal's kind were counted. trading_positions.reviews entries carry price (the price at that look). trading_signals.detail may carry kindBonus (what the kind's win rate added). New settings: trading_breaker {dayKey, at, spyChg}, trading_reviews_day {dayKey, n}, trading_voices {Voice: {right, wrong, recent[]}}, trading_kinds {kind: {wins, losses}}, trading_memo {weekKey, memo, at}.
+

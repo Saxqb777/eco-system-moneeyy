@@ -123,7 +123,8 @@ function ApprovalCard({ a, onDone }: { a: ApprovalRow; onDone: () => void }) {
           </a>
         </div>
       ) : null}
-      <input className="field" placeholder="Feedback (required to reject)" value={feedback} onChange={(e) => setFeedback(e.target.value)} />
+      {a.type === "credential_request" ? <div className="muted">Keys go in the Setup tab, not in this box. A key typed here is moved to Setup and removed from the note.</div> : null}
+      <input className="field" placeholder={a.type === "credential_request" ? "Feedback (no keys here, use the Setup tab)" : "Feedback (required to reject)"} value={feedback} onChange={(e) => setFeedback(e.target.value)} />
       <div className="actions">
         <Key tone="ok" onClick={() => void decide("approved")} disabled={busy}>
           Approve

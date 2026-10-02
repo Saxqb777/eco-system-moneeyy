@@ -3,11 +3,10 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { setupItems } from "@/db/schema";
 import { visibleSetupRows } from "@/lib/clipboard";
-import { encryptSecret, secretHint } from "@/lib/crypto";
 import { bad, json, readJson } from "@/lib/http";
 import { mockEnabled, mockSetup } from "@/lib/mock-state";
-import { parseFacebookPage, parseXCredentials } from "@/lib/social";
-import { channelChatId, pairingCode } from "@/lib/telegram";
+import { saveSetupValue } from "@/lib/setup-store";
+import { pairingCode } from "@/lib/telegram";
 import { runTick } from "@/warden/tick";
 
 export const dynamic = "force-dynamic";
@@ -37,23 +36,10 @@ export async function POST(req: Request) {
     return json({ ok: true, key: item.key, status: "missing" });
   }
 
-  let value = (body.value ?? "").trim();
-  if (!value) return bad("value is empty");
-  if (item.key === "x_credentials" && !parseXCredentials(value)) return bad("Paste four values separated by spaces: API Key, API Key Secret, Access Token, Access Token Secret.");
-  if (item.key === "facebook_page" && !parseFacebookPage(value)) return bad("Paste the Page ID (numbers) and the Page access token, separated by a space.");
-  if (item.key === "deals_channel") {
-    const clean = channelChatId(value);
-    if (!clean) return bad("Paste the channel handle like @uaedailydeals (or its t.me link).");
-    value = clean;
-  }
-  if (item.kind === "url" && !/^https?:\/\//.test(value)) return bad("Expected a URL starting with http");
-  if (item.key === "telegram_chat_id" && !/^-?\d{5,20}$/.test(value)) return bad("A chat id is a number. Easiest: open your bot in Telegram and send the /pair line shown here.");
-
-  const hint = item.kind === "secret" ? secretHint(value) : value.length > 80 ? `${value.slice(0, 77)}...` : value;
-  await db
-    .update(setupItems)
-    .set({ status: "present", valueEncrypted: encryptSecret(value), hint, providedAt: new Date() })
-    .where(eq(setupItems.key, item.key));
+  // One write path for every box (D082): validation, encryption and the hint live in lib/setup-store.ts.
+  const saved = await saveSetupValue(db, item.key, body.value ?? "", new Date());
+  if (!saved.ok) return bad(saved.error);
+  const hint = saved.hint;
   // The brief asks for Warden to speak within 5 minutes of the key landing: an instant run after this response.
   // The Telegram token gets the same treatment so the webhook registers at once and /pair works straight away.
   if (item.key === "anthropic_api_key" || item.key === "telegram_bot_token" || item.key === "deals_channel") {

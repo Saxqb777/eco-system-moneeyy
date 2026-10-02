@@ -1,5 +1,7 @@
 // Warden's system prompt and the schema of the one decision object per run. No tool loop: code gathers, Warden decides, code executes.
 
+import { SETUP_ITEMS } from "@/config/tower";
+
 export const WARDEN_SYSTEM = `You are Warden, the boss of The Tower: a building of small AI worker agents owned by Saaqib, one business per floor.
 Your job on every run: read the snapshot, keep every live floor moving toward its weekly target, keep quality high, keep spend inside the daily cap, and keep the owner informed in plain words.
 
@@ -13,7 +15,7 @@ Rules you never break:
 7. Everything you return is executed by code exactly as written, so use only the ids and slugs from the snapshot.
 
 Run it like a company, not a script. Every run:
-- Look at what the owner has not provided yet (missingSetup on each floor, the clipboard) and what would make the floors earn sooner: a domain for sending and for the client previews, a verified sender, an affiliate account, a channel, a calendar link, a price. Ask for it as one credential_request or decision item with a short reason, a recommendation, and the exact thing you need. Never repeat an ask that is already in pendingApprovals, and never ask for anything listed in clipboardPresent: it is already pasted.
+- Look at what the owner has not provided yet (missingSetup on each floor, the clipboard) and what would make the floors earn sooner: a domain for sending and for the client previews, a verified sender, an affiliate account, a channel, a calendar link, a price. Ask for it as one credential_request or decision item with a short reason, a recommendation, and the exact thing you need. A credential_request names its Setup box in setupKey and tells the owner to paste in the Setup tab of the game, never in the note. Never repeat an ask that is already in pendingApprovals, and never ask for anything listed in clipboardPresent: it is already pasted.
 - When there is a choice of approach (which niche next, whether to widen the search, what a follow up should offer, whether to pause a floor), propose it as a decision item: two or three options, your pick, why. The owner answers on the phone.
 - When something is wrong for a while (no replies after ten emails, a store page that will not load, a worker failing twice), say so in messagesToOwner with what you will try next.
 - Ideas the owner sends get a real reply: what you will do, when, and what you need from him.
@@ -110,12 +112,13 @@ export const WARDEN_SCHEMA: Record<string, unknown> = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["type", "summary", "riskNote", "content"],
+        required: ["type", "summary", "riskNote", "content", "setupKey"],
         properties: {
           type: { type: "string", enum: ["decision", "floor_unlock", "spend_increase", "credential_request"] },
           summary: { type: "string" },
           riskNote: { type: "string" },
           content: { type: "string", description: "the full content or proposal in plain text" },
+          setupKey: { type: "string", description: "credential_request only: the clipboard key of the Setup box the owner pastes into (as listed in missingSetup), otherwise an empty string" },
         },
       },
     },
@@ -145,7 +148,7 @@ export interface WardenDecisions {
   strategyNotes: Array<{ floor: string; note: string }>;
   ideaActions: Array<{ ideaId: string; action: "ticket" | "note" | "decline"; floor: string; reply: string; ticketTitle: string }>;
   budgetMoves: Array<{ from: string; to: string; usd: number }>;
-  approvalsToRaise: Array<{ type: "decision" | "floor_unlock" | "spend_increase" | "credential_request"; summary: string; riskNote: string; content: string }>;
+  approvalsToRaise: Array<{ type: "decision" | "floor_unlock" | "spend_increase" | "credential_request"; summary: string; riskNote: string; content: string; setupKey?: string }>;
   messagesToOwner: string[];
   blockedResolutions: Array<{ taskId: string; action: "reassign" | "input" | "ask_owner"; agent: string; input: string; reason: string }>;
 }
@@ -166,6 +169,8 @@ const str = (v: unknown) => (typeof v === "string" ? v : "");
 const num = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
 
 // Tolerant parse: anything malformed is dropped, never thrown, so one odd field cannot stop a run.
+const SETUP_KEYS = new Set(SETUP_ITEMS.map((i) => i.key));
+
 export function parseDecisions(raw: unknown): WardenDecisions | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
@@ -179,7 +184,7 @@ export function parseDecisions(raw: unknown): WardenDecisions | null {
     approvalsToRaise: arr(r.approvalsToRaise, (x) => {
       const t = str(x.type);
       if (!["decision", "floor_unlock", "spend_increase", "credential_request"].includes(t) || !str(x.summary)) return null;
-      return { type: t as "decision", summary: str(x.summary), riskNote: str(x.riskNote), content: str(x.content) };
+      return { type: t as "decision", summary: str(x.summary), riskNote: str(x.riskNote), content: str(x.content), setupKey: SETUP_KEYS.has(str(x.setupKey)) ? str(x.setupKey) : "" };
     }),
     messagesToOwner: Array.isArray(r.messagesToOwner) ? r.messagesToOwner.filter((m): m is string => typeof m === "string" && m.trim().length > 0) : [],
     blockedResolutions: arr(r.blockedResolutions, (x) => (str(x.taskId) ? { taskId: str(x.taskId), action: x.action === "reassign" ? "reassign" : x.action === "input" ? "input" : "ask_owner", agent: str(x.agent), input: str(x.input), reason: str(x.reason) } : null)),

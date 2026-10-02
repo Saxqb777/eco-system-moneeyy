@@ -162,7 +162,11 @@ export async function findOnSheet(db: Db, name: string, now = new Date()): Promi
 // The 10:00 Dubai card: today's five, ready to dial.
 export async function callSheetCard(db: Db, now = new Date()): Promise<string | null> {
   const { rows } = await callSheet(db, now);
-  if (!rows.length) return null;
+  if (!rows.length) {
+    const li = await linkedinSheet(db, now);
+    if (!li.length) return null;
+    return [`Nobody to call today. LinkedIn: ${li.length} name${li.length === 1 ? "" : "s"}, two lines each, mark them in the game.`, ...li.map((r, i) => `${i + 1}. ${r.name}${r.title ? `, ${r.title}` : ""} at ${r.company}: ${r.profileUrl}`)].join("\n");
+  }
   const lines = [`Call sheet for today: ${rows.length} compan${rows.length === 1 ? "y" : "ies"} worth 20 minutes.`, ""];
   rows.forEach((r, i) => {
     lines.push(`${i + 1}. ${r.company}${r.contact ? ` (${r.contact}${r.title ? `, ${r.title}` : ""})` : ""}, ${r.city ?? r.country}: ${r.phone}`);
@@ -170,6 +174,11 @@ export async function callSheetCard(db: Db, now = new Date()): Promise<string | 
     if (r.demoUrl) lines.push(`   Demo: ${r.demoUrl}`);
   });
   lines.push("", "After each call: /called <company>: interested, no answer, not now or no. The sheet is in the game under Warden, Mailbox, Call sheet.");
+  const li = await linkedinSheet(db, now);
+  if (li.length) {
+    lines.push("", `LinkedIn today: ${li.length} name${li.length === 1 ? "" : "s"}, two lines each, mark them in the game.`);
+    li.forEach((r, i) => lines.push(`${i + 1}. ${r.name}${r.title ? `, ${r.title}` : ""} at ${r.company}: ${r.profileUrl}`));
+  }
   return lines.join("\n");
 }
 
@@ -184,4 +193,67 @@ export async function maybeSendCallSheet(db: Db, now = new Date()): Promise<bool
   if (!card) return false;
   await enqueueMessage(db, { kind: "call_sheet", body: card, now });
   return true;
+}
+
+// D081: the owner's LinkedIn list. Five named contacts a day with a two line message he can paste, the ones that
+// opened their demo first. Code writes the lines (no AI cost); he marks each one sent.
+export const LINKEDIN_SHEET_SIZE = 5;
+
+export interface LinkedinRow {
+  leadId: string;
+  company: string;
+  name: string;
+  title: string | null;
+  profileUrl: string;
+  // true when the profile is a search, not a known URL
+  searched: boolean;
+  message: string;
+  demoUrl: string | null;
+  visited: boolean;
+}
+
+export async function linkedinSheet(db: Db, now = new Date()): Promise<LinkedinRow[]> {
+  const monthAgo = new Date(now.getTime() - 30 * 24 * 3600_000);
+  const rows = await db
+    .select()
+    .from(leads)
+    .where(and(eq(leads.simulated, false), inArray(leads.status, ["contacted", "no_contact", "qualified", "drafted", "replied"]), sql`coalesce(${leads.segment}, '') not like 'partner%'`, sql`coalesce(${leads.decisionMaker} ->> 'name', '') <> ''`))
+    .orderBy(desc(leads.demoVisitedAt), desc(leads.score), asc(leads.createdAt))
+    .limit(80);
+  const out: LinkedinRow[] = [];
+  for (const lead of rows) {
+    const dm = (lead.decisionMaker ?? {}) as Record<string, unknown>;
+    const asked = typeof dm.linkedinAskedAt === "string" ? new Date(dm.linkedinAskedAt) : null;
+    if (asked && asked > monthAgo) continue;
+    const name = String(dm.name ?? "").trim();
+    if (!name) continue;
+    const first = name.split(/\s+/)[0] ?? name;
+    const preview = (lead.preview ?? {}) as { sampleDocument?: string };
+    const docWord = (preview.sampleDocument ?? "").split(",")[0]!.trim().toLowerCase();
+    const bill = docWord && docWord.length <= 40 ? docWord : "shipping bills";
+    const demoUrl = lead.previewCode ? await previewLink(db, lead.previewCode) : null;
+    const known = typeof dm.linkedin === "string" && /linkedin\.com\//.test(dm.linkedin) ? dm.linkedin : null;
+    out.push({
+      leadId: lead.id,
+      company: lead.company,
+      name,
+      title: typeof dm.title === "string" && dm.title ? dm.title : null,
+      profileUrl: known ?? `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`${name} ${lead.company}`)}`,
+      searched: !known,
+      message: `Hi ${first}, I build Doc Ledger in Abu Dhabi: it reads ${bill} from a photo, every charge line, so month end stops being retyping.${demoUrl ? ` I set up a demo company for ${lead.company}, no signup: ${demoUrl}` : ""} Worth a look?`,
+      demoUrl,
+      visited: !!lead.demoVisitedAt,
+    });
+    if (out.length >= LINKEDIN_SHEET_SIZE) break;
+  }
+  return out;
+}
+
+export async function recordLinkedin(db: Db, leadId: string, now = new Date()): Promise<{ ok: boolean; message: string }> {
+  const [lead] = await db.select().from(leads).where(eq(leads.id, leadId)).limit(1);
+  if (!lead) return { ok: false, message: "No such company." };
+  const dm = (lead.decisionMaker ?? {}) as Record<string, unknown>;
+  await db.update(leads).set({ decisionMaker: { ...dm, linkedinAskedAt: now.toISOString() }, updatedAt: now }).where(eq(leads.id, lead.id));
+  await db.insert(taskEvents).values({ floorId: lead.floorId, type: "linkedin", message: `Owner messaged ${String(dm.name ?? "the contact")} at ${lead.company} on LinkedIn`, createdAt: now });
+  return { ok: true, message: `${lead.company}: LinkedIn message noted. Back on the list in a month if nothing comes of it.` };
 }

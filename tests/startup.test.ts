@@ -200,7 +200,7 @@ describe("The DocLedger Growth floor", () => {
     const f = await founderNumbers(db, new Date(NOW.getTime() + 20 * DAY));
     expect(f.clients).toBe(1);
     expect(f.mrrUsd).toBe(99);
-    expect(formatFounderReport(f)).toContain("paying customers: 1");
+    expect(formatFounderReport(f)).toContain("paying 1");
   });
 
   it("takes /trial, /won and /lost from the phone", async () => {

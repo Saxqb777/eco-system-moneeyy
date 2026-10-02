@@ -1,5 +1,5 @@
 import { getDb } from "@/db/client";
-import { CALL_OUTCOMES, callSheet, recordCall, type CallOutcome } from "@/lib/callsheet";
+import { CALL_OUTCOMES, callSheet, linkedinSheet, recordCall, recordLinkedin, type CallOutcome } from "@/lib/callsheet";
 import { bad, json, readJson } from "@/lib/http";
 import { listThreads, mailboxCounts, threadDetail } from "@/lib/mailbox";
 import { mockCallSheet, mockEnabled, mockMailbox } from "@/lib/mock-state";
@@ -15,7 +15,9 @@ export async function GET(req: Request) {
   const f = url.searchParams.get("filter");
   if (f === "calls") {
     if (mockEnabled()) return json({ ok: true, ...mockCallSheet() });
-    return json({ ok: true, ...(await callSheet(getDb())) });
+    const db = getDb();
+    const sheet = await callSheet(db);
+    return json({ ok: true, ...sheet, linkedin: await linkedinSheet(db) });
   }
   const filter = f === "hot" || f === "waiting" ? f : "all";
   if (mockEnabled()) {
@@ -38,6 +40,12 @@ export async function GET(req: Request) {
 // The owner marks a call: { action: "called", leadId, outcome, note? } (D079).
 export async function POST(req: Request) {
   const body = await readJson<{ action?: string; leadId?: string; outcome?: string; note?: string }>(req);
+  if (body?.action === "linkedin") {
+    if (!body.leadId) return bad("leadId is needed");
+    if (mockEnabled()) return json({ ok: true, message: "Noted (mock)." });
+    const r = await recordLinkedin(getDb(), body.leadId, new Date());
+    return r.ok ? json({ ok: true, message: r.message }) : bad(r.message, 404);
+  }
   if (body?.action !== "called") return bad("Unknown action");
   const outcome = (CALL_OUTCOMES as readonly string[]).includes(body.outcome ?? "") ? (body.outcome as CallOutcome) : null;
   if (!body.leadId || !outcome) return bad("leadId and outcome (interested, no_answer, not_now, no) are needed");

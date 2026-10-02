@@ -26,6 +26,8 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 | 13 | Facebook Page id and token (optional) | Deal posts also go to your Facebook Page | When you want it | missing: a Page for the deals, a Meta app with pages_manage_posts, a Page token that does not expire; paste the Page ID and the token separated by a space |
 | 16 | Alpaca paper trading keys | Wall Street's real prices and news (D075) | When you can | missing: steps in section 13 below, paste "KEYID SECRET" in the box "Alpaca paper trading keys". Until then stocks wait; crypto may run on the free feed |
 | 17 | Paddle billing (app) | Taking card payments after the free month | Waiting for you | section 7d: Paddle account, product and price, client token, webhook secret, four Vercel variables on petty-cash |
+| 18 | A customer's words for the site (optional) | Proof on docledger.site | Waiting for you | ask the food group (the Marketer sends you the message), paste "quote | name, title, company" in Setup |
+| 19 | 60 second screen recording (optional) | Proof on docledger.site | Waiting for you | record one minute of a real bill being read (Loom or YouTube unlisted), paste the link in Setup |
 | 15 | DocLedger Facebook Page: Page ID and a Page token | Social posts to the Page (D074) | When you can | missing: steps in section 12 below, paste "PAGEID TOKEN" in the box "DocLedger Facebook Page". Social plans the week already, posts start once it is here |
 | 14 | Business postal address (optional) | DocLedger emails to US companies (US law wants an address under the signature) | When you want US leads | missing: paste the address to print under your signature in the box "Business postal address". Until then the Scout skips the US |
 

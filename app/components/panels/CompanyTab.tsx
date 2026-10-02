@@ -55,7 +55,10 @@ export function CompanyTab({ onApprovals }: { onApprovals: () => void }) {
           ))}
         </div>
         <div className="muted">
-          Cost per lead {n.costPerLeadUsd !== null ? usd(n.costPerLeadUsd) : "not yet"}, per reply {n.costPerReplyUsd !== null ? usd(n.costPerReplyUsd) : "not yet"}. Since the start: {n.allTime.leads} leads, {n.allTime.emailsSent} emails, {n.allTime.clients} customers.
+          The funnel: found {n.leads}, with an address {n.emailable}, sent {n.emailsSent}, delivered {n.delivered}, bounced {n.bounced}, opened their demo {n.demoOpens}, replied {n.replies}, demos booked {n.demos}, free month {n.trials}, paying {n.clients}.
+        </div>
+        <div className="muted">
+          Cost per stage: lead {n.costPerLeadUsd !== null ? usd(n.costPerLeadUsd) : "not yet"}, email {n.costPerEmailUsd !== null ? usd(n.costPerEmailUsd) : "not yet"}, demo opened {n.costPerDemoOpenUsd !== null ? usd(n.costPerDemoOpenUsd) : "not yet"}, reply {n.costPerReplyUsd !== null ? usd(n.costPerReplyUsd) : "not yet"}. Since the start: {n.allTime.leads} leads, {n.allTime.emailsSent} emails, {n.allTime.clients} customers.
         </div>
       </Sheet>
 

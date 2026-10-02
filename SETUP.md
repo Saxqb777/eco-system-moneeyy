@@ -16,7 +16,7 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
 | 4 | Telegram bot token, then pair your chat with /pair | Warden messages, approvals over Telegram, morning brief | Done | done 2026-09-30, chat paired, first four messages delivered 08:18 UTC |
 | 5 | DocLedger GitHub repo URL and a GitHub token for it | Builder (nightly at 02:00 Dubai, built in Phase 5) | Done | done 2026-09-30 18:35 UTC: Saxqb777/Petty-Cash- (the live app, D069) and a token for it |
 | 6 | Calendar booking link | Chaser demo booking | Done | done 2026-09-30 (cal.com 15 min link) |
-| 7 | Resend API key and sending address | Sending approved outreach emails | Done | done 2026-09-30: key, sender Saaqib Khan <saaqib@docledger.site>, domain docledger.site Verified in Resend (confirmed by Saaqib's screenshot about 09:20 UTC) |
+| 7 | Resend API key and sending address | Sending approved outreach emails, reading replies | Redo the key | done 2026-09-30: key, sender Saaqib Khan <saaqib@docledger.site>, domain Verified. 2026-10-02 (D077): the key is sending only, so replies cannot be read: create a Full access key and paste it over the box, then tick the delivery events on the webhook (section 7) |
 | 8 | DocLedger price line and signature block (the pitch itself is in the repo) | Writer and Chaser | Now | missing |
 | 8b | Resend webhook secret for replies (optional) | Chaser reads replies itself | Done | done 2026-09-30 09:06 UTC |
 | 9 | Affiliate IDs: Amazon.ae tag, Noon, others | Deals Engine earning (posts run without them, links stay plain) | Done for Amazon | Amazon.ae tag themarketde0c-21 saved 2026-09-30 (right account). Noon and others optional |
@@ -80,7 +80,8 @@ Rule: never paste a secret into the repo. Secrets go into the Warden clipboard o
   - MX, host @, value inbound-smtp.eu-west-1.amazonaws.com, priority 10 (replies)
   - TXT, host _dmarc, value v=DMARC1; p=none;
 - The domain was also added to the Vercel team (zone on, nameservers not pointed, inert). Vercel's DNS upload endpoint is closed to this environment, so DNS lives at Spaceship.
-- resend.com, add and verify your sending domain, then API Keys, Create. Paste under "Resend API key". Paste the from address (on that domain) under "Sending address".
+- resend.com, add and verify your sending domain, then API Keys, Create with permission Full access. Paste under "Resend API key". Paste the from address (on that domain) under "Sending address".
+- 2026-10-02 (D077): the key pasted on 2026-09-30 is sending only, and Resend's reply webhook carries no text, so replies could not be read (Qafila's reply sat as a placeholder). To do: resend.com, API Keys, Create, name "The Tower full", permission Full access, paste it over the "Resend API key" box. Then: Webhooks, open the existing one, tick email.delivered, email.bounced, email.complained and email.delivery_delayed next to email.received, save (the signing secret stays the same). The Tower then reads every waiting reply on the next heartbeat and sees bounces and spam complaints.
 - Approved outreach emails are sent by the next heartbeat. Nothing goes out without your Approve.
 - Replies, two ways: (a) Resend Receiving: add the MX record for a subdomain, create a webhook for email.received pointing at https://the-tower-saxqb777s-projects.vercel.app/api/email/inbound, paste the signing secret under "Resend webhook secret". (b) Forward by hand on Telegram: /reply Gulf Crescent Freight: their text. Chaser picks it up either way.
 

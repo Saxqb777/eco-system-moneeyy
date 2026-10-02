@@ -273,6 +273,13 @@ export const leads = pgTable(
     foundByTaskId: uuid("found_by_task_id"),
     preview: jsonb("preview"),
     previewCode: text("preview_code").unique(),
+    // D077: the demo company made for them. A visit is a human opening it (the app asks the Tower for the
+    // preview by code), a scan is a link checker opening it within minutes of the send, a read is a document
+    // they uploaded in it.
+    demoVisits: integer("demo_visits").notNull().default(0),
+    demoScans: integer("demo_scans").notNull().default(0),
+    demoReads: integer("demo_reads").notNull().default(0),
+    demoVisitedAt: ts("demo_visited_at"),
     simulated: simulated(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -294,6 +301,11 @@ export const outreach = pgTable("outreach", {
   sentAt: ts("sent_at"),
   replyText: text("reply_text"),
   replyAt: ts("reply_at"),
+  // D077: the Resend email id of their reply (its body is fetched by id when the webhook carries none),
+  // when Resend confirmed delivery, and why it bounced.
+  replyEmailId: text("reply_email_id"),
+  deliveredAt: ts("delivered_at"),
+  bounceReason: text("bounce_reason"),
   simulated: simulated(),
   createdAt: createdAt(),
   updatedAt: updatedAt(),

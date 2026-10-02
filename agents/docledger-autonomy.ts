@@ -122,6 +122,11 @@ export interface SalesFunnel {
   replyRatePct: number | null;
   hotOpen: number;
   demosWeek: number;
+  // D077: delivery and demo signals.
+  deliveredWeek: number;
+  bouncedWeek: number;
+  demoVisitsWeek: number;
+  visitedOpen: number;
   autoSend: boolean;
   autoSentToday: number;
   autoSendCap: number;
@@ -137,6 +142,10 @@ export async function salesFunnel(db: Db, now: Date): Promise<SalesFunnel> {
   const hotOpen = await count(db.select({ n: sql<string>`count(*)` }).from(approvals).where(and(eq(approvals.type, "outreach_email"), eq(approvals.status, "pending"), eq(approvals.simulated, false), sql`${approvals.content} ->> 'hot' = 'true'`)));
   const demosWeek = await count(db.select({ n: sql<string>`count(*)` }).from(leads).where(and(eq(leads.simulated, false), eq(leads.status, "demo_booked"), gte(leads.updatedAt, week))));
   const autoSentToday = await count(db.select({ n: sql<string>`count(*)` }).from(approvals).where(and(eq(approvals.type, "outreach_email"), eq(approvals.simulated, false), eq(approvals.decidedVia, "auto"), gte(approvals.decidedAt, dubaiDayStartUtc(now)))));
+  const deliveredWeek = await count(db.select({ n: sql<string>`count(*)` }).from(outreach).where(and(eq(outreach.simulated, false), gte(outreach.deliveredAt, week))));
+  const bouncedWeek = await count(db.select({ n: sql<string>`count(*)` }).from(outreach).where(and(eq(outreach.simulated, false), eq(outreach.status, "bounced"), gte(outreach.updatedAt, week))));
+  const demoVisitsWeek = await count(db.select({ n: sql<string>`count(*)` }).from(leads).where(and(eq(leads.simulated, false), gte(leads.demoVisitedAt, week))));
+  const visitedOpen = await count(db.select({ n: sql<string>`count(*)` }).from(leads).where(and(eq(leads.simulated, false), eq(leads.status, "contacted"), sql`${leads.demoVisitedAt} is not null`)));
   const [floor] = await db.select().from(floors).where(eq(floors.slug, "docledger")).limit(1);
   return {
     leadsWeek,
@@ -145,6 +154,10 @@ export async function salesFunnel(db: Db, now: Date): Promise<SalesFunnel> {
     replyRatePct: sentWeek ? Math.round((repliesWeek / sentWeek) * 1000) / 10 : null,
     hotOpen,
     demosWeek,
+    deliveredWeek,
+    bouncedWeek,
+    demoVisitsWeek,
+    visitedOpen,
     autoSend: !!floor?.autoApprove,
     autoSentToday,
     autoSendCap: await autoSendCap(db),

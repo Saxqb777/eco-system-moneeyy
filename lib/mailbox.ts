@@ -4,7 +4,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { approvals, leads, outreach } from "@/db/schema";
 
-export type ThreadState = "hot" | "waiting" | "replied" | "sent" | "drafting" | "paused" | "demo" | "closed";
+export type ThreadState = "hot" | "waiting" | "replied" | "visited" | "sent" | "drafting" | "paused" | "demo" | "closed";
 export type SentHow = "auto" | "approved" | "yours" | "waiting" | "rejected" | "replaced" | "draft";
 
 export interface MailThread {
@@ -87,7 +87,7 @@ function stateOf(lead: LeadRow, items: MailMessage[], pending: ApprovalRow[], no
   const snooze = (lead.decisionMaker as { snoozeUntil?: string } | null)?.snoozeUntil;
   if (snooze && Date.parse(snooze) > now.getTime()) return "paused";
   const last = items.at(-1);
-  if (last?.from === "them") return "replied";
+  if (last?.from === "them") return last.status === "visit" || last.status === "read" ? "visited" : "replied";
   return items.some((m) => m.from === "us" && m.status === "sent") ? "sent" : "drafting";
 }
 
@@ -113,6 +113,24 @@ async function load(db: Db, simulated: boolean, leadIds?: string[]) {
 function threadFrom(lead: LeadRow, rows: OutreachRow[], byApproval: Map<string, ApprovalRow>, now: Date): { thread: MailThread; items: MailMessage[] } {
   const own = rows.filter((r) => r.leadId === lead.id).sort((a, b) => a.step - b.step || a.createdAt.getTime() - b.createdAt.getTime());
   const items = messagesFor(own, byApproval);
+  // D077: the demo company made for them, opened (or a document of theirs read in it), sits in the thread as theirs.
+  if (lead.demoVisitedAt) {
+    const reads = lead.demoReads;
+    const visits = lead.demoVisits;
+    items.push({
+      id: `${lead.id}:visit`,
+      from: "them",
+      step: 0,
+      subject: null,
+      body: reads ? `Opened the demo company we made for them and had ${reads === 1 ? "a document" : `${reads} documents`} of their own read in it.` : `Opened the demo company we made for them${visits > 1 ? `, ${visits} times` : ""}.`,
+      at: lead.demoVisitedAt.toISOString(),
+      how: null,
+      status: reads ? "read" : "visit",
+      approvalId: null,
+      previewUrl: null,
+    });
+    items.sort((x, y) => x.at.localeCompare(y.at) || (x.from === "us" ? -1 : 1));
+  }
   const pending = own.map((r) => (r.approvalId ? byApproval.get(r.approvalId) : undefined)).filter((a): a is ApprovalRow => !!a && a.status === "pending");
   const last = items.at(-1);
   const dm = (lead.decisionMaker ?? {}) as Record<string, unknown>;
@@ -134,7 +152,7 @@ function threadFrom(lead: LeadRow, rows: OutreachRow[], byApproval: Map<string, 
   };
 }
 
-const ORDER: Record<ThreadState, number> = { hot: 0, waiting: 1, replied: 2, demo: 3, sent: 4, drafting: 5, paused: 6, closed: 7 };
+const ORDER: Record<ThreadState, number> = { hot: 0, waiting: 1, replied: 2, visited: 3, demo: 4, sent: 5, drafting: 6, paused: 7, closed: 8 };
 
 export async function listThreads(db: Db, simulated: boolean, filter: "all" | "hot" | "waiting" = "all", now = new Date()): Promise<MailThread[]> {
   const { rows, leadRows, byApproval } = await load(db, simulated);

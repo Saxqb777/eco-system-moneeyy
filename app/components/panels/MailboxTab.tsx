@@ -8,6 +8,7 @@ const STATE_LABEL: Record<ThreadState, string> = {
   hot: "Hot",
   waiting: "Waiting on you",
   replied: "They replied",
+  visited: "Opened the demo",
   sent: "Sent",
   drafting: "Drafting",
   paused: "Paused",

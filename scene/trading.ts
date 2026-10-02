@@ -101,8 +101,13 @@ export class TradingFloor {
     if (now > this.wallAt && this.view) {
       this.wallAt = now + 9000;
       const picks = ["SPY", "BTC", "NVDA", "ETH"].map((s) => this.view!.tape.find((t) => t.s === s)).filter((t): t is NonNullable<typeof t> => !!t);
-      const t = picks[this.wallIndex++ % Math.max(1, picks.length)];
+      // every fifth turn the big screen shows who the room has learned to trust
+      const voices = (this.view.voices ?? []).slice(0, 3);
+      const slots = picks.length + (voices.length ? 1 : 0);
+      const i = this.wallIndex++ % Math.max(1, slots);
+      const t = picks[i];
       if (t) p.wall.setQuote(t.s === "SPY" ? "S&P 500" : t.s === "BTC" ? "BITCOIN" : t.s, t.p, t.chg);
+      else if (voices.length) p.wall.setQuote(`ROOM ${voices.map((v) => `${v.who.toUpperCase().replace(" OFFICER", "")} ${v.right}/${v.of}`).join("  ")}`, null, null);
       else p.wall.setQuote("MARKET", null, null);
     }
     if (now < this.busyUntil) return;
@@ -313,6 +318,25 @@ export class TradingFloor {
           coach.setPose("point");
         }
         return 4200;
+      }
+      case "breaker": {
+        const r = h.sprite("trading_risk");
+        if (r) {
+          this.say(r, `Circuit breaker: SPY down ${Math.abs(Number(d.spyChg ?? 0)).toFixed(2)}%. No new stock trades today`, 4500, now, "alert");
+          r.setPose("raise");
+        }
+        this.stamp("BREAKER", LED.red, TRADING_PIT.x, stampY);
+        this.floorFlash(LED.red);
+        h.sound.alarm();
+        return 4800;
+      }
+      case "memo": {
+        const coach = h.sprite("trading_coach");
+        if (coach) {
+          this.say(coach, `Memo for the week: ${clip(d.memo, 56)}`, 5000, now, "chat");
+          coach.setPose("point");
+        }
+        return 5200;
       }
       case "bench":
       case "freeze": {

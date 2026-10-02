@@ -10,6 +10,8 @@ export interface SignalIdea {
   market: Market;
   kind: SignalKind;
   score: number;
+  // what the kind's own win rate added or took away (D076)
+  bonus?: number;
   price: number;
   detail: {
     rsi: number;

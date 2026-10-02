@@ -5,6 +5,7 @@ import type { Db } from "@/db/client";
 import { agents, budgetLedger, floors, taskEvents, tradingDesks, tradingEquity, tradingPositions, tradingSignals } from "@/db/schema";
 import { getSetting, getSettings } from "@/lib/settings";
 import type { DeskPlan, MorningBrief } from "./crew";
+import { kindRecords, recentScore, voiceRecords, type KindRecords } from "./learn";
 import { shortSymbol } from "./engine";
 import type { TapeItem } from "./pulse";
 import { boardRows, type BoardRow } from "./report";
@@ -18,6 +19,8 @@ export interface TradingStatus {
   source: string;
   nextOpen: string | null;
   nextClose: string | null;
+  breaker?: boolean;
+  spyChg?: number | null;
   errors: string[];
   aiLeftUsd: number;
   aiSpentUsd: number;
@@ -33,6 +36,14 @@ export interface TradingEvent {
   at: string;
 }
 
+export interface VoiceScore {
+  who: string;
+  right: number;
+  of: number;
+  allRight: number;
+  allOf: number;
+}
+
 export interface TradingStateView {
   desks: Array<BoardRow & { open: number }>;
   tape: TapeItem[];
@@ -40,6 +51,16 @@ export interface TradingStateView {
   btcPct: number | null;
   brief: { mood: string; headline: string } | null;
   events: TradingEvent[];
+  // who the firm has learned to trust (D076), best first
+  voices: VoiceScore[];
+}
+
+export async function voiceScores(db: Db): Promise<VoiceScore[]> {
+  const records = await voiceRecords(db);
+  return Object.entries(records)
+    .map(([who, r]) => ({ who, ...recentScore(r), allRight: r.right, allOf: r.right + r.wrong }))
+    .filter((v) => v.of > 0)
+    .sort((a, b) => b.right / b.of - a.right / a.of);
 }
 
 async function tradingFloorId(db: Db): Promise<string | null> {
@@ -80,6 +101,7 @@ export async function tradingState(db: Db): Promise<TradingStateView | null> {
     btcPct: btc && start?.price ? ((btc.p - start.price) / start.price) * 100 : null,
     brief: brief ? { mood: brief.mood, headline: brief.headline } : null,
     events: await tradingEvents(db, 25),
+    voices: await voiceScores(db),
   };
 }
 
@@ -91,6 +113,8 @@ export interface TradingDetail extends TradingStateView {
   meetings: Array<{ id: string; symbol: string; desk: string | null; status: string; score: number; kind: string; meeting: unknown; at: string }>;
   lessons: string[];
   briefFull: MorningBrief | null;
+  kinds: KindRecords;
+  memo: { memo: string; at: string } | null;
   aiCost: { todayUsd: number; totalUsd: number };
   startUsd: number;
   stats: { signalsToday: number; meetingsToday: number; tradesTotal: number; winRate: number | null };
@@ -168,6 +192,8 @@ export async function tradingDetail(db: Db, now = new Date()): Promise<TradingDe
     lessons: await getSetting<string[]>(db, "trading_lessons", []),
     briefFull: await getSetting<MorningBrief | null>(db, "trading_brief", null),
     plan: await getSetting<DeskPlan | null>(db, "trading_plan", null),
+    kinds: await kindRecords(db),
+    memo: await getSetting<{ memo: string; at: string } | null>(db, "trading_memo", null),
     aiCost: { todayUsd: base.status?.aiSpentUsd ?? 0, totalUsd: Number(cost?.s ?? 0) },
     startUsd: START_USD,
     stats: { signalsToday: Number(sig?.c ?? 0), meetingsToday: Number(met?.c ?? 0), tradesTotal: total, winRate: total ? Math.round((Number(all?.w ?? 0) / total) * 100) : null },

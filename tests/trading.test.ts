@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { setAnthropicFactory } from "@/agents/client";
 import { RISK } from "@/config/trading";
@@ -11,8 +11,9 @@ import { getSetting, setSetting } from "@/lib/settings";
 import { getTowerState } from "@/lib/state";
 import { setTelegramApi } from "@/lib/telegram";
 import { availableCash, closePosition, deskBySlug, ensureDesks, markDesks, openPosition, replayBars, riskCheck, settleTime } from "@/trading/engine";
+import { kindBonus, kindRecords, scoreOutcomes, trackRecordLine, voiceRecords } from "@/trading/learn";
 import { atr, emaSeries, rsiSeries } from "@/trading/indicators";
-import { runTradingPulse } from "@/trading/pulse";
+import { reviewDue, runTradingPulse } from "@/trading/pulse";
 import { closeReport, signedPct } from "@/trading/report";
 import { defaultPlan, scanSymbol } from "@/trading/scanner";
 import { tradingDetail } from "@/trading/view";
@@ -50,6 +51,8 @@ class FakeMarket implements MarketData {
   readonly hasKeys = true;
   open = true;
   prices: Record<string, number> = {};
+  // yesterday's close per symbol; one percent under today's price unless the test says otherwise
+  prev: Record<string, number> = {};
   minute: Record<string, Bar[]> = {};
   hot = "NVDA";
   async bars(_m: "stocks" | "crypto", symbols: string[], tf: string, start: Date, end = new Date()): Promise<Record<string, Bar[]>> {
@@ -65,7 +68,7 @@ class FakeMarket implements MarketData {
     const out: Record<string, Quote> = {};
     for (const s of symbols) {
       const p = this.prices[s] ?? (s === this.hot ? 100.6 : 100);
-      out[s] = { bid: p * 0.9999, ask: p * 1.0001, last: p, prevClose: p * 0.99, t: NOW.toISOString() };
+      out[s] = { bid: p * 0.9999, ask: p * 1.0001, last: p, prevClose: this.prev[s] ?? p * 0.99, t: NOW.toISOString() };
     }
     return out;
   }
@@ -161,6 +164,29 @@ describe("The Risk Manager", () => {
     expect(riskCheck({ desk, style: "ai", open: [], tradesToday: 6, cashAvailable: 100, entry: 100, plan })).toMatchObject({ ok: false });
     expect(riskCheck({ desk, style: "ai", open: [], tradesToday: 0, cashAvailable: 0.5, entry: 100, plan })).toMatchObject({ ok: false, reason: "no settled cash left" });
     expect(riskCheck({ desk: { status: "benched", equityUsd: "100" }, style: "ai", open: [], tradesToday: 0, cashAvailable: 100, entry: 100, plan })).toMatchObject({ ok: false, reason: "desk is benched" });
+  });
+
+  it("keeps a desk to two trades in one sector and stops stock trades while the breaker is on", () => {
+    const plan = { symbol: "MU", stop: 99, target: 103, sizeUsd: 10 };
+    const chips = [{ symbol: "NVDA" }, { symbol: "AMD" }];
+    expect(riskCheck({ desk, style: "ai", open: chips, tradesToday: 0, cashAvailable: 100, entry: 100, plan })).toMatchObject({ ok: false, reason: "already 2 trades in chips" });
+    expect(riskCheck({ desk, style: "ai", open: [{ symbol: "NVDA" }], tradesToday: 0, cashAvailable: 100, entry: 100, plan }).ok).toBe(true);
+    expect(riskCheck({ desk, style: "ai", open: [], tradesToday: 0, cashAvailable: 100, entry: 100, plan, breaker: true })).toMatchObject({ ok: false, reason: expect.stringMatching(/circuit breaker/) });
+    expect(riskCheck({ desk, style: "ai", open: [], tradesToday: 0, cashAvailable: 100, entry: 100, plan: { symbol: "SOL/USD", stop: 99, target: 103, sizeUsd: 10, market: "crypto" }, breaker: true }).ok).toBe(true);
+  });
+
+  it("makes a crypto target clear the fees and refuses a stop too tight to do it", () => {
+    // a 0.5 percent stop: the target must reach 2 percent (four round trips), that is 4R, right at the limit
+    const r = riskCheck({ desk, style: "ai", open: [], tradesToday: 0, cashAvailable: 100, entry: 100, plan: { symbol: "SOL/USD", stop: 99.5, target: 100.6, sizeUsd: 10, market: "crypto" } });
+    expect(r.ok && r.target).toBeCloseTo(102, 6);
+    // a 2 percent stop: 1.5R is 103, over the fee floor
+    const r2 = riskCheck({ desk, style: "ai", open: [], tradesToday: 0, cashAvailable: 100, entry: 100, plan: { symbol: "SOL/USD", stop: 98, target: 101, sizeUsd: 10, market: "crypto" } });
+    expect(r2.ok && r2.target).toBeCloseTo(103, 6);
+    // the minimum stop (0.4 percent) cannot reach 2 percent inside 4R: not worth the fee
+    expect(riskCheck({ desk, style: "ai", open: [], tradesToday: 0, cashAvailable: 100, entry: 100, plan: { symbol: "SOL/USD", stop: 99.6, target: 102, sizeUsd: 10, market: "crypto" } })).toMatchObject({ ok: false, reason: expect.stringMatching(/fees/) });
+    // stocks keep the 1R floor
+    const st = riskCheck({ desk, style: "ai", open: [], tradesToday: 0, cashAvailable: 100, entry: 100, plan: { symbol: "AAPL", stop: 99, target: 100.5, sizeUsd: 10, market: "stocks" } });
+    expect(st.ok && st.target).toBeCloseTo(101, 6);
   });
 
   it("pulls a stop that is too far back inside the limit and keeps the reward inside 1 to 4 times the risk", () => {
@@ -321,26 +347,73 @@ describe("The pulse", () => {
     expect(await getSetting<string[]>(db, "trading_lessons", [])).toContain("Wait for the second bar.");
   });
 
-  it("reviews an open trade after two hours and tightens the stop, or closes it", async () => {
+  it("reviews an open trade only when it is old enough and moved, tightens the stop, or closes it", async () => {
     const ai = (await deskBySlug(db, "ai_stocks"))!;
-    const reviewAt = new Date(NOW.getTime() + 3 * 3600_000);
     market.prices.MU = 101;
     const q: Quote = { bid: 100, ask: 100, last: 100, prevClose: null, t: NOW.toISOString() };
     const opened = await openPosition(db, ai, { symbol: "MU", market: "stocks", stop: 98.5, target: 106, sizeUsd: 10, thesis: "test", signalId: null }, q, NOW);
     expect(opened.ok).toBe(true);
     if (!opened.ok) return;
+    // three hours in: too soon, no review
+    await setSetting(db, "trading_pulse_at", null);
+    await runTradingPulse(db, new Date(NOW.getTime() + 3 * 3600_000));
+    expect(((await db.select().from(tradingPositions).where(eq(tradingPositions.id, opened.position.id)))[0]!.reviews as unknown[]).length).toBe(0);
+    // five hours in and up one percent: reviewed, stop tightened
+    const reviewAt = new Date(NOW.getTime() + 5 * 3600_000);
     await setSetting(db, "trading_pulse_at", null);
     await runTradingPulse(db, reviewAt);
     const [p] = await db.select().from(tradingPositions).where(eq(tradingPositions.id, opened.position.id));
     expect(Number(p!.stopPrice)).toBeCloseTo(100.4, 4);
     expect((p!.reviews as unknown[]).length).toBe(1);
-    reviewAction = "close";
+    // five more hours but the price did not move since the last look: no review
     await setSetting(db, "trading_pulse_at", null);
-    await runTradingPulse(db, new Date(reviewAt.getTime() + 2.5 * 3600_000));
+    await runTradingPulse(db, new Date(reviewAt.getTime() + 5 * 3600_000));
+    expect(((await db.select().from(tradingPositions).where(eq(tradingPositions.id, opened.position.id)))[0]!.reviews as unknown[]).length).toBe(1);
+    // it moved: reviewed again, and this time the room closes it
+    reviewAction = "close";
+    market.prices.MU = 103;
+    await setSetting(db, "trading_pulse_at", null);
+    await runTradingPulse(db, new Date(reviewAt.getTime() + 5.2 * 3600_000));
     const [after] = await db.select().from(tradingPositions).where(eq(tradingPositions.id, opened.position.id));
     expect(after!.status).toBe("closed");
     expect(after!.exitReason).toBe("review");
     reviewAction = "tighten";
+    expect(reviewDue({ openedAt: NOW, reviewedAt: null, reviews: [], entryPrice: "100", stopPrice: "99.6", targetPrice: "110" }, 100, new Date(NOW.getTime() + 5 * 3600_000))).toBe(true);
+  });
+
+  it("scores every voice on the closed trades and feeds the records back", async () => {
+    // the pulse scored the NVDA trade when it closed; nothing is left to score and nothing is counted twice
+    expect((await scoreOutcomes(db)).scored).toBe(0);
+    const voices = await voiceRecords(db);
+    // the NVDA room: five buys on a winner were right, the Bear's pass was wrong
+    expect(voices.Bull).toMatchObject({ right: 1, wrong: 0 });
+    expect(voices.Bear).toMatchObject({ right: 0, wrong: 1 });
+    expect(voices.Chief).toBeUndefined();
+    const kinds = await kindRecords(db);
+    expect(kinds.breakout?.wins ?? kinds.volume?.wins ?? 0).toBeGreaterThanOrEqual(1);
+    expect(trackRecordLine({ Bear: { right: 7, wrong: 3, recent: [1, 1, 1, 1, 1, 1, 1, 0, 0, 0] }, Bull: { right: 1, wrong: 1, recent: [1, 0] } })).toBe("Track records (the last 20 trades each): Bear right 7 of 10. Weigh a voice by its record, not its volume.");
+    expect(kindBonus({ breakout: { wins: 9, losses: 1 } }, "breakout")).toBe(6);
+    expect(kindBonus({ breakout: { wins: 1, losses: 9 } }, "breakout")).toBe(-6);
+    expect(kindBonus({ breakout: { wins: 4, losses: 2 } }, "breakout")).toBe(0);
+    const state = await getTowerState(db, NOW);
+    expect(state.trading?.voices.find((v) => v.who === "Bull")).toMatchObject({ right: 1, of: 1 });
+  });
+
+  it("trips the circuit breaker when SPY falls and keeps stock trades off for the day", async () => {
+    market.prices.SPY = 98;
+    market.prev.SPY = 100;
+    market.hot = "META";
+    await setSetting(db, "trading_pulse_at", null);
+    const calls = fake.calls.length;
+    const res = await runTradingPulse(db, new Date(NOW.getTime() + 40 * 60_000));
+    expect(res.steps.breaker).toBe(true);
+    expect(res.steps.quant).toEqual({ status: "circuit breaker" });
+    // no stock room was held: every call in this pulse was a review or a side job, not a META meeting
+    expect(fake.calls.slice(calls).some((c) => JSON.stringify(c.messages).includes("Symbol: META"))).toBe(false);
+    const [ev] = await db.select().from(taskEvents).where(sql`${taskEvents.data}->>'kind' = 'breaker'`).orderBy(desc(taskEvents.id)).limit(1);
+    expect(ev?.message).toMatch(/Circuit breaker: SPY is down 2.00 percent/);
+    market.prices.SPY = 100;
+    market.prev.SPY = 99;
   });
 
   it("goes quiet when the AI money is used up and keeps the code crew going", async () => {

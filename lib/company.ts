@@ -1,6 +1,7 @@
 // The Company tab (D065): DocLedger seen as a startup. The week's numbers, the team and what each person did last,
 // the ideas waiting on the owner and the experiments running, Product's roadmap, the Marketer's pack, customers.
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { appUsageByCode, usageLine } from "@/lib/app-usage";
 import type { Db } from "@/db/client";
 import { agents, approvals, floors, leads, tasks } from "@/db/schema";
 import { allExperiments } from "@/agents/experiments";
@@ -16,7 +17,7 @@ export interface CompanyView {
   roadmap: RoadmapItem[];
   marketing: MarketingPack | null;
   report: { at: string; text: string } | null;
-  customers: Array<{ id: string; company: string; country: string; status: "trial" | "client"; since: string | null; monthlyUsd: number | null }>;
+  customers: Array<{ id: string; company: string; country: string; status: "trial" | "client"; since: string | null; monthlyUsd: number | null; plan: string | null; usage: string | null; trialEndsAt: string | null }>;
   social: SocialView;
 }
 
@@ -71,10 +72,13 @@ export async function companyView(db: Db, now = new Date()): Promise<CompanyView
     .where(and(eq(leads.simulated, false), inArray(leads.status, ["trial", "client"])))
     .orderBy(desc(leads.updatedAt))
     .limit(20);
+  // D080: the app's own numbers for the companies that signed up through their sales code
+  const usage = await appUsageByCode(db, clientRows.map((l) => l.previewCode).filter((c): c is string => !!c));
   const customers: CompanyView["customers"] = clientRows.map((l) => {
     const dm = (l.decisionMaker ?? {}) as Record<string, unknown>;
     const since = l.status === "client" ? dm.wonAt : dm.trialStart;
-    return { id: l.id, company: l.company, country: l.country, status: l.status as "trial" | "client", since: typeof since === "string" ? since : null, monthlyUsd: typeof dm.monthlyUsd === "number" ? dm.monthlyUsd : null };
+    const u = l.previewCode ? usage.get(l.previewCode) : undefined;
+    return { id: l.id, company: l.company, country: l.country, status: l.status as "trial" | "client", since: typeof since === "string" ? since : null, monthlyUsd: typeof dm.monthlyUsd === "number" ? dm.monthlyUsd : null, plan: u?.plan ?? null, usage: u ? usageLine(u, now) : null, trialEndsAt: u?.trialEndsAt ?? null };
   });
 
   const report = s.founder_report as { at?: string; text?: string } | null;

@@ -234,7 +234,7 @@ export async function ownerMarksLead(db: Db, action: "trial" | "won" | "lost", c
   if (action === "trial") {
     await db.update(leads).set({ status: "trial", decisionMaker: { ...dm, trialStart: now.toISOString(), successSteps: [] }, updatedAt: now }).where(eq(leads.id, lead.id));
     await logEvent(db, { floorId: lead.floorId, type: "log", message: `${lead.company} started the free month`, at: now });
-    return { ok: true, message: `${lead.company} is in the free month. Success drafts the welcome email on the next heartbeat, then check ins on days 3, 7 and 21 and the paid offer on day 27.` };
+    return { ok: true, message: `${lead.company} is in the free month. Success drafts the welcome email on the next heartbeat, then check ins on days 3 and 10 and the paid offer on day 25.` };
   }
   if (action === "lost") {
     await db.update(leads).set({ status: "lost", updatedAt: now }).where(eq(leads.id, lead.id));

@@ -4,6 +4,7 @@ import type { Db } from "@/db/client";
 import { approvals, floors, leads, outreach, posts, taskEvents, tasks, tickets } from "@/db/schema";
 import { enqueueMessage } from "@/lib/telegram";
 import { asNumber, getSettings, setSetting } from "@/lib/settings";
+import { quarantineNote } from "@/lib/setup-store";
 
 export type ApprovalType = "outreach_email" | "public_post" | "pull_request" | "spend_increase" | "floor_unlock" | "credential_request" | "decision";
 
@@ -41,6 +42,7 @@ export function approvalDetail(type: ApprovalType, content: Record<string, unkno
     return str(content.body) ? `Post:\n${clip(str(content.body), 1800)}` : "";
   }
   if (type === "decision" || type === "spend_increase") return clip(str(content.text), 1200);
+  if (type === "credential_request") return [clip(str(content.text), 1200), "", "Paste the key in the Setup tab of the game, never in a note or a reply here."].filter((x, i) => i !== 0 || x).join("\n");
   return "";
 }
 
@@ -178,6 +180,8 @@ async function executeApproval(db: Db, a: typeof approvals.$inferSelect, now: Da
 export async function applyApprovalDecision(db: Db, approvalId: string, status: "approved" | "rejected", feedback: string | null, via: string, now = new Date()) {
   const [a] = await db.select().from(approvals).where(eq(approvals.id, approvalId)).limit(1);
   if (!a || a.status !== "pending") return null;
+  // D082: a key typed into the note moves to its Setup box before the note is stored, echoed or handed to a task.
+  feedback = (await quarantineNote(db, a, feedback, now)).feedback;
   let executionResult: Record<string, unknown> | null = null;
   let executedAt: Date | null = null;
   if (a.simulated) {

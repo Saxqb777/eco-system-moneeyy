@@ -156,6 +156,7 @@ export async function applyWardenDecisions(db: Db, runId: string, d: WardenDecis
 
   for (const a of d.approvalsToRaise) {
     const content: Record<string, unknown> = { text: a.content };
+    if (a.type === "credential_request" && a.setupKey) content.setupKey = a.setupKey;
     if (a.type === "spend_increase") {
       const m = a.content.match(/(\d+(?:\.\d+)?)\s*USD/i);
       if (m) content.proposedCapUsd = Number(m[1]);

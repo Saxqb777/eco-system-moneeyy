@@ -143,3 +143,8 @@ What happens next: within 5 minutes the floor reads prices, Larry buys the index
 - Vercel: the project, environment variables (DATABASE_URL, CRON_SECRET, OWNER_PASSCODE, SECRETS_KEY, TELEGRAM_WEBHOOK_SECRET), region, function duration.
 - GitHub Actions workflow files in this repo.
 - The owner passcode for the game UI. I will send it to you in chat once, and you can change it in Vercel env vars any time.
+
+## Where keys go
+- Every key, token and secret goes into its box in the game: Warden, Setup tab. The box encrypts it; the hint shows only the last four characters.
+- Never type a key into an approval note or a Telegram reply. Since D082 the Tower moves a key typed there into its Setup box and wipes the note, but notes are plain text until that moment and a shape it does not know is dropped.
+

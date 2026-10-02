@@ -1,5 +1,6 @@
 // Fixture state for local screenshots and tests. Never used on Vercel: only when TOWER_MOCK_STATE is 1.
 import { AGENTS, FLOORS, SETUP_ITEMS } from "@/config/tower";
+import type { CallRow } from "@/lib/callsheet";
 import type { MailMessage, MailThread, MailThreadDetail } from "@/lib/mailbox";
 import type { TowerState } from "@/lib/state";
 import type { AgentDetail, FloorDetail, WardenSummary } from "@/lib/detail";
@@ -480,4 +481,14 @@ export function mockTradingDetail(now = new Date()): TradingDetail {
     exposure: { ai_stocks: { chips: 12 }, ai_crypto: { crypto: 24 }, index: { index: 100 } },
     dayPnl: { ai_stocks: { usd: 0.41, pct: 0.41 }, ai_crypto: { usd: 0.52, pct: 0.51 }, quant: { usd: 0, pct: 0 }, index: { usd: 0.48, pct: 0.47 } },
   };
+}
+
+// D079: the owner's call sheet in the mock game.
+export function mockCallSheet(now = new Date()): { dayKey: string; rows: CallRow[] } {
+  const rows: CallRow[] = [
+    { leadId: "lead-qafila", company: "Qafila FZ LLC", contact: "Atif Rafiq", title: "Founder", phone: "+97145512345", city: "Dubai", country: "AE", why: "opened their demo and stayed quiet", opening: "Hi Atif, Saaqib from Doc Ledger in Abu Dhabi. Qafila runs FCL, LCL and air through one platform, so I set up a demo company for Qafila that reads your shipping line bills from a photo. Could I show you in ten minutes, or send the link on WhatsApp?", bill: "Shipping line bill, Maersk, Jebel Ali", demoUrl: "https://demo.docledger.site/?for=8cgghn", emailed: true, visited: true, attempts: 0, lastOutcome: null },
+    { leadId: "lead-seaprince", company: "Sea Prince Shipping", contact: null, title: null, phone: "+97165551234", city: "Sharjah", country: "AE", why: "good fit, no public email", opening: "Hello, Saaqib from Doc Ledger in Abu Dhabi. Could I speak to whoever handles the shipping bills and receipts at month end? I set up a demo company for Sea Prince Shipping that reads your customs invoices from a photo.", bill: "Customs clearance invoice", demoUrl: "https://demo.docledger.site/?for=k2pq7m", emailed: false, visited: false, attempts: 1, lastOutcome: "no_answer" },
+    { leadId: "lead-midtrans", company: "Mid Trans", contact: null, title: null, phone: "+97142223344", city: "Dubai", country: "AE", why: "emailed, no reply", opening: "Hello, Saaqib from Doc Ledger in Abu Dhabi. Could I speak to whoever handles the shipping bills and receipts at month end? I set up a demo company for Mid Trans that reads your shipping bills from a photo.", bill: "Shipping bill with charge lines", demoUrl: "https://demo.docledger.site/?for=ahygun", emailed: true, visited: false, attempts: 0, lastOutcome: null },
+  ];
+  return { dayKey: now.toISOString().slice(0, 10), rows };
 }

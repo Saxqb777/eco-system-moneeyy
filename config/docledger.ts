@@ -70,6 +70,40 @@ Saaqib`,
   ],
 } as const;
 
+// D079: how the Chaser follows up a thread that stays quiet. Days after the previous email, one angle each,
+// the last one a polite close that leaves the door open. Step 1 is the first email.
+export const FOLLOW_UP_LADDER: Array<{ step: number; afterDays: number; angle: string; last?: boolean }> = [
+  { step: 2, afterDays: 3, angle: "Fuel receipts: litres, odometer and plate read off the receipt, no typing." },
+  { step: 3, afterDays: 4, angle: "Foreign currency: converted at the rate on the day it was spent, fixed at entry." },
+  { step: 4, afterDays: 7, angle: "Their own document types: name the fields, describe the document, it reads for those." },
+  { step: 5, afterDays: 7, angle: "A short last note: no reply needed, the demo company stays open, the door is open whenever month end hurts.", last: true },
+];
+
+// D079: a shared inbox (info@, accounts@) is read by whoever opens the post, not by the person who buys. That email
+// asks to be passed on and stays short.
+export const FRONT_DESK_RULES = [
+  "This address is a shared company inbox, not a named person. Open with one line asking for the email to be passed to whoever handles the shipping bills and receipts at month end (the finance or accounts manager).",
+  "Under 80 words before the signature. The demo link and the first month free stay. No name in the greeting: write Hello, then the company name is fine in the first line.",
+  "Subject names the company and its paperwork, so the person who opens the inbox knows who it is for.",
+];
+
+// D079: member directories the Scout works through page by page, home market first. A directory that cannot be
+// opened is skipped for the day and the Scout searches instead.
+export const DIRECTORIES: Array<{ name: string; url: string; region: string }> = [
+  { name: "NAFL members (National Association of Freight and Logistics, UAE)", url: "https://nafl.ae/members/", region: "AE" },
+  { name: "Yellow Pages UAE, freight forwarders", url: "https://www.yellowpages-uae.com/uae/freight-forwarders", region: "AE" },
+  { name: "Yellow Pages UAE, customs brokers", url: "https://www.yellowpages-uae.com/uae/customs-clearing-agents", region: "AE" },
+  { name: "Dubai Trade directory, clearing and forwarding", url: "https://www.dubaitrade.ae/en/service-providers", region: "AE" },
+  { name: "Saudi freight forwarders (Yellow Pages Saudi)", url: "https://www.yellowpages.com.sa/en/freight-forwarders", region: "SA" },
+  { name: "Qatar freight forwarders (Qatar Yellow Pages)", url: "https://www.qataryellowpages.com/en/freight-forwarders", region: "QA" },
+  { name: "Oman freight forwarders (Oman Yellow Pages)", url: "https://www.omanyp.com/en/freight-forwarders", region: "OM" },
+  { name: "FIATA member directory", url: "https://fiata.org/members/", region: "world" },
+];
+
+// D079: the home market comes first. Five days in seven the Scout works the Gulf; the other two it follows the
+// world rotation, so the pipe never depends on one region.
+export const HOME_REGION = "the UAE first (Dubai, Jebel Ali, Sharjah, Abu Dhabi), then Saudi Arabia, Qatar, Oman, Bahrain and Kuwait";
+
 // One block for system prompts.
 // What Partners offers a firm that refers clients. No number here on purpose: the founder sets the share on the call.
 // Change this line when he decides the terms.

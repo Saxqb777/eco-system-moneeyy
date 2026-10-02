@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import type { CallRow } from "@/lib/callsheet";
 import type { MailMessage, MailThread, MailThreadDetail, ThreadState } from "@/lib/mailbox";
-import { Empty, Key, Pill, Sheet, since, usePoll, when } from "./shared";
+import { Empty, Key, Pill, Sheet, post, since, usePoll, when } from "./shared";
 
 const STATE_LABEL: Record<ThreadState, string> = {
   hot: "Hot",
@@ -26,14 +27,15 @@ const HOW_LABEL: Record<NonNullable<MailMessage["how"]>, string> = {
   draft: "Draft",
 };
 
-type Filter = "all" | "hot" | "waiting";
+type Filter = "all" | "hot" | "waiting" | "calls";
 
 // The mail room: every company DocLedger is writing to, and each whole conversation in order.
 export function MailboxTab({ onApprovals }: { onApprovals: () => void }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [open, setOpen] = useState<string | null>(null);
-  const list = usePoll<{ threads: MailThread[]; counts: { hot: number; waiting: number } }>(open ? null : `/api/mailbox?filter=${filter}`, 15000);
+  const list = usePoll<{ threads: MailThread[]; counts: { hot: number; waiting: number } }>(open || filter === "calls" ? null : `/api/mailbox?filter=${filter}`, 15000);
   if (open) return <ThreadView leadId={open} onBack={() => setOpen(null)} onApprovals={onApprovals} />;
+  if (filter === "calls") return <CallSheetView onBack={() => setFilter("all")} />;
   const threads = list.data?.threads ?? [];
   const counts = list.data?.counts;
   return (
@@ -47,6 +49,9 @@ export function MailboxTab({ onApprovals }: { onApprovals: () => void }) {
         </Key>
         <Key small tone={filter === "waiting" ? "ok" : "plain"} onClick={() => setFilter("waiting")}>
           Waiting on you{counts?.waiting ? ` ${counts.waiting}` : ""}
+        </Key>
+        <Key small tone="plain" onClick={() => setFilter("calls")}>
+          Call sheet
         </Key>
       </div>
       {list.error && !list.data ? <Empty>{list.error}</Empty> : null}
@@ -143,5 +148,75 @@ function Letter({ m, contact, onApprovals }: { m: MailMessage; contact: string; 
         </div>
       ) : null}
     </section>
+  );
+}
+
+// D079: today's five companies worth a phone call or a WhatsApp from the owner, with the opening line ready.
+const OUTCOME_LABEL: Record<string, string> = { interested: "Interested", no_answer: "No answer", not_now: "Not now", no: "No" };
+
+function CallSheetView({ onBack }: { onBack: () => void }) {
+  const q = usePoll<{ dayKey: string; rows: CallRow[] }>("/api/mailbox?filter=calls", 30000);
+  const [note, setNote] = useState<string>("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const rows = q.data?.rows ?? [];
+  async function mark(leadId: string, outcome: string) {
+    setBusy(leadId);
+    const res = await post("/api/mailbox", { action: "called", leadId, outcome });
+    setBusy(null);
+    setNote(res.ok ? String(res.message ?? "Noted.") : (res.error ?? "Could not save that"));
+    q.reload();
+    setTimeout(() => setNote(""), 5000);
+  }
+  const wa = (phone: string) => `https://wa.me/${phone.replace(/[^\d]/g, "")}`;
+  return (
+    <>
+      <div className="mail-filters">
+        <Key small tone="plain" onClick={onBack}>
+          Back to the letters
+        </Key>
+        {note ? <span className="muted">{note}</span> : null}
+      </div>
+      <Sheet title="Call sheet" clip>
+        <div className="muted">Twenty minutes a day. The ones that opened their demo first, then good fits with no public email, then the quiet ones. Mark each call and the Chaser writes the email after it.</div>
+      </Sheet>
+      {q.error && !q.data ? <Empty>{q.error}</Empty> : null}
+      {q.data && rows.length === 0 ? (
+        <Sheet title="Nobody to call today">
+          <div className="muted">No home market company with a phone number is waiting. The Scout brings more tomorrow.</div>
+        </Sheet>
+      ) : null}
+      {rows.map((r, i) => (
+        <Sheet key={r.leadId} title={`${i + 1}. ${r.company}`} className="call-row">
+          <div className="h-top">
+            <b>{[r.contact, r.title].filter(Boolean).join(", ") || "Whoever runs the month end"}</b>
+            <span className="muted">{[r.city, r.country].filter(Boolean).join(", ")}</span>
+          </div>
+          <div className="muted">
+            Why: {r.why}. {r.bill ? `Talk about: ${r.bill}.` : ""} {r.attempts ? `${r.attempts} tr${r.attempts === 1 ? "y" : "ies"} so far${r.lastOutcome ? `, last ${OUTCOME_LABEL[r.lastOutcome]?.toLowerCase()}` : ""}.` : ""}
+          </div>
+          <div className="row-keys">
+            <a className="key small" href={`tel:${r.phone}`}>
+              Call {r.phone}
+            </a>
+            <a className="key small" href={wa(r.phone)} target="_blank" rel="noreferrer">
+              WhatsApp
+            </a>
+            {r.demoUrl ? (
+              <a className="key small" href={r.demoUrl} target="_blank" rel="noreferrer">
+                Their demo
+              </a>
+            ) : null}
+          </div>
+          <pre>{r.opening}</pre>
+          <div className="row-keys">
+            {Object.entries(OUTCOME_LABEL).map(([k, label]) => (
+              <Key key={k} small tone={k === "interested" ? "ok" : k === "no" ? "bad" : "plain"} disabled={busy === r.leadId} onClick={() => void mark(r.leadId, k)}>
+                {label}
+              </Key>
+            ))}
+          </div>
+        </Sheet>
+      ))}
+    </>
   );
 }

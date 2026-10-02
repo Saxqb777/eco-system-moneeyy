@@ -1,4 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
+import { setPageFetch } from "@/lib/contact-finder";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setAnthropicFactory } from "@/agents/client";
 import { advancePipelines } from "@/agents/pipeline";
@@ -17,6 +18,8 @@ let fake: ReturnType<typeof fakeAnthropic>;
 const NOW = new Date("2026-10-06T06:00:00Z");
 
 beforeAll(async () => {
+  // D079: the Analyst reads company websites in code; tests never touch the network
+  setPageFetch(async () => ({ ok: false, status: 404, html: "" }));
   process.env.SECRETS_KEY = testSecretsKey();
   const t = await makeTestDb();
   db = t.db;
@@ -40,8 +43,8 @@ afterAll(async () => {
   if (close) await close();
 });
 
-describe("Express mode and the Analyst's second look", () => {
-  it("runs queued tasks directly while express is on, and a no email lead gets exactly one second look", async () => {
+describe("Express mode and the Analyst's first look", () => {
+  it("runs queued tasks directly while express is on, and a no email lead gets no second look (D079)", async () => {
     const [floor] = await db.select().from(floors).where(eq(floors.slug, "docledger")).limit(1);
     await db.insert(leads).values({ floorId: floor!.id, company: "Cargo Line", dedupeKey: "cargo-line", country: "AE", status: "new", simulated: false });
     await setSetting(db, "express_until", new Date(NOW.getTime() + 3600_000).toISOString());
@@ -54,19 +57,13 @@ describe("Express mode and the Analyst's second look", () => {
     let [lead] = await db.select().from(leads).where(eq(leads.company, "Cargo Line")).limit(1);
     expect(lead!.status).toBe("no_contact");
 
+    // D079: no second look. The Tower read the site itself before the first look (nothing to read here), so the
+    // company stays no_contact and waits for the owner's call sheet instead of another model call.
     await advancePipelines(db, NOW);
-    const retry = await db.select().from(tasks).where(and(eq(tasks.kind, "qualify_lead"), sql`${tasks.input} ->> 'retry' = 'true'`));
-    expect(retry.map((t) => t.title)).toEqual(["Find an email at Cargo Line"]);
-    await submitQueuedTasks(db, NOW);
+    expect(await db.select().from(tasks).where(and(eq(tasks.kind, "qualify_lead"), sql`${tasks.input} ->> 'retry' = 'true'`))).toHaveLength(0);
     [lead] = await db.select().from(leads).where(eq(leads.company, "Cargo Line")).limit(1);
-    expect(lead!.status).toBe("qualified");
-    expect(lead!.website).toBe("https://cargoline.example");
-    expect((lead!.decisionMaker as { email: string; retried: boolean })).toMatchObject({ email: "info@cargoline.example", retried: true });
-
-    // Only one second look, even if it had failed again.
-    await db.update(leads).set({ status: "no_contact" }).where(eq(leads.id, lead!.id));
-    await advancePipelines(db, NOW);
-    expect(await db.select().from(tasks).where(and(eq(tasks.kind, "qualify_lead"), sql`${tasks.input} ->> 'retry' = 'true'`))).toHaveLength(1);
+    expect(lead!.status).toBe("no_contact");
+    expect((lead!.decisionMaker as { siteNote?: string | null }).siteNote).toBe("no website to read");
   });
 
   it("lets one worker run several tasks side by side in express mode", async () => {

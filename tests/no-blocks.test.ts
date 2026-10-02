@@ -1,4 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
+import { setPageFetch } from "@/lib/contact-finder";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setAnthropicFactory } from "@/agents/client";
 import { trustEarned } from "@/agents/docledger-autonomy";
@@ -32,6 +33,8 @@ async function paste(key: string, value: string) {
 }
 
 beforeAll(async () => {
+  // D079: the Analyst reads company websites in code; tests never touch the network
+  setPageFetch(async () => ({ ok: false, status: 404, html: "" }));
   process.env.SECRETS_KEY = testSecretsKey();
   const t = await makeTestDb();
   db = t.db;
@@ -118,7 +121,7 @@ describe("Writing tasks never wait for a batch", () => {
     expect(batched.map((r) => r.custom_id)).toHaveLength(1);
     // research thinks harder (it skipped searching at low effort), writing stays light
     expect((batched[0]!.params.output_config as { effort?: string }).effort).toBe("medium");
-    expect(batched[0]!.params.messages[0]!.content).toContain("contact or about page");
+    expect(batched[0]!.params.messages[0]!.content).toContain("about or team page");
     const postCall = fake.calls.find((c) => JSON.stringify(c.messages[0]?.content ?? "").includes("Write the post"));
     expect((postCall!.output_config as { effort?: string }).effort).toBe("low");
     const [post] = await db.select().from(tasks).where(eq(tasks.kind, "write_post")).limit(1);

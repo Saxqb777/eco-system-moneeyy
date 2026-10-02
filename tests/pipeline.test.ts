@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { setPageFetch } from "@/lib/contact-finder";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { collectBatches } from "@/agents/batches";
 import { setAnthropicFactory } from "@/agents/client";
@@ -25,6 +26,8 @@ async function paste(key: string, value: string) {
 }
 
 beforeAll(async () => {
+  // D079: the Analyst reads company websites in code; tests never touch the network
+  setPageFetch(async () => ({ ok: false, status: 404, html: "" }));
   process.env.SECRETS_KEY = testSecretsKey();
   const t = await makeTestDb();
   db = t.db;

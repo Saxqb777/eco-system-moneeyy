@@ -1,13 +1,14 @@
 // Worker batch pipeline: queued real tasks become one batch per tick, results come back on later ticks.
 import { and, asc, eq, inArray } from "drizzle-orm";
 import type { Db } from "@/db/client";
-import { agentRuns, agents, budgetLedger, floors, taskEvents, tasks } from "@/db/schema";
+import { agentRuns, agents, budgetLedger, floors, leads, outreach, taskEvents, tasks } from "@/db/schema";
 import { floorShare, getSpendSummary } from "@/lib/budget";
 import { asNumber, getSettings } from "@/lib/settings";
 import { callModel, getClient, type ModelCall } from "./client";
 import { submitBatch, type BatchItem, type CollectedResult } from "./batches";
 import { playbookFor } from "./playbooks";
 import { estimateTaskUsd, inFlightUsd } from "./spend-guard";
+import { EMAILED_STATES } from "@/lib/email";
 
 const MAX_PER_BATCH = 20;
 // Express mode: while settings.express_until is in the future, a tick runs up to this many tasks directly
@@ -53,6 +54,22 @@ export interface SubmitSummary {
   skipped: number;
   held: string[]; // floors at their share of the cap
   paused: string[]; // floors with queued work that are paused
+}
+
+// D083: redo copies and late assignments for a lead that moved on would spend money for nothing.
+const PAST_FIRST_EMAIL = new Set(["replied", "trial", "client", "lost", "demo_booked"]);
+async function staleLeadNote(db: Db, t: typeof tasks.$inferSelect): Promise<string | null> {
+  if (t.kind !== "qualify_lead" && t.kind !== "draft_outreach") return null;
+  const leadId = (t.input as Record<string, unknown> | null)?.leadId;
+  if (typeof leadId !== "string" || !leadId) return null;
+  const [lead] = await db.select({ status: leads.status }).from(leads).where(eq(leads.id, leadId)).limit(1);
+  if (!lead) return null;
+  if (PAST_FIRST_EMAIL.has(lead.status)) return `the lead is already ${lead.status}, nothing to redo`;
+  if (t.kind === "draft_outreach") {
+    const [first] = await db.select({ id: outreach.id }).from(outreach).where(and(eq(outreach.leadId, leadId), eq(outreach.step, 1), eq(outreach.simulated, false), inArray(outreach.status, EMAILED_STATES))).limit(1);
+    if (first) return "the first email already went out, nothing to draft";
+  }
+  return null;
 }
 
 export async function submitQueuedTasks(db: Db, now = new Date()): Promise<SubmitSummary> {
@@ -119,6 +136,14 @@ export async function submitQueuedTasks(db: Db, now = new Date()): Promise<Submi
     // One batch task at a time per worker. Direct tasks finish inside the tick, so a worker may run several.
     if (!goesDirect && agent.currentTaskId && agent.currentTaskId !== t.id) {
       busy += 1;
+      continue;
+    }
+    // D083: a lead that already answered, started or ended never gets a fresh qualify or first draft. No model call.
+    const stale = await staleLeadNote(db, t);
+    if (stale) {
+      await db.update(tasks).set({ status: "done", output: { note: stale }, reviewScore: null, finishedAt: now, updatedAt: now }).where(eq(tasks.id, t.id));
+      await logEvent(db, { taskId: t.id, agentId: agent.id, floorId: floor.id, type: "done", message: `${t.title}: ${stale}`, at: now });
+      out.skipped += 1;
       continue;
     }
     const playbook = playbookFor(t.kind);

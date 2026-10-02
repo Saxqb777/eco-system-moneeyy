@@ -70,7 +70,7 @@ export async function founderNumbers(db: Db, now: Date, days = 7): Promise<Found
   const n = async (q: Promise<Array<{ n: string | null }>>) => Number((await q)[0]?.n ?? 0);
   const leadsIn = (since: Date) => n(db.select({ n: sql<string>`count(*)` }).from(leads).where(and(eq(leads.simulated, false), gte(leads.createdAt, since), sql`coalesce(${leads.segment}, '') not like 'partner%'`)));
   const sentIn = (since: Date) => n(db.select({ n: sql<string>`count(*)` }).from(outreach).where(and(eq(outreach.simulated, false), gte(outreach.sentAt, since))));
-  const repliesIn = (since: Date) => n(db.select({ n: sql<string>`count(*)` }).from(outreach).where(and(eq(outreach.simulated, false), gte(outreach.replyAt, since))));
+  const repliesIn = (since: Date) => n(db.select({ n: sql<string>`count(*)` }).from(outreach).where(and(eq(outreach.simulated, false), gte(outreach.replyAt, since), sql`${outreach.status} <> 'auto_reply'`)));
   const revenueIn = (since: Date) => n(db.select({ n: sql<string>`coalesce(sum(${revenue.amountUsd}), 0)` }).from(revenue).where(and(eq(revenue.simulated, false), eq(revenue.verified, true), gte(revenue.occurredAt, since))));
   const spendIn = (since: Date) => n(db.select({ n: sql<string>`coalesce(sum(${budgetLedger.amountUsd}), 0)` }).from(budgetLedger).where(and(eq(budgetLedger.simulated, false), eq(budgetLedger.kind, "api_cost"), gte(budgetLedger.occurredAt, since))));
   const epoch = new Date(0);
